@@ -1,0 +1,33 @@
+# Render Blueprint for Clara's web app (apps/web): box API, companion app, consoles, kit map, scene report.
+# Pattern from Sophi's render.yaml (github.com/mzhao1599/sophi). Field reference: https://render.com/docs/blueprint-spec
+# Secrets are never written here: the keys below are `sync: false`, so Render asks for them in the dashboard.
+services:
+  - type: web
+    name: clara
+    runtime: node
+    # Free: spins down after 15 minutes with no requests (first request after that waits about a minute).
+    # A connected box's heartbeat keeps it up. Data is in memory, so a restart or spin-down resets it.
+    plan: free
+    region: virginia
+    buildCommand: npm ci --include=dev && npm run build -w @clara/web
+    startCommand: cd apps/web && ../../node_modules/.bin/next start --hostname 0.0.0.0 --port $PORT
+    healthCheckPath: /api/state
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # Claude (voice turns) and Cartesia (speech-to-text and voice). Entered in the dashboard.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CARTESIA_API_KEY
+        sync: false
+      # Without an Anthropic key the voice brain uses the keyword stub; with one, Claude answers.
+      - key: CLARA_MODEL
+        value: stub
+      - key: CLARA_TURN_BUDGET_MS
+        value: "6500"
+      # Demo boxes with a simulated heartbeat. Remove a box's id once its real Pi is connected.
+      - key: CLARA_SIMULATED_BOXES
+        value: box-clinic,box-water-point
+      - key: CLARA_AMBULANCE_ETA_MIN
+        value: "35"

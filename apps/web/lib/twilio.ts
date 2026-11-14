@@ -70,19 +70,48 @@ export function gatherReplyTwiml(kind: "coming" | "driving" | "taken" | "decline
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
-/** Places one outbound call with inline TwiML. Resolves with the call sid; throws on a non-2xx or the deadline. */
+/** Twilio's text-to-speech call template: the only kind of spoken call a newer trial account may place. */
+export const TRIAL_TTS_TEMPLATE = "https://webhooks.twilio.com/v1/Voice/Template/voice_text_to_speech";
+const TRIAL_LIMITED = /trial accounts have limited parameter access/i;
+
+/** The words a TwiML document says, joined (used to hand the same message to the trial template). */
+export const spokenText = (twiml: string) =>
+  [...twiml.matchAll(/<Say>([\s\S]*?)<\/Say>/g)]
+    .map((m) => m[1]!.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&"))
+    .filter((t, i, all) => all.indexOf(t) === i)
+    .join(" ");
+
+/**
+ * Places one outbound call with inline TwiML. A newer Twilio trial account refuses custom TwiML ("trial accounts have
+ * limited parameter access"); then the call is retried on Twilio's text-to-speech template, passing the same words as
+ * `Message`, so the phone still rings (the template may read its own sample text instead). Resolves with the call sid;
+ * throws on a non-2xx or the deadline.
+ */
 export async function placeCall(config: TwilioConfig, to: string, twiml: string, fetchImpl: FetchLike = fetch, timeoutMs = TWILIO_TIMEOUT_MS): Promise<string> {
-  const deadline = AbortSignal.timeout(timeoutMs);
-  const res = await fetchImpl(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(config.accountSid)}/Calls.json`, {
-    method: "POST",
-    signal: deadline,
-    headers: {
-      authorization: `Basic ${Buffer.from(`${config.accountSid}:${config.authToken}`).toString("base64")}`,
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ To: to, From: config.from, Twiml: twiml, Timeout: "25" }).toString(),
-  });
-  const body = (await res.json().catch(() => null)) as { sid?: string; message?: string } | null;
-  if (!res.ok) throw new Error(`Twilio answered ${res.status}${body?.message ? `: ${body.message}` : ""}`);
-  return body?.sid ?? "unknown";
+  const post = async (params: Record<string, string>) => {
+    const res = await fetchImpl(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(config.accountSid)}/Calls.json`, {
+      method: "POST",
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: {
+        authorization: `Basic ${Buffer.from(`${config.accountSid}:${config.authToken}`).toString("base64")}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams(params).toString(),
+    });
+    const body = (await res.json().catch(() => null)) as { sid?: string; message?: string } | null;
+    return { ok: res.ok, status: res.status, sid: body?.sid, message: body?.message ?? "" };
+  };
+  const first = await post({ To: to, From: config.from, Twiml: twiml, Timeout: "25" });
+  if (first.ok) return first.sid ?? "unknown";
+  if (first.status === 400 && TRIAL_LIMITED.test(first.message)) {
+    const url = `${TRIAL_TTS_TEMPLATE}?Message=${encodeURIComponent(spokenText(twiml).slice(0, 1500))}`;
+    // Trial calls take only To, the template URL and (maybe) From; try with From first, then without.
+    const attempts: Array<Record<string, string>> = [{ To: to, From: config.from, Url: url }, { To: to, Url: url }];
+    for (const params of attempts) {
+      const retry = await post(params);
+      if (retry.ok) return retry.sid ?? "unknown";
+      if (!(retry.status === 400 && TRIAL_LIMITED.test(retry.message))) throw new Error(`Twilio answered ${retry.status} (trial template)${retry.message ? `: ${retry.message}` : ""}`);
+    }
+  }
+  throw new Error(`Twilio answered ${first.status}${first.message ? `: ${first.message}` : ""}`);
 }

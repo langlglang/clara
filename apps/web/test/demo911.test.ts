@@ -102,3 +102,23 @@ describe("demo 911 call", () => {
     expect(demo911Twiml("a < b & c")).toContain("a &lt; b &amp; c");
   });
 });
+
+describe("Twilio trial fallback", () => {
+  it("retries a refused custom call on the text-to-speech template with the same words", async () => {
+    const { placeCall } = await import("../lib/twilio");
+    const sent: URLSearchParams[] = [];
+    const fake = async (_url: string, init: RequestInit) => {
+      const p = new URLSearchParams(String(init.body));
+      sent.push(p);
+      if (p.has("Twiml")) return new Response(JSON.stringify({ message: "Invalid or disallowed parameters provided - trial accounts have limited parameter access, upgrade" }), { status: 400 });
+      return new Response(JSON.stringify({ sid: "CAtrial" }), { status: 201 });
+    };
+    const sid = await placeCall(twilio, "+17372583742", "<Response><Say>Hello &amp; welcome</Say><Say>Hello &amp; welcome</Say></Response>", fake);
+    expect(sid).toBe("CAtrial");
+    expect(sent).toHaveLength(2);
+    const url = new URL(sent[1]!.get("Url")!);
+    expect(url.origin + url.pathname).toBe("https://webhooks.twilio.com/v1/Voice/Template/voice_text_to_speech");
+    expect(url.searchParams.get("Message")).toBe("Hello & welcome");
+    expect(sent[1]!.get("Twiml")).toBeNull();
+  });
+});

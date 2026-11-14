@@ -4,6 +4,7 @@ import type { CoordinatorLog, CoordinatorMode } from "@clara/coordinator";
 import type { BoxMessage, Runtime } from "./server";
 import type { Hospital, RideView, VehicleKind } from "./rides";
 import type { CallLogEntry } from "./calls";
+import type { Demo911Call } from "./demo911";
 import type { PersistenceStatus } from "./snapshot";
 
 /**
@@ -127,7 +128,7 @@ export interface StateSnapshot {
 export interface MaintainerResponse {
   rows: MaintainerRow[];
   /** Push and phone-call fallback status for the console. */
-  outreach: { push_vapid: "env" | "generated" | "saved"; push_devices: number; calls_configured: boolean; calls: CallLogEntry[] };
+  outreach: { push_vapid: "env" | "generated" | "saved"; push_devices: number; calls_configured: boolean; calls: CallLogEntry[]; demo_911: { configured: boolean; target: string | null; calls: Demo911Call[] } };
   alerts: MaintainerAlert[];
   simulated_boxes: string[];
   server_time: string;

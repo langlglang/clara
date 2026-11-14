@@ -5,6 +5,7 @@ import { DEFAULT_CARE, createCoordinator, type CareThreshold, type Coordinator, 
 import { DEMO_BOXES, createNetwork, randomIds, type MaintainerAlert, type Network, type NetworkOptions, type ReportOptions } from "@clara/network";
 import { createRideBook, type Ride, type RideBook, type RideChange, type VehicleKind } from "./rides";
 import { createCallBook, type CallBook } from "./calls";
+import { createDemo911, type Demo911 } from "./demo911";
 import { ridePushListener, wireAlertPushes } from "./notify";
 import { createPushBook, resolveVapid, type PushBook, type PushSender, type VapidEnv } from "./push";
 import { createTextBook, photonConfig, wireTexts, type PhotonConfig, type PhotonEnv, type TextBook } from "./photon";
@@ -62,6 +63,8 @@ export interface Runtime {
   calls: CallBook;
   /** Twilio settings (null: calls only log) and the public origin Twilio calls back on. */
   twilio: TwilioConfig | null;
+  /** Demo "911": rings the team's demo dispatcher phone (CLARA_DEMO_911_NUMBER) when an SOS opens. */
+  demo911: Demo911;
   publicBaseUrl: string;
   /** Text alerts over Photon (iMessage/WhatsApp/SMS), or "would message" logs without it. */
   texts: TextBook;
@@ -80,7 +83,7 @@ export interface Runtime {
 const DEMO_VEHICLES: Record<string, VehicleKind> = { "vol-tomas": "van", "vol-priya": "car", "vol-samir": "car" };
 
 /** The server's environment: the agent's keys plus web push (VAPID_*) and Twilio (TWILIO_*, PUBLIC_BASE_URL). */
-export type WebEnv = ClaraAgentEnv & VapidEnv & TwilioEnv & PhotonEnv;
+export type WebEnv = ClaraAgentEnv & VapidEnv & TwilioEnv & PhotonEnv & { CLARA_DEMO_911_NUMBER?: string };
 
 export interface RuntimeOptions extends NetworkOptions {
   env?: WebEnv;
@@ -188,6 +191,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const twilio = twilioConfig(env);
   const calls = createCallBook({ network, rides, twilio, baseUrl: publicBaseUrl(env), ...(options.fetch ? { fetch: options.fetch } : {}) });
   if (snap) calls.importState(snap.calls);
+  const demo911 = createDemo911({ network, twilio, number: env.CLARA_DEMO_911_NUMBER, timers: options.timers !== false, ...(options.fetch ? { fetch: options.fetch } : {}) });
   const photon = photonConfig(env);
   const texts = createTextBook({ network, rides, photon, ...(options.fetch ? { fetch: options.fetch } : {}) });
   // Other books are saved under `extra` once they expose exportState/importState (duck-typed, so adding one is enough).
@@ -248,6 +252,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     push,
     calls,
     twilio,
+    demo911,
     texts,
     photon,
     publicBaseUrl: publicBaseUrl(env),
@@ -285,6 +290,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     stop: () => {
       timers.forEach(clearInterval);
       coordinator.stop();
+      demo911.stop();
     },
   };
 }

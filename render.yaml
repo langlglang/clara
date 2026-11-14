@@ -66,6 +66,9 @@ services:
         sync: false
       - key: TWILIO_FROM_NUMBER
         sync: false
+      # Demo "911": the team's demo dispatcher phone that Twilio rings when an SOS opens (never a real emergency number).
+      - key: CLARA_DEMO_911_NUMBER
+        sync: false
       # Origin Twilio calls back on; its request signatures are checked against this.
       - key: PUBLIC_BASE_URL
         value: https://clara.living

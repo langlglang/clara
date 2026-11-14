@@ -51,9 +51,18 @@ describe("tool limits", () => {
     expect(h.net.incident(id)!.incident.alerts).toHaveLength(3 + 6);
   });
 
+  it("request_kit waits for the person at the box to ask", () => {
+    const h = harness();
+    heartbeat(h, "box-room-101", "box-clinic");
+    const id = openSos(h);
+    const { tools } = layerFor(h, id);
+    const r = tools.request_kit({ from_box_id: "box-room-101", reason: "second kit" });
+    expect(!r.ok && r.error).toMatch(/hasn't asked/);
+  });
+
   it("request_kit refuses offline, far, own and repeated boxes", () => {
     const h = harness();
-    const id = openSos(h);
+    const id = openSos(h, "box-clinic", { askNearby: true });
     const { tools } = layerFor(h, id);
     // Boxes start offline (no heartbeat yet).
     const offline = tools.request_kit({ from_box_id: "box-room-101", reason: "second kit" });
@@ -119,7 +128,7 @@ describe("tool limits", () => {
   it("read tools describe the incident, candidates and kits as data", () => {
     const h = harness();
     heartbeat(h, "box-room-101");
-    const id = openSos(h);
+    const id = openSos(h, "box-clinic", { askNearby: true });
     const { tools } = layerFor(h, id);
     const inc = tools.get_incident() as { ok: true; need: string; alerts: unknown[]; report_token?: string };
     expect(inc.need).toBe("bleeding");

@@ -42,6 +42,8 @@ export const BoxEventSchema = z.discriminatedUnion("type", [
   z.strictObject({ ...base, type: z.literal("sos.cancelled"), source: SourceSchema }),
   /** The countdown finished: the simulated 911 call shows and the network is alerted. */
   z.strictObject({ ...base, type: z.literal("sos.opened"), need: z.enum(["bleeding", "breathing", "general"]), source: SourceSchema }),
+  /** The person at a box in SOS asked for other Clara boxes nearby to bring their kits. Never sent by default. */
+  z.strictObject({ ...base, type: z.literal("nearby.requested"), source: SourceSchema }),
   z.strictObject({ ...base, type: z.literal("emergency.context"), task_id: z.uuid(), location: EmergencyLocationSchema }),
   z.strictObject({ ...base, type: z.literal("emergency.answer"), task_id: z.uuid(), question_id: EmergencyQuestionIdSchema, answer: z.string().trim().min(1).max(500), source_event_id: z.uuid() }),
   z.strictObject({ ...base, type: z.literal("supply.used"), sku: Id, qty: z.number().int().min(1).max(99), confirmed: z.boolean() }),

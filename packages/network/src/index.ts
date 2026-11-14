@@ -1,5 +1,5 @@
 import { AlertResponseSchema, VolunteerSchema, type Alert, type BoxRecord, type Incident, type Volunteer } from "@clara/contracts";
-import { alertVolunteers, comingLineForBox, escalationOf, inbox, requestKit, respond, tickIncidents, candidatesFor, type AlertVolunteersResult, type EscalationView, type Push, type RequestKitResult, type RespondResult } from "./alerts.js";
+import { alertVolunteers, comingLineForBox, escalationOf, inbox, nearbyRequested, requestKit, respond, tickIncidents, candidatesFor, type AlertVolunteersResult, type EscalationView, type Push, type RequestKitResult, type RespondResult } from "./alerts.js";
 import { kitMap, maintainerView, refreshAllBoxes, refreshBox, registerBox, restock, type BoxRegistration, type KitPin, type MaintainerRow } from "./boxes.js";
 import { randomIds, type Clock, type Ids } from "./config.js";
 import { ingest, type IngestResult } from "./events.js";
@@ -149,6 +149,11 @@ export function createNetwork(options: NetworkOptions = {}) {
       const result = alertVolunteers(ctx, incidentId, volunteerIds, clock());
       if (result.outcome === "alerted") publish(result.pushes);
       return result;
+    },
+    /** True once the person at the incident's box asked for nearby kits (only then may anyone send for one). */
+    nearbyRequested(incidentId: string): boolean {
+      const entry = ctx.store.getIncident(incidentId);
+      return entry ? nearbyRequested(ctx, entry) : false;
     },
     /** Sends one other box the incident's nearby.emergency push ("bring this kit"). */
     requestKit(incidentId: string, boxId: string): RequestKitResult {

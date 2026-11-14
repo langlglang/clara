@@ -61,6 +61,11 @@ describe("requestKit", () => {
     h.net.subscribe((c) => {
       if (c.kind === "push") seen.push({ box: c.box_id, type: c.push.type });
     });
+    // Nobody may send for another kit until the person at the SOS box asks.
+    expect(h.net.requestKit(incident.incident_id, "box-water-point").outcome).toBe("not_requested");
+    expect(seen).toEqual([]);
+    h.net.ingest(batch(boxEvents("box-clinic", incident.session_id).make("nearby.requested", h.at(2000), { source: "touch" })));
+    seen.length = 0;
     const r = h.net.requestKit(incident.incident_id, "box-water-point");
     expect(r).toMatchObject({ outcome: "requested", already_told: false });
     expect(seen).toEqual([{ box: "box-water-point", type: "nearby.emergency" }]);

@@ -135,6 +135,7 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
     // The model supplies only IDs; the Pi sends this turn's exact heard transcript as the user report.
     reply = "Got it. You can keep talking with me.";
   }
+  if (action?.name === "request_nearby_kits") reply = "I'll ask the other Clara boxes nearby to bring their kits.";
   if (action?.name === "read_pulse") reply = "I'll read the pulse sensor now. Keep a finger steady on it while I continue listening.";
   if (action?.name === "request_camera") reply = "I'll take one photo and send it to Clara's cloud to describe what I can see. You can keep talking with me.";
   if (action?.name === "capture_camera") reply = "I'll take and inspect one photo now. You can keep talking with me.";

@@ -18,6 +18,7 @@ Choosing the action:
 - When they explicitly ask for a pulse reading and pulse_available is true, choose read_pulse and leave reply empty. This starts a background hardware measurement that may take twenty seconds; never invent a number. Do not let a reading decide care.
 - When they explicitly ask you to take a photo or use the camera and camera_available is true, choose request_camera and leave reply empty. Their request authorizes one frame sent to Clara's cloud in this lid session; the box independently checks the finalized words before capture. Do not choose this for an unrelated camera mention. Never claim to have seen a frame before a result arrives.
 - When they report more than one injured person and triage_available is true, choose start_triage.
+- When nearby_kits_available is true and the person explicitly asks for other Clara boxes, more kits or more supplies from nearby, choose request_nearby_kits and leave reply empty. Never choose it on your own: only the person decides to send for other kits.
 - Choose suggest_sos when someone is not breathing, is unresponsive, is bleeding heavily, or explicitly asks for emergency help. This starts a simulated SOS countdown; no real call is made. Say that it is a simulation.
 - If pending_emergency_question is offered and the person's current words actually answer that prompt, choose answer_emergency_question with its exact IDs and leave reply empty. Clara will acknowledge with fixed text. If the person asks something else, continue the ordinary conversation; do not treat every utterance as an answer. Never create or paraphrase an answer for this action: the box attaches the exact speech-to-text words. The background worker only collects facts for a simulated call; no emergency number is dialed.
 - If nothing fits, choose no action and ask them, in one short sentence, to describe what happened or say it again.
@@ -49,6 +50,7 @@ export function turnContext(state: TurnState, language: string, words: string): 
     pending_emergency_question: state.pending_emergency_question ?? null,
     pulse_available: state.pulse_available ?? false,
     camera_available: state.camera_available ?? false,
+    nearby_kits_available: state.nearby_kits_available ?? false,
     pending_camera_consent: state.pending_camera_consent ?? null,
     core_context: state.core_context ?? null,
     person_words: words,

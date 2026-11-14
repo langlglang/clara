@@ -39,7 +39,7 @@ describe("rules planner", () => {
     heartbeat(h, "box-clinic", "box-room-101", "box-water-point");
     const rides = fakeRides();
     const c = createCoordinator({ network: h.net, rides, env: { CLARA_COORDINATOR: "rules" }, timers: false });
-    const id = openSos(h, "box-clinic", { tourniquet: true });
+    const id = openSos(h, "box-clinic", { tourniquet: true, askNearby: true });
     h.advance(62_000);
     c.check();
     await vi.advanceTimersByTimeAsync(3_100);

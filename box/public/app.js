@@ -219,6 +219,10 @@
       );
       text($("call-network"), v.online ? "Alert queued for the response network." : "Offline: the response network is not notified yet. It is sent when the link returns.");
       text($("call-coming"), v.coming ? comingStrip(v.coming).text : "NOBODY HAS ACCEPTED YET");
+      // Other boxes are only asked when the person here taps this (or asks Clara); never by default.
+      const ask = $("ask-nearby");
+      ask.disabled = Boolean(v.sos.nearby_asked);
+      text(ask, v.sos.nearby_asked ? "NEARBY BOXES ASKED" : "ASK NEARBY BOXES FOR KITS");
       $("call-coming").classList.toggle("none", !v.coming);
     }
 

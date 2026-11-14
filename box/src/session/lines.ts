@@ -14,6 +14,8 @@ export const LINES = {
   helperWithdrew: "The person who accepted can no longer come. The SOS stays open.",
   responderMessage: (from: string, text: string) => `Message from ${from}: ${text}`,
   usageConfirmed: "Supply count updated.",
+  nearbyAsked: "I've asked the other Clara boxes nearby to bring their kits. The screen shows it if someone accepts.",
+  nearbyAskedOffline: "Offline: the request to nearby Clara boxes is sent when the link returns.",
   nearbyEmergency: (from: string, directions: string) => `Emergency at ${from}. Please bring this kit.${directions ? ` ${directions}` : ""}`,
   noPulse: "I can't detect a pulse. Is the person responding? Are they breathing normally?",
 } as const;

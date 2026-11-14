@@ -154,10 +154,20 @@ describe("incidents", () => {
     expect(h.net.incident(incident.incident_id)!.escalation.flag).toBeNull();
   });
 
-  it("nearby boxes within ~1 km get nearby.emergency, and nearby.clear on close", () => {
+  it("nearby boxes are told only after the person at the SOS box asks, and get nearby.clear on close", () => {
     const h = harness();
     const { ev, incident, result } = openSos(h);
-    const nearby = pushesOf(result.ok ? result.pushes : [], "nearby.emergency");
+    // The SOS alone alerts volunteers, never other boxes.
+    expect(pushesOf(result.ok ? result.pushes : [], "nearby.emergency")).toEqual([]);
+    // Another box (or the same box in another session) can't send for kits.
+    const other = boxEvents("box-room-101");
+    const stranger = h.net.ingest(batch(other.make("nearby.requested", h.at(7000), { source: "touch" })));
+    expect(pushesOf(stranger.ok ? stranger.pushes : [], "nearby.emergency")).toEqual([]);
+    const asked = h.net.ingest(batch(ev.make("nearby.requested", h.at(8000), { source: "voice" })));
+    const nearby = pushesOf(asked.ok ? asked.pushes : [], "nearby.emergency");
+    // Asking twice tells nobody twice.
+    const again = h.net.ingest(batch(ev.make("nearby.requested", h.at(9000), { source: "touch" })));
+    expect(pushesOf(again.ok ? again.pushes : [], "nearby.emergency")).toEqual([]);
     // Room 101 is 0.4 km away; Water point 3 is 1.6 km away.
     expect(nearby).toEqual([
       {
@@ -205,7 +215,8 @@ describe("incidents", () => {
 
   it("expires an incident left open for an hour", () => {
     const h = harness();
-    const { incident } = openSos(h);
+    const { ev, incident } = openSos(h);
+    h.net.ingest(batch(ev.make("nearby.requested", h.at(8000), { source: "touch" })));
     h.advance(60 * 60_000);
     const t = h.net.tick();
     expect(h.net.incident(incident.incident_id)!.incident.closed?.how).toBe("expired");
@@ -228,7 +239,8 @@ describe("incidents", () => {
     heartbeat(h, "box-room-101");
     const seen: string[] = [];
     const off = h.net.subscribe((c) => seen.push(c.kind === "push" ? `push:${c.box_id}:${c.push.type}` : c.kind));
-    openSos(h);
+    const { ev } = openSos(h);
+    h.net.ingest(batch(ev.make("nearby.requested", h.at(8000), { source: "touch" })));
     expect(seen).toContain("incident");
     expect(seen).toContain("event");
     expect(seen).toContain("push:box-clinic:alert.update");

@@ -132,7 +132,7 @@ describe("screen server", () => {
       req.end();
     });
     expect(chunks.join("")).toContain("event: view");
-    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.3"');
+    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.4"');
     expect(chunks.join("")).toContain('"speech_muted":false');
     expect(chunks.join("")).toContain('"presentation":null');
     expect(chunks.join("")).toContain('"step":null');

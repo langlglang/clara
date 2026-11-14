@@ -98,6 +98,8 @@ function timelineLine(e: BoxEvent, opts: ReportOptions): ReportLine | null {
       return line("SOS cancelled", "done");
     case "sos.opened":
       return line(`Mock SOS opened, need: ${e.need} (simulated 911 call shown)`, "done");
+    case "nearby.requested":
+      return line("Bystander asked nearby Clara boxes to bring their kits", "done");
     case "emergency.context":
     case "emergency.answer":
       // Caller-task metadata stays out of the scene report; the cited user report is already on its timeline.

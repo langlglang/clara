@@ -748,3 +748,27 @@ describe("nearby box alert", () => {
     expect(session.view().nearby).toEqual([]);
   });
 });
+
+describe("asking nearby boxes", () => {
+  it("is never sent by default; only the person at the box in SOS can ask, once", () => {
+    const { clock, cloud, speech, session } = setup();
+    session.lidOpened();
+    expect(session.turnState()?.nearby_kits_available).toBeUndefined();
+    expect(session.applyAction({ name: "request_nearby_kits" })).toBe(false);
+    session.press({ action: "ask_nearby" }); // no SOS yet: nothing
+    expect(cloud.types()).not.toContain("nearby.requested");
+    session.press({ action: "sos" });
+    clock.advance(5_000);
+    expect(session.view().phase).toBe("sos");
+    expect(cloud.types()).not.toContain("nearby.requested");
+    expect(session.view().sos?.nearby_asked).toBe(false);
+    expect(session.turnState()?.nearby_kits_available).toBe(true);
+    expect(session.applyAction({ name: "request_nearby_kits" }, "voice")).toBe(true);
+    expect(cloud.events.filter((e) => e.type === "nearby.requested")).toEqual([expect.objectContaining({ source: "voice", session_id: session.sessionId })]);
+    expect(speech.said.join(" ")).toContain("asked the other Clara boxes nearby");
+    expect(session.view().sos?.nearby_asked).toBe(true);
+    session.press({ action: "ask_nearby" });
+    expect(cloud.types().filter((t) => t === "nearby.requested")).toHaveLength(1);
+    expect(session.turnState()?.nearby_kits_available).toBeUndefined();
+  });
+});

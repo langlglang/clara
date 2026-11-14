@@ -97,13 +97,28 @@ function fillAlerts(ctx: AlertContext, entry: IncidentEntry, now: Date): Push[] 
   return fresh.map((a) => alertUpdate(incident, a));
 }
 
-/** A new incident: alert the first wave and light up nearby boxes. Stores the entry. */
+/**
+ * A new incident: alert the first wave of volunteers. Stores the entry. Other boxes are not told: that waits for
+ * the person at this box to ask (nearby.requested, see alertNearbyBoxes).
+ */
 export function startIncident(ctx: AlertContext, entry: IncidentEntry, now: Date): Push[] {
-  const box = ctx.store.getBox(entry.incident.box_id);
   const pushes = fillAlerts(ctx, entry, now);
+  ctx.store.putIncident(entry);
+  return pushes;
+}
+
+/** True once the person at the incident's box asked for nearby kits in this incident's session. */
+export function nearbyRequested(ctx: AlertContext, entry: IncidentEntry): boolean {
+  return ctx.store.eventsForBox(entry.incident.box_id).some((e) => e.event.type === "nearby.requested" && e.event.session_id === entry.incident.session_id);
+}
+
+/** The person at the box asked: every box within NEARBY_BOX_KM not told yet gets "Emergency at ..., bring this kit". */
+export function alertNearbyBoxes(ctx: AlertContext, entry: IncidentEntry): Push[] {
+  const box = ctx.store.getBox(entry.incident.box_id);
+  const pushes: Push[] = [];
   if (box) {
     for (const other of ctx.store.listBoxes()) {
-      if (other.box.box_id === box.box.box_id || haversineKm(other.box.location, box.box.location) > NEARBY_BOX_KM) continue;
+      if (other.box.box_id === box.box.box_id || entry.nearby_box_ids.includes(other.box.box_id) || haversineKm(other.box.location, box.box.location) > NEARBY_BOX_KM) continue;
       entry.nearby_box_ids.push(other.box.box_id);
       pushes.push(
         push(other.box.box_id, {
@@ -300,17 +315,20 @@ export function alertVolunteers(ctx: AlertContext, incidentId: string, volunteer
 export type RequestKitResult =
   | { outcome: "requested"; push: Push; already_told: boolean }
   | { outcome: "not_found" | "unknown_box" | "own_box" }
-  | { outcome: "closed" };
+  | { outcome: "closed" }
+  /** The person at the incident's box hasn't asked for other kits; nobody else may send for them. */
+  | { outcome: "not_requested" };
 
 /**
  * Tells one other box about an open incident ("Emergency at ..., bring this kit") with the same nearby.emergency
- * push the incident start sends, and remembers it so the box gets nearby.clear on close. Distance and status
- * limits are the caller's policy.
+ * push alertNearbyBoxes sends, and remembers it so the box gets nearby.clear on close. Only after the person at
+ * the incident's box asked for nearby kits. Distance and status limits are the caller's policy.
  */
 export function requestKit(ctx: AlertContext, incidentId: string, boxId: string): RequestKitResult {
   const entry = ctx.store.getIncident(incidentId);
   if (!entry) return { outcome: "not_found" };
   if (entry.incident.closed !== null) return { outcome: "closed" };
+  if (!nearbyRequested(ctx, entry)) return { outcome: "not_requested" };
   if (boxId === entry.incident.box_id) return { outcome: "own_box" };
   const from = ctx.store.getBox(entry.incident.box_id);
   const target = ctx.store.getBox(boxId);

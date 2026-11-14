@@ -16,6 +16,7 @@
  *      appears (coordinator off, ambulance in time, no driver) the scene simply goes on without one.
  *
  * Optional: --cast adds six extra fictional volunteers within about a kilometre of the box first, and
+ * --ask-nearby has the bystander ask nearby Clara boxes for their kits right after the SOS (never by default), and
  * --close sends box.closed at the end. Nothing here contacts a real person or emergency service.
  */
 import { randomUUID } from "node:crypto";
@@ -35,6 +36,7 @@ const SERVER = flag("server", "http://localhost:3000").replace(/\/+$/, "");
 const BOX_ID = flag("box", "box-clinic");
 const CAST = args.includes("--cast");
 const CLOSE = args.includes("--close");
+const ASK_NEARBY = args.includes("--ask-nearby");
 const MAX_MINUTES = Number(flag("minutes", "4"));
 
 const started = Date.now();
@@ -201,6 +203,10 @@ async function main(): Promise<void> {
   await boxEvents([{ type: "sos.countdown", seconds: 5, source: "system" }]);
   await sleep(5_000);
   await boxEvents([{ type: "sos.opened", need: "bleeding", source: "system" }, done("get_help", "system"), step("find_wound")]);
+  if (ASK_NEARBY) {
+    await boxEvents([{ type: "nearby.requested", source: "voice" }]);
+    say("📦", "The bystander asked nearby Clara boxes to bring their kits (boxes within 1 km now show it).");
+  }
   say("🚨", "SOS opened: simulated 911 screen on the box; the network alerts nearby volunteers.");
 
   let tourniquetSent = false;

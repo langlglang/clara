@@ -55,6 +55,8 @@ export const TurnStateSchema = z.strictObject({
   pulse_available: z.boolean().optional(),
   camera_available: z.boolean().optional(),
   pending_camera_consent: z.literal("cloud_interpretation").optional(),
+  /** The box is in SOS and hasn't asked nearby boxes yet: request_nearby_kits may be chosen. */
+  nearby_kits_available: z.literal(true).optional(),
   /** Server-owned, source-labeled context. The server ignores a box-supplied value. */
   core_context: CoreContextSchema.optional(),
 });
@@ -80,6 +82,7 @@ export const ActionSchema = z.discriminatedUnion("name", [
   z.strictObject({ name: z.literal("record_usage"), items: z.array(UsageItemSchema).min(1).max(10) }),
   z.strictObject({ name: z.literal("start_triage") }),
   z.strictObject({ name: z.literal("suggest_sos") }),
+  z.strictObject({ name: z.literal("request_nearby_kits") }),
   z.strictObject({ name: z.literal("show_visual"), visual_id: Id }),
   z.strictObject({ name: z.literal("read_pulse") }),
   z.strictObject({ name: z.literal("request_camera") }),
@@ -132,6 +135,8 @@ export function actionAllowed(action: Action, state: TurnState): boolean {
       return state.triage_available;
     case "suggest_sos":
       return true;
+    case "request_nearby_kits":
+      return state.nearby_kits_available === true;
     case "show_visual":
       return state.available_visuals?.some((visual) => visual.visual_id === action.visual_id) ?? false;
     case "read_pulse":

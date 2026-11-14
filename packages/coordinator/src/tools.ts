@@ -210,6 +210,7 @@ export function createToolLayer(ctx: ToolContext): ToolLayer {
         const v = network.incident(incidentId);
         if (!v || !v.box) return fail("No such incident or box.");
         const origin = v.box.location;
+        const asked = network.nearbyRequested(incidentId);
         const kits = network
           .kitMap()
           .filter((p) => p.box_id !== v.box!.box_id)
@@ -222,7 +223,7 @@ export function createToolLayer(ctx: ToolContext): ToolLayer {
               status: p.status,
               distance_km: km(distance),
               within_request_radius: distance <= LIMITS.KIT_RADIUS_KM,
-              requestable: distance <= LIMITS.KIT_RADIUS_KM && p.status !== "offline" && !state.kitRequests.has(p.box_id),
+              requestable: asked && distance <= LIMITS.KIT_RADIUS_KM && p.status !== "offline" && !state.kitRequests.has(p.box_id),
               already_requested: state.kitRequests.has(p.box_id),
               last_updated_seconds_ago: p.last_updated_seconds_ago,
               battery_pct: p.battery_pct,
@@ -234,6 +235,8 @@ export function createToolLayer(ctx: ToolContext): ToolLayer {
         const own = network.supplies(v.box.box_id);
         const result: ToolResult = {
           ok: true,
+          /** Kits can be sent for only after the person at the incident's box asked for them. */
+          nearby_kits_asked_for_by_bystander: asked,
           incident_box: { box_id: v.box.box_id, name: v.box.name, low_items: own?.low_skus ?? [], stock: own ? Object.fromEntries(own.items.map((i) => [i.sku, i.remaining])) : {} },
           kits,
         };
@@ -365,6 +368,7 @@ export function createToolLayer(ctx: ToolContext): ToolLayer {
         const o = openView();
         if ("error" in o) return fail(o.error as string);
         if (!reason) return fail("Give a reason (it is shown to the dispatcher).");
+        if (!network.nearbyRequested(incidentId)) return fail("The person at the box hasn't asked for other kits. Only they can send for one.");
         const own = o.view.box;
         if (!own) return fail("The incident's box is unknown.");
         if (boxId === own.box_id) return fail("That is the incident's own box.");

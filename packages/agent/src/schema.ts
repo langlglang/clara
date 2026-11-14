@@ -25,11 +25,12 @@ export function allowedOptions(state: TurnState) {
     pendingEmergencyQuestion: state.pending_emergency_question,
     pulseAvailable: state.pulse_available === true,
     cameraAvailable: state.camera_available === true,
+    nearbyKits: state.nearby_kits_available === true,
   };
 }
 
 export function replyJsonSchema(state: TurnState): Record<string, unknown> {
-  const { stepIds, questionIds, skus, visualIds, triage, pendingEmergencyQuestion, pulseAvailable, cameraAvailable } = allowedOptions(state);
+  const { stepIds, questionIds, skus, visualIds, triage, pendingEmergencyQuestion, pulseAvailable, cameraAvailable, nearbyKits } = allowedOptions(state);
   const variants: Record<string, unknown>[] = [{ type: "null" }];
   const obj = (name: string, props: Record<string, unknown> = {}) => ({
     type: "object",
@@ -47,6 +48,7 @@ export function replyJsonSchema(state: TurnState): Record<string, unknown> {
   if (cameraAvailable) variants.push(obj("request_camera"));
   if (triage) variants.push(obj("start_triage"));
   if (pendingEmergencyQuestion) variants.push(obj("answer_emergency_question", { task_id: { type: "string", enum: [pendingEmergencyQuestion.task_id] }, question_id: { type: "string", enum: [pendingEmergencyQuestion.question_id] } }));
+  if (nearbyKits) variants.push(obj("request_nearby_kits"));
   variants.push(obj("suggest_sos"));
   return {
     type: "object",
@@ -67,7 +69,7 @@ const oneOf = (values: string[]) => z.enum(values as [string, ...string[]]);
 
 /** The zod twin of replyJsonSchema; `reply` is tidied before its length is checked. */
 export function replyZodSchema(state: TurnState) {
-  const { stepIds, questionIds, skus, visualIds, triage, pendingEmergencyQuestion, pulseAvailable, cameraAvailable } = allowedOptions(state);
+  const { stepIds, questionIds, skus, visualIds, triage, pendingEmergencyQuestion, pulseAvailable, cameraAvailable, nearbyKits } = allowedOptions(state);
   const variants: z.ZodType[] = [];
   if (stepIds.length > 0) variants.push(z.strictObject({ name: z.literal("select_step"), step_id: oneOf(stepIds) }));
   if (questionIds.length > 0) variants.push(z.strictObject({ name: z.literal("ask_clarifying"), question_id: oneOf(questionIds) }));
@@ -79,6 +81,7 @@ export function replyZodSchema(state: TurnState) {
   if (cameraAvailable) variants.push(z.strictObject({ name: z.literal("request_camera") }));
   if (triage) variants.push(z.strictObject({ name: z.literal("start_triage") }));
   if (pendingEmergencyQuestion) variants.push(z.strictObject({ name: z.literal("answer_emergency_question"), task_id: z.literal(pendingEmergencyQuestion.task_id), question_id: z.literal(pendingEmergencyQuestion.question_id) }));
+  if (nearbyKits) variants.push(z.strictObject({ name: z.literal("request_nearby_kits") }));
   variants.push(z.strictObject({ name: z.literal("suggest_sos") }));
   const action = (variants.length === 1 ? variants[0]! : z.union(variants as [z.ZodType, z.ZodType, ...z.ZodType[]])).pipe(ActionSchema);
   return z.strictObject({

@@ -26,12 +26,13 @@ export function heartbeat(h: Harness, ...boxIds: string[]) {
 }
 
 /** box.opened + sos.opened (+ optional tourniquet timer) on a box; returns the incident id. */
-export function openSos(h: Harness, box = "box-clinic", opts: { tourniquet?: boolean } = {}): string {
+export function openSos(h: Harness, box = "box-clinic", opts: { tourniquet?: boolean; askNearby?: boolean } = {}): string {
   const session = randomUUID();
   const at = (ms: number) => new Date(h.now.ms + ms).toISOString();
   const mk = (type: string, ms: number, body: Record<string, unknown>) => ({ event_id: randomUUID(), box_id: box, session_id: session, occurred_at: at(ms), type, ...body }) as BoxEvent;
   const events: BoxEvent[] = [mk("box.opened", 0, {}), mk("sos.opened", 500, { need: "bleeding", source: "touch" })];
   if (opts.tourniquet) events.push(mk("timer.started", 800, { timer: "tourniquet", step_id: "apply-tourniquet" }));
+  if (opts.askNearby) events.push(mk("nearby.requested", 900, { source: "touch" }));
   const r = h.net.ingest({ schema_version: EVENTS_VERSION, events });
   if (!r.ok) throw new Error(r.error);
   return r.opened[0]!.incident_id;

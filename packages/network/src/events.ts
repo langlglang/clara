@@ -3,7 +3,7 @@
 // harmless" becomes: one open incident per box; a repeated sos.opened joins the open one; a re-sent event_id is
 // ignored.
 import { EventBatchSchema, type BoxEvent, type Incident } from "@clara/contracts";
-import { closeHowForBoxClosed, closeIncident, startIncident, type AlertContext, type Push } from "./alerts.js";
+import { alertNearbyBoxes, closeHowForBoxClosed, closeIncident, startIncident, type AlertContext, type Push } from "./alerts.js";
 import { refreshBox } from "./boxes.js";
 import type { IncidentEntry } from "./store.js";
 import type { MaintainerAlert } from "./supplies.js";
@@ -91,6 +91,12 @@ function applyIncidentEvent(ctx: AlertContext, event: BoxEvent, now: Date, resul
       if (sos && Date.parse(event.occurred_at) < Date.parse(sos.event.occurred_at)) return;
       result.pushes.push(...closeIncident(ctx, open, "cancelled", now));
       result.closed.push(open.incident);
+      return;
+    }
+    case "nearby.requested": {
+      // Only the person at the box in SOS can send for nearby kits, and only for its own open incident.
+      if (!open || open.incident.session_id !== event.session_id) return;
+      result.pushes.push(...alertNearbyBoxes(ctx, open));
       return;
     }
     case "box.closed": {

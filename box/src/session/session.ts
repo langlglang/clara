@@ -135,7 +135,7 @@ export class BoxSession {
   private lidOpen = false;
   private presentation: ScreenPresentation | null = null;
   private countdown: Countdown | null = null;
-  private sos: { need: Need; openedAt: number; overlay: boolean } | null = null;
+  private sos: { need: Need; openedAt: number; overlay: boolean; nearbyAsked: boolean } | null = null;
   private emergencyTaskId: string | null = null;
   private readonly background = new Map<"pulse" | "camera", AbortController>();
   private latestPulse: PulseObservation | null = null;
@@ -384,7 +384,7 @@ export class BoxSession {
 
   private openSos(source: Source): void {
     this.countdown = null;
-    this.sos = { need: this.currentNeed(), openedAt: this.clock.now(), overlay: true };
+    this.sos = { need: this.currentNeed(), openedAt: this.clock.now(), overlay: true, nearbyAsked: false };
     const opened = this.emit("sos.opened", { need: this.currentNeed(), source });
     this.emergencyTaskId = opened?.event_id ?? null;
     if (opened) {
@@ -400,6 +400,19 @@ export class BoxSession {
     this.o.speech?.stopAll();
     this.say(LINES.sosOpened);
     this.publish();
+  }
+
+  /**
+   * The person at this box, in SOS, asked other Clara boxes nearby to bring their kits. Never sent by default:
+   * only this request lets the network (or its coordinator) send for another box's kit.
+   */
+  askNearby(source: Source): boolean {
+    if (!this.sos || this.sos.nearbyAsked) return false;
+    this.sos.nearbyAsked = true;
+    this.emit("nearby.requested", { source });
+    this.say(this.online ? LINES.nearbyAsked : LINES.nearbyAskedOffline);
+    this.publish();
+    return true;
   }
 
   // ---------- Screen presses ----------
@@ -446,6 +459,9 @@ export class BoxSession {
         return;
       case "cancel_sos":
         this.cancelSos("touch");
+        return;
+      case "ask_nearby":
+        this.askNearby("touch");
         return;
       case "show_911":
       case "hide_911":
@@ -505,6 +521,7 @@ export class BoxSession {
     if (!this.active || !this.lidOpen) return null;
     const state = { ...this.engine.turnState(this.recent),
       pulse_available: Boolean(this.o.pulseReader),
+      ...(this.sos && !this.sos.nearbyAsked ? { nearby_kits_available: true as const } : {}),
       camera_available: Boolean(this.o.camera && this.o.cloud.inspectCamera && this.o.cameraCloudEnabled),
       available_visuals: VISUALS.filter((visual) => {
       if (visual.id === "kit_overview" && this.o.kit.layoutRevision !== "3slot-v1") return false;
@@ -623,6 +640,8 @@ export class BoxSession {
       case "suggest_sos":
         this.requestSos(source);
         return true;
+      case "request_nearby_kits":
+        return this.askNearby(source);
       case "answer_emergency_question": {
         const question = this.emergencyQuestion;
         const report = response ? this.heardByTurn.get(response.client_turn_id) : null;
@@ -911,6 +930,7 @@ export class BoxSession {
             need: this.sos.need,
             opened_at: this.sos.openedAt,
             overlay: this.sos.overlay,
+            nearby_asked: this.sos.nearbyAsked,
             coaching: coachingLines({ directions: this.o.directions ?? null, multipleInjured: this.multipleInjured,
               location: this.o.location?.current() ?? null, configuredAddress: this.o.configuredAddress ?? null }),
           }

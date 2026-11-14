@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Id } from "@clara/contracts";
 
 export type ScreenPhase = "idle" | "guiding" | "countdown" | "sos";
-export const SCREEN_VIEW_VERSION = "screen-view/1.3" as const;
+export const SCREEN_VIEW_VERSION = "screen-view/1.4" as const;
 export type ScreenVoiceState = "off" | "starting" | "ready" | "listening" | "processing" | "speaking" | "unavailable";
 
 export interface ScreenStep {
@@ -51,7 +51,8 @@ export interface ScreenView {
   presentation: ScreenPresentation | null;
   countdown: { seconds_left: number; total: number } | null;
   /** Mock 911 only: never a real call. */
-  sos: { need: "bleeding" | "breathing" | "general"; opened_at: number; overlay: boolean; coaching: string[] } | null;
+  /** nearby_asked (additive in 1.4): the person asked other boxes nearby to bring their kits. */
+  sos: { need: "bleeding" | "breathing" | "general"; opened_at: number; overlay: boolean; nearby_asked: boolean; coaching: string[] } | null;
   /** From comingLine() only: null until someone really accepted. */
   coming: string | null;
   nearby: { incident_id: string; from_box_name: string; directions: string; bringing: boolean }[];
@@ -94,6 +95,7 @@ export const ScreenPressSchema = z.union([
       "unmute",
       "sos",
       "cancel_sos",
+      "ask_nearby",
       "show_911",
       "hide_911",
       "multiple_injured",

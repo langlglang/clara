@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Field Kit computer</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;700&amp;family=IBM+Plex+Sans:wght@400;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#F97316}a:hover{color:#FAFAFA}
+.row{display:flex;gap:40px;font-family:'IBM Plex Sans', sans-serif;color:#FAFAFA}
+.cap{font:600 13px 'IBM Plex Sans', sans-serif;color:#666;margin:0 0 12px}
+.s{width:390px;height:844px;box-sizing:border-box;background:#18181B;padding:56px 20px 24px;display:flex;flex-direction:column;gap:14px;position:relative;overflow:hidden}
+.d{width:1440px;height:900px;box-sizing:border-box;background:#18181B;display:grid;grid-template-columns:1fr 440px;grid-template-rows:64px 1fr}
+.h1{margin:0;font-family:'IBM Plex Mono', monospace;font-weight:700;font-size:32px;line-height:1.1}
+.h2{margin:0;font-family:'IBM Plex Mono', monospace;font-weight:700;font-size:22px}
+.lbl{font-size:12px;font-weight:700;letter-spacing:.08em;color:#A1A1AA;text-transform:uppercase}
+.m{color:#A1A1AA;font-size:14px}
+.card{background:#27272A;border:1px solid #3F3F46;border-radius:0px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.big{font-family:'IBM Plex Mono', monospace;font-size:22px;font-weight:700}
+.btn{height:60px;border:0;border-radius:0px;background:#F97316;color:#18181B;font:700 18px 'IBM Plex Sans', sans-serif;text-transform:uppercase}
+.btn2{height:48px;border:1px solid #3F3F46;border-radius:0px;background:transparent;color:#FAFAFA;font:600 15px 'IBM Plex Sans', sans-serif}
+.chip{font-size:13px;padding:6px 12px;border-radius:0px;background:#27272A;border:1px solid #3F3F46}
+.alert{color:#F97316}.ok{color:#22C55E}.warn{color:#EAB308}.info{color:#38BDF8}
+.tl{display:flex;gap:12px;font-size:15px}.tl span:first-child{width:48px;color:#A1A1AA;font-size:13px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#27272A;border-top:1px solid #3F3F46;border-radius:0px 0px 0 0;padding:18px 20px 28px;display:flex;flex-direction:column;gap:10px}
+.nav{display:flex;justify-content:space-around;border-top:1px solid #3F3F46;padding-top:12px;font-size:13px;font-weight:600}
+.top{grid-column:1/3;display:flex;align-items:center;gap:28px;padding:0 24px;border-bottom:1px solid #3F3F46}
+.side{border-left:1px solid #3F3F46;padding:20px;display:flex;flex-direction:column;gap:12px;background:#27272A}
+.legend{position:absolute;left:20px;bottom:20px;background:#27272A;border:1px solid #3F3F46;border-radius:0px;padding:10px 14px;display:flex;gap:16px;font-size:13px}
+.float{position:absolute;left:20px;top:20px;background:#27272A;border:1px solid #3F3F46;border-radius:0px;padding:12px 16px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+</style>
+</helmet>
+<div class="row" style="width: 2968px; height: 978px; background: #FFFFFF; padding: 24px; box-sizing: border-box">
+<div><p class="cap">Field Kit · Computer · Network and boxes</p><div class="d">
+<header class="top"><b style="font-family: 'IBM Plex Mono', monospace; color: #F97316; text-transform: uppercase">Clara Network</b><nav style="display: flex; gap: 20px; font-size: 14px"><a href="#network" style="color: #FAFAFA; font-weight: 700">Network</a><a href="#boxes">Boxes</a><a href="#helpers">Helpers</a><a href="#incidents">Incidents</a><a href="#restock">Restock</a></nav><span style="flex: 1"></span><span class="m">Live</span></header>
+<section style="position: relative; overflow: hidden"><svg width="1000" height="836" viewBox="0 0 1000 836" aria-hidden="true" style="position: absolute; inset: 0">
+<rect width="1000" height="836" style="fill: #1F1F23"></rect>
+<path d="M0 250.79999999999998 L1000 292.59999999999997 M0 568.48 L1000 526.68 M270 0 L310 836 M720 0 L690 836" style="stroke: #2E2E33; stroke-width: 18"></path>
+<circle cx="500" cy="418" r="183.92" style="fill: none; stroke: #F97316; stroke-opacity: .35; stroke-dasharray: 6 8"></circle>
+<circle cx="500" cy="418" r="13" style="fill: #F97316"></circle>
+<rect x="180" y="167.20000000000002" width="22" height="22" rx="4" style="fill: #22C55E"></rect>
+<rect x="780" y="627" width="22" height="22" rx="4" style="fill: #EAB308"></rect>
+<circle cx="420" cy="351.12" r="7" style="fill: #38BDF8"></circle><circle cx="600" cy="468.16" r="7" style="fill: #38BDF8"></circle><circle cx="360" cy="518.32" r="7" style="fill: #38BDF8"></circle><circle cx="640" cy="300.96" r="7" style="fill: #FAFAFA"></circle><circle cx="200" cy="418" r="7" style="fill: #38BDF8"></circle>
+</svg>
+<div class="float"><span class="lbl">Helpers nearby now</span><span><b class="big">14</b> available · <b class="info">9</b> on foot · <b>5</b> drivers</span></div>
+<div class="legend"><span class="ok">■ Ready</span><span class="warn">■ Low stock</span><span class="alert">● Emergency</span><span class="info">● Helper</span><span>● Driver</span></div></section>
+<aside class="side"><span class="lbl">Boxes · 4</span>
+<div class="card" style="border-color: #F97316"><b>Market Street · in use</b><span class="m">Battery 78% · tourniquet 1 of 2 left</span></div>
+<div class="card"><b>Library · ready</b><span class="m">Battery 96% · self-test passed 6:00</span></div>
+<div class="card"><b class="warn">School gate · low stock</b><span class="m">Gauze 0 · restock requested</span></div>
+<div class="card"><b class="m">Bus depot · offline</b><span class="m">Last seen 19:05 · check power</span></div>
+<div style="flex: 1"></div><button class="btn">Plan restock run</button></aside>
+</div></div>
+<div><p class="cap">Field Kit · Computer · Dispatch and rides</p><div class="d">
+<header class="top"><b style="font-family: 'IBM Plex Mono', monospace; color: #F97316; text-transform: uppercase">Clara Dispatch</b><span class="alert">● 2 active emergencies</span><span class="m">14 helpers · 5 drivers · ambulance 35+ min</span></header>
+<section style="position: relative; overflow: hidden"><svg width="1000" height="836" viewBox="0 0 1000 836" aria-hidden="true" style="position: absolute; inset: 0">
+<rect width="1000" height="836" style="fill: #1F1F23"></rect>
+<path d="M0 250.79999999999998 L1000 292.59999999999997 M0 568.48 L1000 526.68 M270 0 L310 836 M720 0 L690 836" style="stroke: #2E2E33; stroke-width: 18"></path>
+<circle cx="500" cy="418" r="183.92" style="fill: none; stroke: #F97316; stroke-opacity: .35; stroke-dasharray: 6 8"></circle>
+<circle cx="500" cy="418" r="13" style="fill: #F97316"></circle>
+<rect x="180" y="167.20000000000002" width="22" height="22" rx="4" style="fill: #22C55E"></rect>
+<rect x="780" y="627" width="22" height="22" rx="4" style="fill: #EAB308"></rect>
+<circle cx="420" cy="351.12" r="7" style="fill: #38BDF8"></circle><circle cx="600" cy="468.16" r="7" style="fill: #38BDF8"></circle><circle cx="360" cy="518.32" r="7" style="fill: #38BDF8"></circle><circle cx="640" cy="300.96" r="7" style="fill: #FAFAFA"></circle><circle cx="200" cy="418" r="7" style="fill: #38BDF8"></circle>
+<path d="M330 640 L340 520 L500 418 L520 160" style="fill: none; stroke: #38BDF8; stroke-width: 5"></path></svg>
+<div class="float"><span class="lbl">Emergencies</span><b>Bleeding · Market Street</b><span class="m">Tourniquet 2:14 · Priya on scene · ride needed</span><b style="margin-top: 8px">Not breathing · Library</b><span class="m">CPR coach 4:10 · 1 helper 3 min out</span></div></section>
+<aside class="side"><span class="lbl">Ride plan · Market Street</span>
+<div class="card"><b>Suggested: Omar · white van</b><span class="m">Pickup 4 min · hospital 11 min</span><span class="m">Why: closest free driver, room for a helper, avoids closed Bridge Rd</span><div style="display: flex; gap: 8px"><button class="btn" style="flex: 1; height: 44px; font-size: 15px">Approve and offer</button><button class="btn2" style="height: 44px">Reassign</button></div></div>
+<span class="lbl">Backups</span><div style="display: flex; justify-content: space-between"><span>Lena · sedan</span><span class="m">7 min</span></div><div style="display: flex; justify-content: space-between"><span>Sam · motorbike</span><span class="m">not suitable</span></div>
+<span class="lbl">Said at the box</span><span>"Priya is here." Ride not promised yet.</span></aside>
+</div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2968,"height":978}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

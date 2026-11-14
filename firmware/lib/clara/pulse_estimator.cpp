@@ -81,7 +81,8 @@ void PulseEstimator::sample(uint32_t ir, uint32_t sampledAtMs) {
   }
 
   if (filtered < trough_) trough_ = filtered;
-  const float minimumProminence = fmaxf(80.0f, dc_ * 0.002f);
+  // A live hold had beat candidates below the old 0.2% of DC gate.
+  const float minimumProminence = fmaxf(80.0f, dc_ * 0.001f);
   if (filtered1_ > filtered2_ && filtered1_ >= filtered &&
       filtered1_ > minimumProminence && filtered1_ - trough_ > minimumProminence * 2.0f) {
     acceptPeak(sampledAtMs - dt);

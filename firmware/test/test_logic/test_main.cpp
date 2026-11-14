@@ -1,5 +1,5 @@
 // Adapted from Sophi (github.com/mzhao1599/sophi), firmware/test/test_module/test_main.cpp.
-// Native tests for lib/clara on a fake clock: pio test -e native. Not run yet (PlatformIO not installed).
+// Native tests for lib/clara on a fake clock: pio test -e native.
 #include <unity.h>
 
 #include <cstring>
@@ -123,6 +123,17 @@ void test_pulse_steady_waveform_is_valid() {
   TEST_ASSERT_TRUE(p.result(8300).quality == PulseQuality::Unavailable);  // No new FIFO records.
 }
 
+void test_pulse_low_amplitude_waveform_is_valid() {
+  PulseEstimator p;
+  for (uint32_t t = 0; t <= 8000; t += 40) {
+    const float phase = 6.2831853f * static_cast<float>(t % 800) / 800;
+    p.sample(static_cast<uint32_t>(121000.0f + 160.0f * std::sin(phase)), t);
+  }
+  const PulseResult r = p.result(8000);
+  TEST_ASSERT_TRUE(r.quality == PulseQuality::Valid);
+  TEST_ASSERT_EQUAL(75, r.bpm);
+}
+
 void test_pulse_recovers_after_one_long_interval() {
   PulseEstimator p;
   // Downward optical troughs with one 1.6 s interval amid 0.8 s intervals.
@@ -178,6 +189,7 @@ int main() {
   RUN_TEST(test_buzzer_chime_ends_and_alert_is_bounded);
   RUN_TEST(test_pulse_no_finger_is_unavailable);
   RUN_TEST(test_pulse_steady_waveform_is_valid);
+  RUN_TEST(test_pulse_low_amplitude_waveform_is_valid);
   RUN_TEST(test_pulse_recovers_after_one_long_interval);
   RUN_TEST(test_pulse_flat_noisy_or_broken_signal_never_reports_a_number);
   RUN_TEST(test_line_buffer_frames_and_drops_oversize);

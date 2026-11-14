@@ -41,7 +41,7 @@
 
 namespace {
 
-constexpr const char* kFirmware = "clara-0.2.1";
+constexpr const char* kFirmware = "clara-0.2.2";
 constexpr unsigned long kBaud = 115200;
 
 // ---- Installed pins (avoid strapping pins 0, 2, 5, 12, 15, flash pins 6-11, and UART0 pins 1, 3) ----

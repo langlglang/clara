@@ -2,7 +2,7 @@
 
 Adapted from [Sophi](https://github.com/mzhao1599/sophi) firmware layout and serial pattern. Pure logic lives in `lib/clara/`, hardware code in `src/main.cpp`, and native tests in `test/test_logic/`.
 
-**Status:** `clara-0.2.0` builds and is flashed on the connected ESP32. The Pi adapter has received its hello and lid state, ACKs for all three LED channels and clear, and a fresh raw MAX30102 result. With no finger present, the pulse stream correctly reports null BPM. The native signal tests pass; a sustained on-finger pulse estimate and the installed lid mechanism remain unverified. Clara is a fictional-scenario demo, never used on a patient.
+**Status:** `clara-0.2.0` builds and is flashed on the connected ESP32. The Pi adapter has received its hello and lid state, ACKs for all three LED channels and clear, and a fresh raw MAX30102 result. The three installed LEDs were visually verified after fixing an immediate lease-expiry bug. With no finger present, the pulse stream correctly reports null BPM. The native signal tests pass; a sustained on-finger pulse estimate remains unverified. Clara is a fictional-scenario demo, never used on a patient.
 
 ## Current board profile
 
@@ -12,9 +12,9 @@ The Pi stays powered and uses one USB data cable to the ESP32 board's USB-to-UAR
 | --- | --- | --- |
 | GPIO33 | Lid limit switch `NC`; `COM` to ground, internal pull-up. Released switch reads LOW = open. | Bench GPIO logic observed; installed lid mechanism still needs a close/open check. |
 | GPIO21 / GPIO22 | MAX30102 SDA / SCL at 3.3 V logic, 100 kHz I²C | Bench raw samples verified. |
-| GPIO18 / GPIO19 / GPIO23 | LED channels 0 / 1 / 2, each through its own resistor to ground | User observed all three blink in expected bench positions. |
+| GPIO18 / GPIO19 / GPIO23 | LED channels 0 / 1 / 2, each through its own resistor to ground | User verified top-left small / top-right medium / bottom large slots with the integrated firmware. |
 
-`CLARA_LED_COUNT=3`, `CLARA_MOUNT_SWITCH=0`, and `CLARA_BUZZER_ENABLED=0` are set in `platformio.ini`. Other proposed LEDs, wall-mount switch and buzzer are **not wired or claimed working**. The proposed six-slot kit map must be verified separately before a supply can trigger a light. This firmware refuses light and pulse-start commands while the lid reads closed. A clear/off command always works. The switch orientation follows the tested bench wiring; confirm the actual lid's pressed/released states before using that gate.
+`CLARA_LED_COUNT=3`, `CLARA_MOUNT_SWITCH=0`, and `CLARA_BUZZER_ENABLED=0` are set in `platformio.ini`. Other proposed LEDs, wall-mount switch and buzzer are **not wired or claimed working**. The physical channel-to-position map is verified; the item-to-slot inventory still needs confirmation before retrieval instructions can claim a supply is in a slot. This firmware refuses light and pulse-start commands while the lid reads closed. A clear/off command always works.
 
 ## Build and flash
 

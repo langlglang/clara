@@ -62,6 +62,8 @@ export interface Speaker {
 export interface SpeechQueue {
   say(item: { text: string; wav?: Buffer; file?: string }): Promise<void>;
   stopAll(): void;
+  setMuted(muted: boolean): void;
+  readonly muted: boolean;
   readonly busy: boolean;
   onIdle(listener: () => void): void;
   /** Fires the moment playback starts, so the mic can pause (half-duplex). */

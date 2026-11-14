@@ -1,0 +1,29 @@
+{
+  "kit_id": "clara-3slot-v1",
+  "layout_revision": "3slot-v1",
+  "note": "Physical inventory confirmed by the box owner on 2026-11-13. One unit means at least one item or pack was observed; exact package counts, lots, and expiry dates need a restock check. Channel 0 = top-left small, 1 = top-right medium, 2 = bottom large.",
+  "items": [
+    { "sku": "SCISSORS", "name": "scissors", "slot": "top-left", "led": 0, "on_hand": 1, "low_at": 0 },
+    { "sku": "MEDICAL_TAPE", "name": "medical tape", "slot": "top-left", "led": 0, "on_hand": 1, "low_at": 0 },
+    { "sku": "TWEEZERS", "name": "tweezers", "slot": "top-left", "led": 0, "on_hand": 1, "low_at": 0 },
+    { "sku": "ADHESIVE_BANDAGES", "name": "adhesive bandages", "slot": "top-left", "led": 0, "on_hand": 1, "low_at": 0 },
+    { "sku": "ANTACID", "name": "antacid", "slot": "top-left", "led": 0, "on_hand": 1, "low_at": 0 },
+    { "sku": "BURN_CREAM", "name": "first aid burn cream", "slot": "top-left", "led": 0, "on_hand": 1, "low_at": 0 },
+    { "sku": "ANTISEPTIC_TOWELETTES", "name": "antiseptic towelettes", "slot": "top-right", "led": 1, "on_hand": 1, "low_at": 0 },
+    { "sku": "FINGERTIP_BANDAGES", "name": "fingertip bandages", "slot": "top-right", "led": 1, "on_hand": 1, "low_at": 0 },
+    { "sku": "KNUCKLE_BANDAGES", "name": "knuckle bandages", "slot": "top-right", "led": 1, "on_hand": 1, "low_at": 0 },
+    { "sku": "FABRIC_BANDAGES", "name": "fabric bandages", "slot": "top-right", "led": 1, "on_hand": 1, "low_at": 0 },
+    { "sku": "IBUPROFEN", "name": "ibuprofen", "slot": "top-right", "led": 1, "on_hand": 1, "low_at": 0 },
+    { "sku": "NON_ASPIRIN", "name": "non-aspirin pain reliever", "slot": "top-right", "led": 1, "on_hand": 1, "low_at": 0 },
+    { "sku": "BUTTERFLY_CLOSURES", "name": "butterfly closures", "slot": "top-right", "led": 1, "on_hand": 1, "low_at": 0 },
+    { "sku": "GLOVES", "name": "nitrile exam gloves", "slot": "top-right", "led": 1, "on_hand": 1, "low_at": 0 },
+    { "sku": "INSTANT_COLD_PACK", "name": "instant cold pack", "slot": "bottom", "led": 2, "on_hand": 1, "low_at": 0 },
+    { "sku": "OVAL_EYE_PAD", "name": "oval eye pad", "slot": "bottom", "led": 2, "on_hand": 1, "low_at": 0 },
+    { "sku": "GAUZE", "name": "sterile gauze packs", "slot": "bottom", "led": 2, "on_hand": 1, "low_at": 0 },
+    { "sku": "CONFORMING_GAUZE_ROLL", "name": "conforming gauze roll", "slot": "bottom", "led": 2, "on_hand": 1, "low_at": 0 },
+    { "sku": "TRAUMA_PAD", "name": "trauma pad", "slot": "bottom", "led": 2, "on_hand": 1, "low_at": 0 },
+    { "sku": "COTTON_SWABS", "name": "cotton swabs", "slot": "bottom", "led": 2, "on_hand": 1, "low_at": 0 },
+    { "sku": "TRIPLE_ANTIBIOTIC_OINTMENT", "name": "triple antibiotic ointment", "slot": "bottom", "led": 2, "on_hand": 1, "low_at": 0 },
+    { "sku": "POPSICLE_STICKS", "name": "popsicle sticks", "slot": "bottom", "led": 2, "on_hand": 1, "low_at": 0 }
+  ]
+}

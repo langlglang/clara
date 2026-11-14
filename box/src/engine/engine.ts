@@ -112,7 +112,9 @@ export class ScenarioEngine {
   /** What the model may pick: the next steps, plus the current one so "say that again" works. */
   allowedSteps(): ScenarioStep[] {
     const current = this.current;
-    return current ? [current, ...this.allowedNext()] : [this.step(this.scenario.start)];
+    const candidates = current ? [current, ...this.allowedNext()] : [this.step(this.scenario.start)];
+    // Do not offer a panel that tells someone to retrieve equipment this physical box lacks.
+    return candidates.filter((step) => !step.item || (this.kit.get(step.item)?.on_hand ?? 0) > 0);
   }
 
   canBack(): boolean {

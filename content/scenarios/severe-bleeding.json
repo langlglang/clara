@@ -1,6 +1,6 @@
 {
   "scenario_id": "severe_bleeding",
-  "version": "draft-1",
+  "version": "draft-2",
   "title": "Severe bleeding",
   "status": "draft",
   "sources": [
@@ -26,15 +26,15 @@
     {
       "step_id": "get_help",
       "label": "Alert help now",
-      "text": "Heavy bleeding can be life-threatening. I'm alerting help now. If someone is with you, ask them to call for emergency help too.",
+      "text": "Heavy bleeding can be life-threatening. Ask someone nearby to call emergency services now. This screen can guide an emergency call.",
       "sos": true,
       "next": ["find_wound"]
     },
     {
       "step_id": "find_wound",
       "label": "Find where the blood is coming from",
-      "text": "Find where the blood is coming from. Open or cut away clothing so you can see the wound. Use the shears in the lit compartment.",
-      "item": "SHEARS",
+      "text": "Find where the blood is coming from. Open or cut away clothing so you can see the wound. Use the scissors in the lit compartment.",
+      "item": "SCISSORS",
       "next": ["tourniquet", "pack_wound", "direct_pressure"]
     },
     {

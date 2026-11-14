@@ -1,25 +1,25 @@
 # Interface and message contracts — proposal v0.7
 
-**Interaction update:** the implemented screen now exposes only the simulated SOS flow as a touch action; legacy step-navigation actions remain in the internal `ScreenPressSchema` for compatibility but have no visible controls. Lid open does not produce a voice turn. The proposed generic presentation contract is specified below and in [conversation runtime](conversation-runtime.md).
+**Interaction update:** the implemented screen exposes simulated SOS and speaker mute as touch actions; legacy step-navigation actions remain in the internal `ScreenPressSchema` for compatibility but have no visible controls. Lid open does not produce a voice turn. The proposed generic presentation contract is specified below and in [conversation runtime](conversation-runtime.md).
 
-## Pi → kiosk screen — implemented `screen-view/1.1`
+## Pi → kiosk screen — implemented `screen-view/1.2`
 
-The Pi sends whole `ScreenView` snapshots over a local, token-protected Server-Sent Events stream. `schema_version: "screen-view/1.1"` adds `voice_state` to the `1.0` presentation surface; `revision` is a monotonically increasing view update counter, not a schema version. The page rejects unknown schema majors. `lid_open` is the physical lid state, independent of `phase`: a user can open simulated SOS with the lid closed, and the microphone must still display **MIC OFF**. `voice_state` is `off`, `starting`, `ready`, `listening`, `processing`, `speaking`, or `unavailable`; ready means the mic is open, listening means voice activity was detected, and processing means a final utterance was sent. Existing `step` remains for older consumers, but the current page renders `presentation` when present. A null presentation means the idle view. Old consumers can ignore new fields and continue to use `step`; a new consumer must handle null and all enumerated kinds.
+The Pi sends whole `ScreenView` snapshots over a local, token-protected Server-Sent Events stream. `schema_version: "screen-view/1.2"` adds `speech_muted` to the `1.1` voice-state surface; `revision` is a monotonically increasing view update counter, not a schema version. The page rejects unknown schema majors. `lid_open` is the physical lid state, independent of `phase`: while closed and idle the page is visually black; touching it reveals SOS and Mute for 15 seconds without opening the microphone. A simulated SOS countdown or call remains visible even with the lid closed. `voice_state` is `off`, `starting`, `ready`, `listening`, `processing`, `speaking`, or `unavailable`; ready means the mic is open, listening means voice activity was detected, and processing means a final utterance was sent. `speech_muted` silences Clara's speech and cues, while the microphone, visual replies, and mock SOS remain active. The page sends `mute` and `unmute` through the same token-protected press endpoint as SOS. Existing `step` remains for older consumers, but the current page renders `presentation` when present. A null presentation means the idle view. Old consumers can ignore new fields and continue to use `step`; a new consumer must handle null and all enumerated kinds.
 
 ```json
 {
-  "schema_version": "screen-view/1.1", "revision": 7, "phase": "guiding",
-  "lid_open": true, "voice_state": "listening", "box_name": "Clara Demo", "online": true,
+  "schema_version": "screen-view/1.2", "revision": 7, "phase": "guiding",
+  "lid_open": true, "voice_state": "listening", "speech_muted": false, "box_name": "Clara", "online": true,
   "presentation": {
-    "kind": "item", "title": "Find gauze", "body": "Compartment A1",
-    "image_url": null, "item": {"sku":"GAUZE-01","name":"Gauze","slot":"A1","lit":true,"missing":false},
-    "source_label": "Demo kit manifest"
+    "kind": "item", "title": "sterile gauze packs", "body": "In the bottom compartment.",
+    "image_url": "/content/kits/layout-3slot-v1-bottom.svg", "item": {"sku":"GAUZE","name":"sterile gauze packs","slot":"bottom","lit":true,"missing":false},
+    "source_label": "Kit inventory"
   },
   "step": null
 }
 ```
 
-The initial producers are local spoken answer/question captions, a demo kit inventory lookup, and versioned scenario guidance. `diagram`, `reading`, `handoff`, and `status` are renderer-ready types without producers. A reading producer must later bind a real connected-hardware result ID, units, time and quality before showing a number. Item producers must use the current manifest, not model-generated slot text; the physical slot mapping still needs an assembly check. The `presentation` field is a display snapshot, not permission for the model to choose arbitrary medical instructions or assets. The Pi producer, kiosk consumer, example above and compatibility tests change together; future meaning changes require a new major.
+The initial producers are local spoken answer/question captions, a kit inventory lookup, and versioned scenario guidance. `diagram`, `reading`, `handoff`, and `status` are renderer-ready types without producers. A reading producer must later bind a real connected-hardware result ID, units, time and quality before showing a number. Item producers use the current `clara-3slot-v1` manifest, never model-generated slot text. That manifest's 22 named supplies map to the owner's visually verified channel positions: `top-left → 0/GPIO18`, `top-right → 1/GPIO19`, `bottom → 2/GPIO23`; its `3slot-v1` screen SVGs show the same layout. Presence is confirmed, but exact package counts, expiry and lot still need a restock check. The `presentation` field is a display snapshot, not permission for the model to choose arbitrary medical instructions or assets. The Pi producer, kiosk consumer, example above and compatibility tests change together; future meaning changes require a new major.
 
 The broad `2.4` envelope below is still proposed. The Pi ↔ ESP32 link has an implemented, smaller [serial `1.1` schema](../packages/contracts/src/serial.ts); its wire messages and hardware status are described in [the firmware guide](../firmware/README.md). The Pi's implemented local `LocationProvider.current()` returns a fresh `GpsFix { latitude, longitude, observedAt, accuracyM }` or null; invalid/stale NMEA is not a fix. It accepts a checksummed 9600-baud RMC sentence only when status and fix time are valid, with a 15 s receipt and 30 s fix-time freshness limit. Mock SOS coaching uses that result or the configured address `1455 California Ave`, explicitly labeled as configured. This local location does not populate the proposed outbound `location.observation` message or send a volunteer alert. The installed receiver emitted a valid RMC/GGA fix and the service connected to its port; mock SOS display with that live fix remains unverified. JSON examples in this document are illustrative. All clocks use UTC RFC 3339 plus a monotonic `uptime_ms` where ordering matters. IDs are opaque UUIDs. `null` is never a fake reading.
 
@@ -27,7 +27,7 @@ The broad `2.4` envelope below is still proposed. The Pi ↔ ESP32 link has an i
 
 The ESP32 and Pi use 115200-baud newline JSON, maximum 1 KiB per line. `hello` requires `proto:"1.1"`, a per-reset `boot` identifier, firmware version and installed LED count; the Pi rejects an older hello. The current board has three installed LED channels (GPIO18, GPIO19, GPIO23), a lid switch on GPIO33, and MAX30102 I²C on GPIO21/22. The Pi's `sensor.read` command has an integer `id`. The ESP32 ACKs it, then returns `sensor.raw` with the same `id`, an advanced `sample_seq`, a reconstructed monotonic sample time after the request, red/IR counts and `quality:"valid"`; after one second without a new sample it returns null counts with `quality:"unavailable"`. A missing sensor or closed lid is NACKed. The Pi returns null on unavailable, timeout, malformed values or disconnect. It never substitutes a fixture or generated reading. Raw `valid` describes transport freshness, not medical accuracy.
 
-`pulse.start` and `pulse.stop` are separate commands. The ESP32's demo-only signal processor reports a numeric BPM only after contact, continuous 25-record/s input, non-saturated signal, enough prominent peaks and consistent recent intervals; otherwise the `pulse` event has `bpm:null`. It calculates no SpO₂. The Pi keeps raw sensor data out of ordinary logs. These serial messages are a working adapter design, **not** implementation of the full `2.4` envelope, inventory-authorized light commands, or clinical validation. Change the serial protocol literal, producer, Zod consumer, examples and compatibility tests together.
+`pulse.start` and `pulse.stop` are separate commands. The ESP32's demo-only signal processor reports a numeric BPM only after contact, continuous 25-record/s input, non-saturated signal, enough prominent peaks and consistent recent intervals; otherwise the `pulse` event has `bpm:null`. It calculates no SpO₂. The Pi keeps raw sensor data out of ordinary logs. The current Pi checks item IDs against its local manifest before issuing the simple LED command; the larger `2.4` request envelope and clinical validation are not implemented. Change the serial protocol literal, producer, Zod consumer, examples and compatibility tests together.
 
 ## Versioning and transport
 
@@ -189,7 +189,7 @@ Request (JSON, at most 1.5 MB):
     "scenario_id": "severe_bleeding", "step_id": null,
     "allowed_steps": [{ "step_id": "start", "label": "Tell me what happened" }],
     "questions": [{ "question_id": "where", "text": "Where is the bleeding?" }],
-    "manifest": [{ "sku": "GAUZE-01", "name": "gauze roll", "on_hand": 2 }],
+    "manifest": [{ "sku": "GAUZE", "name": "sterile gauze packs", "on_hand": 1 }],
     "triage_available": true,
     "recent_turns": [{ "from": "person", "words": "…" }, { "from": "clara", "words": "…" }]
   }

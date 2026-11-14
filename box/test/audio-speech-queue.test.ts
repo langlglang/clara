@@ -43,6 +43,23 @@ describe("SpeechQueue", () => {
     expect(speaker.lines[0]!.stopped).toBe(true);
   });
 
+  it("mutes current and later speech, then resumes new lines", async () => {
+    const speaker = new FakeSpeaker();
+    const queue = createSpeechQueue(speaker, { clock: new FakeClock() });
+    const current = queue.say({ text: "before" });
+    await flush();
+    queue.setMuted(true);
+    expect(queue.muted).toBe(true);
+    expect(speaker.lines[0]!.stopped).toBe(true);
+    await current;
+    await queue.say({ text: "muted" });
+    queue.setMuted(false);
+    const after = queue.say({ text: "after" });
+    speaker.lines[1]!.finish();
+    await after;
+    expect(speaker.lines.map((line) => line.value)).toEqual(["before", "after"]);
+  });
+
   it("stops a hung line after the per-line limit and moves on", async () => {
     const clock = new FakeClock();
     const speaker = new FakeSpeaker();

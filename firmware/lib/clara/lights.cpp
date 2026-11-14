@@ -47,7 +47,8 @@ void Lights::clear() {
 }
 
 void Lights::update(uint32_t now) {
-  if (lit_ >= 0 && now - litSince_ >= leaseMs_) lit_ = -1;
+  // A command can arrive after the caller captured its loop time. A slightly older time is not an expired lease.
+  if (lit_ >= 0 && static_cast<int32_t>(now - litSince_) >= 0 && now - litSince_ >= leaseMs_) lit_ = -1;
 }
 
 uint8_t Lights::rhythmLevel(uint32_t now) const {

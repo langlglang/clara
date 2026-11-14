@@ -462,5 +462,5 @@ void loop() {
   }
   readSensor(millis());  // Command parsing above may have advanced the clock past `now`.
   readPulse(millis());
-  writeOutputs(now);
+  writeOutputs(millis());  // The serial command above may have started a lease after `now` was captured.
 }

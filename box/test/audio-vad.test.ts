@@ -32,7 +32,23 @@ function feed(endpointer: Endpointer, samples: Int16Array) {
   return out;
 }
 
+const flat = (ms: number, level: number) => new Int16Array((ms * RATE) / 1000).fill(level);
+
 describe("Endpointer (docs/voice.md: 0.7 s silence, 0.3 s minimum, 15 s maximum)", () => {
+  it("learns a loud USB mic room floor and ends speech after the person stops", () => {
+    const endpointer = new Endpointer();
+    expect(feed(endpointer, flat(1000, 280))).toHaveLength(0); // about -41 dBFS, measured on the Pi
+    expect(endpointer.active).toBe(false);
+    expect(feed(endpointer, flat(800, 3500))).toHaveLength(0);
+    expect(endpointer.active).toBe(true);
+    expect(feed(endpointer, flat(900, 280))).toHaveLength(1);
+    expect(endpointer.active).toBe(false);
+  });
+
+  it("still catches speech that begins on the first mic frame", () => {
+    expect(feed(new Endpointer(), signal([{ ms: 600, loud: true }, { ms: 900, loud: false }]))).toHaveLength(1);
+  });
+
   it("reports when speech starts and when it ends or is cancelled", () => {
     const activity: boolean[] = [];
     const endpointer = new Endpointer({}, (active) => activity.push(active));

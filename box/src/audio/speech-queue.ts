@@ -33,6 +33,7 @@ export class PlayerQueue implements SpeechQueue {
   private queue: Item[] = [];
   private current: { item: Item; utterance: Utterance } | null = null;
   private running = false;
+  private isMuted = false;
   private readonly idleListeners: Array<() => void> = [];
   private readonly busyListeners: Array<() => void> = [];
   private readonly clock: Clock;
@@ -50,6 +51,15 @@ export class PlayerQueue implements SpeechQueue {
     return this.running;
   }
 
+  get muted(): boolean {
+    return this.isMuted;
+  }
+
+  setMuted(muted: boolean): void {
+    this.isMuted = muted;
+    if (muted) this.stopAll();
+  }
+
   onIdle(listener: () => void): void {
     this.idleListeners.push(listener);
   }
@@ -59,6 +69,7 @@ export class PlayerQueue implements SpeechQueue {
   }
 
   say(item: { text: string; wav?: Buffer; file?: string }): Promise<void> {
+    if (this.isMuted) return Promise.resolve();
     if (!item.text.trim() && !item.wav && !item.file) return Promise.resolve();
     return new Promise((resolve) => {
       this.queue.push({ ...item, cancelled: false, resolve });

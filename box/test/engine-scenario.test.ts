@@ -4,6 +4,7 @@ import type { BoxEvent } from "@clara/contracts";
 import { EventFactory, Kit, ScenarioEngine, loadKit, loadScenario, parseScenario } from "../src/engine/index.js";
 
 const fixture = (name: string) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
+const content = (name: string) => fileURLToPath(new URL(`../../content/${name}`, import.meta.url));
 
 function setup() {
   const events: BoxEvent[] = [];
@@ -18,6 +19,21 @@ function setup() {
 }
 
 describe("scenario loading", () => {
+  it("maps every stocked item to one of the three physically verified compartments", () => {
+    const kit = loadKit(content("kits/clara-3slot-v1.json"));
+    expect(kit.kitId).toBe("clara-3slot-v1");
+    expect(kit.layoutRevision).toBe("3slot-v1");
+    expect(kit.all()).toHaveLength(22);
+    const mapping = { "top-left": 0, "top-right": 1, bottom: 2 } as const;
+    for (const item of kit.all()) {
+      expect(item.led).toBe(mapping[item.slot as keyof typeof mapping]);
+    }
+    expect(kit.get("SCISSORS")?.slot).toBe("top-left");
+    expect(kit.get("GLOVES")?.slot).toBe("top-right");
+    expect(kit.get("GAUZE")?.slot).toBe("bottom");
+    expect(kit.get("POPSICLE_STICKS")?.slot).toBe("bottom");
+  });
+
   it("loads and checks the fixture", () => {
     const scenario = loadScenario(fixture("test-scenario.json"));
     expect(scenario.steps).toHaveLength(5);
@@ -37,6 +53,19 @@ describe("scenario loading", () => {
 });
 
 describe("ScenarioEngine", () => {
+  it("does not offer guidance that requires absent equipment", () => {
+    const events = new EventFactory("box-test", () => 1_700_000_000_000);
+    events.sessionId = "00000000-0000-4000-8000-000000000001";
+    const engine = new ScenarioEngine(loadScenario(content("scenarios/severe-bleeding.json")), loadKit(content("kits/clara-3slot-v1.json")), {
+      events, emit: () => {},
+    });
+    engine.start("voice");
+    engine.goTo("safety", "voice");
+    engine.goTo("get_help", "voice");
+    engine.goTo("find_wound", "voice");
+    expect(engine.turnState().allowed_steps.map((step) => step.step_id)).toEqual(["find_wound", "direct_pressure"]);
+  });
+
   it("offers only the entry package before guidance starts", () => {
     const { engine } = setup();
     expect(engine.turnState().allowed_steps.map((s) => s.step_id)).toEqual(["s1"]);

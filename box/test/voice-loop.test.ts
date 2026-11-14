@@ -129,6 +129,18 @@ describe("voice loop", () => {
     expect(t.loop.status).toBe("listening");
   });
 
+  it("shows speaking for a greeting queued before the voice loop starts", async () => {
+    const t = setup(async () => answer(null, "Okay."));
+    t.speaker.auto = false;
+    void t.queue.say({ text: "Greeting" });
+    t.loop.start();
+    expect(t.loop.status).toBe("speaking");
+    expect(t.listener.last).toBe("pause");
+    t.speaker.lines[0]!.finish();
+    await flush();
+    expect(t.loop.status).toBe("listening");
+  });
+
   it("sends a clip as a TurnRequest, wipes it, and on select_step acts without speaking the reply", async () => {
     const t = setup(async () => answer({ name: "select_step", step_id: "pressure" }, "Press now."));
     t.loop.start();

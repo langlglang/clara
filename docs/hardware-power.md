@@ -42,7 +42,7 @@ flowchart TB
 
 The current ESP32 board communicates through its USB-to-serial bridge at `/dev/cu.SLAB_USBtoUART` on the development Mac; the Pi should discover its stable `/dev/serial/by-id/` path. Use the implemented [serial contract](contracts.md#implemented-pi--esp32-serial-11). There is **no Pi GPIO↔ESP32 UART wire**, no separate 3.3 V regulator for the dev board, and no Pi power-button wire in this demo. Power the screen and hub according to their actual labels, not assumptions based on connector shape.
 
-**Current three-light bench profile:** GPIO33 is the lid input (switch `NC`, `COM` to ground, open when LOW); GPIO21/22 are MAX30102 SDA/SCL; GPIO18/19/23 drive the three installed LEDs, each through its own resistor. The user observed all three bench LEDs lighting. The [integrated firmware](../firmware/README.md) uses this profile over USB serial; six kit slots, a mount switch, a buzzer and their mapping are still proposed.
+**Current three-light box profile:** GPIO33 is the lid input (switch `NC`, `COM` to ground, open when LOW); GPIO21/22 are MAX30102 SDA/SCL; GPIO18/19/23 drive the three installed LEDs, each through its own resistor. With the integrated firmware, the user verified channel 0 = top-left small slot, channel 1 = top-right medium slot, and channel 2 = bottom large slot. The [integrated firmware](../firmware/README.md) uses this profile over USB serial; the item-to-slot inventory is still unverified. Additional slots, a mount switch and a buzzer are proposed.
 
 ### Proposed anti-theft inputs and outputs
 

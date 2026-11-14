@@ -1,22 +1,22 @@
-# Kit inventory handoff — proposed
+# Kit inventory and compartment lights
 
-The screen can point to an item only if it knows the exact physical kit revision and a teammate has verified that box. Start with a fixed tray model `CL-DEMO-A`. Proposed top view: A1 gloves, A2 dressings, B1 gauze, B2 pressure dressing, C1 bandage, C2 spare/empty. This is a **sample demo layout**, not a finalized medical kit. The demo will never be used on a patient.
+**Implemented and physically verified on the current box, 2026-11-13:** three installed LEDs identify three compartments. The owner confirmed the supplies below are stocked in those positions, and observed each light with the integrated Pi-to-ESP32 command path after the lease-clock fix. This is a proof of concept, not a patient-ready medical kit.
 
-Each tray has permanent printed slot labels and a revision label. Each box has a manifest with SKU, slot, quantity, lot, expiry, verification date and checker identity. The screen holds a matching layout image. After a supply is used or the seal breaks, mark its availability unknown until a teammate checks it. A mismatched revision means no item-location claim.
+| Physical compartment | ESP32 channel / pin | Stocked supplies |
+| --- | --- | --- |
+| Top-left, small (`top-left`) | 0 / GPIO18 | Scissors, medical tape, tweezers, adhesive bandages, antacid, first aid burn cream |
+| Top-right, medium (`top-right`) | 1 / GPIO19 | Antiseptic towelettes, fingertip bandages, knuckle bandages, fabric bandages, ibuprofen, non-aspirin pain reliever, butterfly closures, nitrile exam gloves |
+| Bottom, large (`bottom`) | 2 / GPIO23 | Instant cold pack, oval eye pad, sterile gauze packs, conforming gauze roll, trauma pad, cotton swabs, triple antibiotic ointment, popsicle sticks |
 
-Proposed addition: mount one LED beside each physical slot, not on the removable supply. Keep a `slot_id → led_channel` map with the same kit revision as the printed tray and screen asset. The Pi may light only a slot returned by a verified `inventory.locate` result for a user request or approved guidance card; it clears the previous slot before lighting the next. If the manifest, layout or light map does not match the box, do not light a compartment. Printed slot labels and the screen diagram remain the location cues if a light fails. Photograph and check each slot-to-light mapping after assembly and whenever the tray or wiring changes.
+The source of truth is [`clara-3slot-v1.json`](../../content/kits/clara-3slot-v1.json): `kit_id: clara-3slot-v1`, `layout_revision: 3slot-v1`, one SKU per named supply, physical `slot`, and LED `channel`. The matching screen assets are `content/kits/layout-3slot-v1-{top-left,top-right,bottom}.svg`; each highlights the selected compartment. `on_hand: 1` means at least one item or pack was observed, **not** an exact piece count. Lot, expiry, package count and checker identity have not been recorded. The current `record_usage` action is unavailable, so these placeholders are not decremented during a conversation.
 
-## Running supply ledger (proposed; no weight or slot sensors)
+When someone asks where an item is, the cloud agent can choose only a SKU the Pi offered from this manifest. The Pi checks the SKU again, shows the matching layout and slot name, then sends one bounded LED command over USB. Guidance panels that name an item use the same lookup. Only one channel is lit at once; the previous light clears when another is selected, the lease expires, the lid closes, or the Pi disconnects. A failed LED command leaves the text and layout visible. The current bleeding scenario is still a draft. Its model-facing choices omit panels requiring absent equipment, such as a tourniquet or hemostatic gauze; it does not substitute another supply automatically.
 
-Clara keeps a **running count** instead of sensing supplies. The rule: **the LLM turns what people say into structured entries; plain code keeps the count.** The LLM never edits a count directly.
+## Restock and layout changes
 
-1. **Starting stock.** At restock, a teammate records the quantity in each slot in the manifest (for example, "B2: 2 pressure dressings").
-2. **Expected use during the session.** When the scenario reaches a step that uses an item, the box logs `supply.expected_use` (for example, the tourniquet step logs one tourniquet). This is deterministic, from the scenario file.
-3. **Usage report (future).** After a user explicitly reports what was used, the agent may map the words ("both gauze rolls and some gloves") to manifest SKUs. Each `sku` must exist in the active manifest and each `qty` must be between 1 and the quantity on hand. Closing the lid does not start an agent turn because the microphone is off.
-4. **Confirmation (unresolved).** A future voice confirmation or maintainer workflow must approve the proposed quantities before `supply.usage_confirmed` changes stock. The minimal screen has no supply counter or Confirm control. Until that path exists, the model does not offer `record_usage`; a report alone does not decrement stock.
-5. **Ledger.** Stock per slot = starting quantity − confirmed use. Unverified slots are shown as "unverified" until the next restock check resets them. The agent and `inventory.locate` never claim an unverified item is present.
-6. **Restock.** When a slot reaches its low threshold, the box's heartbeat reports `low_supplies` and the hub shows a restock alert. The hub keeps supply use per box over time for supply planning.
+1. Check every listed supply in its actual compartment. Record exact package count, lot and expiry before changing `on_hand` from the presence placeholder. Remove or set `on_hand: 0` for anything missing.
+2. Open the lid and request one item from each compartment. Confirm the text, highlighted SVG, and physical LED agree: top-left → 0, top-right → 1, bottom → 2. Verify an item missing from the manifest is not offered or lit.
+3. If the tray, wiring, or contents move, increment `kit_id` and `layout_revision` together. Update the JSON, each SVG, scenario item references, this table, tests, and the box's installed manifest in one change. Do not reuse the old revision for a new physical layout.
+4. After any kit use or broken seal, a teammate checks and replenishes stock before claiming it is available again. Automatic per-item sensing, signed restock records, expiry enforcement, and a running ledger remain proposed.
 
-This replaces per-slot scanning during sessions; a teammate still verifies the tray at restock. A missing high-value item reported with no emergency session feeds the [anti-theft](anti-theft.md) flag.
-
-Use [manifest and supply contracts](../contracts.md). Acceptance for future ledger work: scanning a wrong revision blocks map and light; a missing item is never described as present; expired supply is flagged; each screen/LED slot callout matches the physical tray in a photographed check; an agent-proposed usage with an unknown SKU or a quantity above stock is rejected; nothing changes the count without an explicit confirmation; an unconfirmed session leaves affected slots unverified. Assign one teammate to reset the demo tray between runs.
+The current tests check every listed SKU's slot/channel and exercise a Pi `locate_item` action for each of the three compartments. The hardware check is a separate observation: a serial ACK proves the ESP32 accepted a command; the owner's visual check proved the light actually appeared in the expected physical position.

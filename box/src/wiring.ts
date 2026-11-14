@@ -114,7 +114,7 @@ export async function loadVoiceLoop(o: {
         const accepted = session.applyAction(action, "voice", response);
         if (accepted && action.name === "select_step") session.remember("clara", response.reply);
       },
-      ...(o.speaker ? { playCue: (name: CueName) => o.speaker!.playCue(name) } : {}),
+      ...(o.speaker ? { playCue: (name: CueName) => o.speech.muted ? Promise.resolve() : o.speaker!.playCue(name) } : {}),
       onEvent: (event) => {
         if (event.type === "status") {
           session.setVoiceStatus(event.status);

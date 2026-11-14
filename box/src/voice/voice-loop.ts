@@ -124,7 +124,8 @@ class VoiceLoopImpl implements VoiceLoop {
     this.o.listener.start((clip) => void this.onClip(clip), (active) => this.onActivity(active), (available) => this.onAvailability(available));
     this.o.listener.pause();
     this.cueDue = true;
-    this.settle();
+    if (this.o.queue.busy) this.setStatus("speaking");
+    else this.settle();
   }
 
   stop(): void {

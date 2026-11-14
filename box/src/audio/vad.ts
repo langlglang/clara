@@ -53,6 +53,7 @@ export class Endpointer {
   private readonly o: Required<EndpointerOptions>;
   private remainder = new Int16Array(0);
   private noiseDb = -60;
+  private noiseSampled = false;
   private preRoll: Int16Array[] = [];
   private voicedRun = 0;
   private speaking = false;
@@ -131,6 +132,12 @@ export class Endpointer {
   private frame(frame: Int16Array): Segment | null {
     const o = this.o;
     const level = dbfs(frame);
+    // The USB mic's room floor can be far above -60 dBFS. Seed from its first frame so room noise
+    // does not look like continuous speech; cap the seed so speech beginning immediately still starts.
+    if (!this.noiseSampled) {
+      this.noiseDb = Math.min(level, -40);
+      this.noiseSampled = true;
+    }
     const voiced = level > Math.max(this.noiseDb + o.marginDb, o.minLevelDb);
     if (!this.speaking) {
       // Track the room slowly while nobody is talking.

@@ -1,6 +1,6 @@
 # Fictional-scenario content and demo boundaries
 
-**Clara is a HackPrinceton proof of concept and will never be used on a patient.** There is no treatment-validation, clinical-review, certification, or deployment milestone. The agent demonstrates conversation, tool use, kit navigation and synchronized instructions using fictional first-aid scenarios. The overall interface says **Clara Demo**; SOS is mocked. Do not describe the prototype as a certified medical device or imply a real emergency call occurred.
+**Clara is a HackPrinceton proof of concept and will never be used on a patient.** There is no treatment-validation, clinical-review, certification, or deployment milestone. The agent demonstrates conversation, tool use, kit navigation and synchronized instructions using fictional first-aid scenarios. The ordinary kiosk conversation does not carry a demo banner; the SOS button and call overlay explicitly state that 911 is simulated and no real call is made. This repository and project documentation identify the build as a prototype. Do not describe it as a certified medical device or imply a real emergency call occurred.
 
 ## Source registry, checked 2026-11-02
 
@@ -29,6 +29,6 @@ The nearby CPR-trained volunteer idea is a **later product concept**, modeled on
 
 ## Live sensor presentation
 
-A consenting volunteer may use an actual cuff or optical sensor. The UI shows the returned value, device, units and time under the overall **Clara Demo** context. No separate experimental badge is required. The engineering notes record the model, connection, quality flags and known limitations. A value can demonstrate that the tool read hardware; it does not control the fictional care flow.
+A consenting volunteer may use an actual cuff or optical sensor. The UI shows the returned value, device, units and time. No separate experimental badge is required. The engineering notes record the model, connection, quality flags and known limitations. A value can demonstrate that the tool read hardware; it does not control the fictional care flow.
 
 If the project were ever repurposed for patient use, that would be a different scope requiring new clinical, regulatory and emergency-service work. It is **not** part of Clara's plan.

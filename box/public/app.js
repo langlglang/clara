@@ -6,6 +6,7 @@
   const $ = (id) => document.getElementById(id);
   let view = null;
   let linkOk = false;
+  let wakeUntil = 0;
 
   function press(body) {
     fetch("/screen/press", {
@@ -107,8 +108,8 @@
   function draw() {
     if (!view) return;
     const v = view;
-    text($("box-name"), v.box_name);
-    show($("tag-sim"), v.simulated);
+    if (v.lid_open) wakeUntil = 0;
+    show($("sleep"), !v.lid_open && !v.sos && !v.countdown && Date.now() >= wakeUntil);
     const voiceState = !v.lid_open ? "off" : voiceLabels[v.voice_state] ? v.voice_state : "unavailable";
     text($("voice-state"), voiceLabels[voiceState]);
     $("voice-state").className = `tag ${voiceState}`;
@@ -125,10 +126,6 @@
       text($("coming-text"), strip.text);
       $("coming").classList.toggle("here", strip.here);
     }
-
-    const firstNearby = v.nearby[0];
-    show($("nearby-banner"), Boolean(firstNearby));
-    if (firstNearby) text($("nearby-banner-text"), `${firstNearby.from_box_name}: ${firstNearby.directions}`);
 
     show($("notice"), Boolean(v.notice));
     text($("notice-text"), v.notice);
@@ -178,6 +175,11 @@
       text($("caption"), v.caption && v.caption !== p.body ? v.caption : "");
     }
     $("sos-button").classList.toggle("open", Boolean(v.sos));
+    const mute = $("mute-button");
+    mute.dataset.action = v.speech_muted ? "unmute" : "mute";
+    mute.textContent = v.speech_muted ? "UNMUTE CLARA" : "MUTE CLARA";
+    mute.setAttribute("aria-pressed", String(v.speech_muted));
+    mute.classList.toggle("active", v.speech_muted);
     // report_url stays in the view model but is not drawn: the team dropped QR codes.
 
     show($("countdown"), v.phase === "countdown");
@@ -236,6 +238,19 @@
   $("visual-image").addEventListener("error", () => {
     show($("visual-image"), false);
     show($("no-image"), true);
+  });
+
+  const wakeScreen = () => {
+    wakeUntil = Date.now() + 15_000;
+    draw();
+    setTimeout(draw, 15_000);
+  };
+  $("sleep").addEventListener("pointerdown", wakeScreen);
+  $("sleep").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      wakeScreen();
+    }
   });
 
   setInterval(drawTimers, 1000);

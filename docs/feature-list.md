@@ -2,7 +2,7 @@
 
 **Updated 2026-11-13 at the start of HackPrinceton.** This list supersedes older planning docs in this folder where they disagree (those were written before the event; see "What changed" at the end). Labels: **must** (the core loop), **should**, **stretch**.
 
-**ESP32 build status:** the current three-light board profile has been built and flashed with a Pi-compatible USB serial protocol. Pi hello, LED commands, a fresh raw sensor result and null BPM with no finger are verified on the connected board. A steady on-finger BPM, the installed lid mechanism and six-compartment layout are not yet verified; see [firmware](../firmware/README.md).
+**ESP32 build status:** the current three-light board profile has been built and flashed with a Pi-compatible USB serial protocol. Pi hello, a fresh raw sensor result and null BPM with no finger are verified on the connected board. The owner visually verified all three physical LEDs with the integrated firmware after its lease-clock fix: top-left small, top-right medium and bottom large. The 22 stocked supply categories are mapped to those slots in `content/kits/clara-3slot-v1.json`; exact quantities, lots and expiry remain unverified. A steady on-finger BPM remains unverified; see [firmware](../firmware/README.md).
 
 ## The story
 
@@ -10,7 +10,7 @@ Clara is a network of AI-assisted first-aid boxes for places where professional 
 
 ## Current interaction direction (2026-11-13)
 
-**Demo implemented:** the Pi receives the ESP32 lid event; the lid opens a voice session, and a final utterance requests a cloud turn. Closing the lid stops voice. The local screen can render answer, question, item-location, and versioned-guidance cards; item light and mock SOS are implemented. The screen exposes visuals, status, and simulated SOS, with no step navigation or Talk button. **Demo verified on Pi:** commit `f83cc43` runs with active box/kiosk services, ESP32 hello, GPS serial connection, and an 800 × 480 idle screen showing MIC OFF and SOS. A live lid-open conversation and generated card on the physical screen remain unverified.
+**Demo implemented:** the Pi receives the ESP32 lid event; the lid shows and plays a fixed two-second Cartesia greeting, then opens a voice session without contacting the model. A final utterance requests a cloud turn. Closing the lid stops voice and blanks the screen to black; touching the black screen reveals SOS and Mute Clara for 15 seconds. The local screen can render answer, question, item-location, and versioned-guidance cards; item light and mock SOS are implemented. The screen exposes visuals, voice status, simulated SOS, and speaker mute, with no step navigation or Talk button. The nearby-emergency banner and interruptive alert are hidden. **Demo verified on Pi:** commit `f83cc43` ran with active box/kiosk services, ESP32 hello and GPS serial connection. The new greeting, black screen and mute need a physical check after deployment.
 
 **Proposed:** Core Clara is one continuous user-facing conversation while the lid is open. It invokes tools and launches background emergency, responder, handoff, and evidence jobs only after real triggers. The screen shows whichever approved visual helps the current request, not a required sequence of steps. Generated diagrams, reading and handoff cards, synchronized speech segments, and background agents are not yet implemented; see [conversation runtime](conversation-runtime.md).
 
@@ -25,14 +25,14 @@ Someone opens the box → the mic becomes available without automatically contac
 2. **Hands-free conversation.** Mic listens while the lid is open; voice-activity detection ends each utterance. There is no on-screen Talk control.
 3. **Approved guidance and flexible visuals.** Current code can select a versioned scenario panel. The proposed core agent can present a relevant answer, question, diagram, item location, reading, or handoff card, within source and provenance checks.
 4. **Lit compartments.** When a verified item is requested, its mapped LED can light; guidance may also locate an item.
-5. **Minimal touchscreen.** It displays agent-selected visuals, captions and status, with always-visible **simulated SOS**. No Next / Back / Repeat or branch controls are shown.
+5. **Minimal touchscreen.** It displays agent-selected visuals, captions and status, with **simulated SOS** and **Mute Clara** controls. The closed-lid screen is black and wakes to reveal SOS on touch. No Next / Back / Repeat or branch controls are shown.
 6. **Runs on the 12 V battery** (power path to the Pi still needs a bench test; keep the official Pi supply as backup).
 
 **SOS and help**
 7. **Mock SOS.** 5 s countdown (tap to cancel) → a **simulated 911 call** screen ("Calling 911 — simulation"); the screen coaches what to say; the scene report is ready for EMS. Clara never really dials 911.
 8. **Companion app = the response network.** Volunteer sign-up by QR (skills, vehicle, language, location); alerts for nearby emergencies (also over WhatsApp/iMessage through Photon); **Accept / Decline** with the handoff card and directions; the kit map; two-way messages that the box reads aloud.
 9. **The box says who is coming, honestly.** "Amina, a nurse, about 6 minutes" only after Amina accepted; names and times come from templates, never from the model.
-10. **Nearby boxes join.** Box B lights up: "Emergency at Room 101, bring this kit."
+10. **Nearby boxes join (not shown on the current kiosk).** The network contract can deliver another box's incident, but the kiosk does not announce it or show an emergency-nearby banner.
 11. **Honesty rule in code.** No "help is coming" before an accept, no diagnoses, no false comfort ("he'll be fine"), no advice outside the approved steps.
 
 **Dashboards**

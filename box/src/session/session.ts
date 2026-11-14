@@ -80,6 +80,13 @@ interface Countdown {
 
 const MAX_MESSAGES = 5;
 const MAX_RECENT = 12;
+const GREETING = "I'm Clara. I'm here to help.";
+const GREETING_AUDIO = "audio/clara-greeting-v1.wav";
+const SLOT_IMAGES: Record<string, string> = {
+  "top-left": "/content/kits/layout-3slot-v1-top-left.svg",
+  "top-right": "/content/kits/layout-3slot-v1-top-right.svg",
+  bottom: "/content/kits/layout-3slot-v1-bottom.svg",
+};
 
 export class BoxSession {
   readonly engine: ScenarioEngine;
@@ -94,6 +101,7 @@ export class BoxSession {
 
   private voice: VoiceControl | null = null;
   private voiceStatus: VoiceStatus = "off";
+  private speechMuted = false;
   private lidOpen = false;
   private presentation: ScreenPresentation | null = null;
   private countdown: Countdown | null = null;
@@ -178,6 +186,13 @@ export class BoxSession {
     this.lidOpen = true;
     if (!this.active) this.beginSession();
     this.board((b) => b.buzz("chime"));
+    this.caption = GREETING;
+    this.presentation = { kind: "answer", title: "Clara", body: GREETING, image_url: null, item: null, source_label: null };
+    const audio = this.o.contentDir ? join(this.o.contentDir, GREETING_AUDIO) : null;
+    if (audio && (this.o.fileExists ?? existsSync)(audio)) {
+      // No local-voice fallback if the short recorded greeting cannot play.
+      this.o.speech?.say({ text: "", file: audio }).catch(() => {});
+    }
     this.voice?.start();
     this.publish();
   }
@@ -350,6 +365,12 @@ export class BoxSession {
         if (!this.lidOpen) return;
         this.voice?.endPress?.();
         return;
+      case "mute":
+      case "unmute":
+        this.speechMuted = press.action === "mute";
+        this.o.speech?.setMuted(this.speechMuted);
+        this.publish();
+        return;
       case "sos":
         this.requestSos("touch");
         return;
@@ -438,7 +459,7 @@ export class BoxSession {
         this.notice = question?.text ?? null;
         if (question) {
           this.caption = question.text;
-          this.presentation = { kind: "question", title: "Clara asks", body: question.text, image_url: null, item: null, source_label: "Demo scenario" };
+          this.presentation = { kind: "question", title: "Clara asks", body: question.text, image_url: null, item: null, source_label: "Scenario question" };
           this.o.speech?.say({ text: question.text }).catch(() => {});
         }
         this.publish();
@@ -447,9 +468,10 @@ export class BoxSession {
       case "locate_item": {
         const item = this.o.kit.get(action.sku);
         this.presentation = item && item.on_hand > 0
-          ? { kind: "item", title: item.name, body: `Listed in compartment ${item.slot}.`, image_url: null,
-              item: { sku: item.sku, name: item.name, slot: item.slot, lit: false, missing: false }, source_label: "Demo kit manifest" }
-          : { kind: "status", title: "Item unavailable", body: "This item is not listed as available in this box.", image_url: null, item: null, source_label: "Demo kit manifest" };
+          ? { kind: "item", title: item.name, body: `In the ${item.slot.replace("-", " ")} compartment.`,
+              image_url: this.o.kit.layoutRevision === "3slot-v1" ? SLOT_IMAGES[item.slot] ?? null : null,
+              item: { sku: item.sku, name: item.name, slot: item.slot, lit: false, missing: false }, source_label: "Kit inventory" }
+          : { kind: "status", title: "Item unavailable", body: "This item is not listed as available in this box.", image_url: null, item: null, source_label: "Kit inventory" };
         this.apply(this.engine.locate(action.sku), false);
         return true;
       }
@@ -541,13 +563,6 @@ export class BoxSession {
         if (push.from_box_id === this.o.boxId) return;
         const known = this.nearby.has(push.incident_id);
         this.nearby.set(push.incident_id, { incident_id: push.incident_id, from_box_name: push.from_box_name, directions: push.directions, bringing: known ? this.nearby.get(push.incident_id)!.bringing : false });
-        if (!known) {
-          this.o.cue?.("alert");
-          if (!this.active) {
-            this.board((b) => b.buzz("alert"));
-            this.say(LINES.nearbyEmergency(push.from_box_name));
-          }
-        }
         this.publish();
         return;
       }
@@ -606,7 +621,7 @@ export class BoxSession {
             need: this.sos.need,
             opened_at: this.sos.openedAt,
             overlay: this.sos.overlay,
-            coaching: coachingLines({ boxName: this.boxName, directions: this.o.directions ?? null, multipleInjured: this.multipleInjured,
+            coaching: coachingLines({ directions: this.o.directions ?? null, multipleInjured: this.multipleInjured,
               location: this.o.location?.current() ?? null, configuredAddress: this.o.configuredAddress ?? null }),
           }
         : null,
@@ -619,6 +634,7 @@ export class BoxSession {
       messages: this.messages.map((m) => ({ ...m })),
       pending_usage: this.pendingUsage ? this.pendingUsage.map((u) => ({ ...u })) : null,
       voice_available: this.lidOpen && this.voice?.handsFree === true,
+      speech_muted: this.speechMuted,
       voice_state: voiceState,
       report_url: this.reportUrl,
     };
@@ -644,12 +660,14 @@ export class BoxSession {
           if (!intent.replay) this.notice = null;
           this.presentation = {
             kind: "guidance", title: intent.step.label, body: intent.step.text,
-            image_url: intent.step.image ? `/content/${intent.step.image.split("/").map(encodeURIComponent).join("/")}` : null,
+            image_url: intent.step.image ? `/content/${intent.step.image.split("/").map(encodeURIComponent).join("/")}`
+              : this.o.kit.layoutRevision === "3slot-v1" && intent.step.item
+                ? SLOT_IMAGES[this.o.kit.get(intent.step.item)?.slot ?? ""] ?? null : null,
             item: intent.step.item ? {
               sku: intent.step.item, name: this.o.kit.get(intent.step.item)?.name ?? null,
               slot: this.o.kit.get(intent.step.item)?.slot ?? null, lit: false, missing: false,
             } : null,
-            source_label: `Demo scenario ${this.o.scenario.version}`,
+            source_label: `Scenario ${this.o.scenario.version}`,
           };
           if (speakStep) this.speakStep(intent.step, wav);
           break;

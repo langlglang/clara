@@ -38,6 +38,7 @@ const view = (revision: number): ScreenView => ({
   pending_usage: null,
   voice_available: false,
   voice_state: "off",
+  speech_muted: false,
   report_url: null,
 });
 
@@ -68,6 +69,12 @@ describe("screen server", () => {
     expect(page.status).toBe(200);
     expect(page.body).toContain('content="test-token"');
     expect(page.body).toContain('data-action="sos"');
+    expect(page.body).toContain('data-action="mute"');
+    expect(page.body).toContain('id="sleep"');
+    expect(page.body).not.toContain("CLARA DEMO");
+    expect(page.body).not.toContain("EMERGENCY NEARBY");
+    expect(page.body).not.toContain('id="box-name"');
+    expect(page.body).toContain("SIMULATED 911");
     for (const action of ["next", "back", "repeat", "talk", "goto", "start"]) {
       expect(page.body).not.toContain(`data-action="${action}"`);
     }
@@ -91,10 +98,12 @@ describe("screen server", () => {
       call(s.port, "/screen/press", { method: "POST", headers: { "content-type": "application/json", "x-screen-token": token }, body: JSON.stringify(body) });
     expect((await post({ action: "next" })).status).toBe(204);
     expect((await post({ action: "goto", step_id: "s2" })).status).toBe(204);
+    expect((await post({ action: "mute" })).status).toBe(204);
+    expect((await post({ action: "unmute" })).status).toBe(204);
     expect((await post({ action: "next" }, "wrong-token")).status).toBe(403);
     expect((await post({ action: "launch_missiles" })).status).toBe(400);
     expect((await post({ action: "next", extra: 1 })).status).toBe(400);
-    expect(presses).toEqual([{ action: "next" }, { action: "goto", step_id: "s2" }]);
+    expect(presses).toEqual([{ action: "next" }, { action: "goto", step_id: "s2" }, { action: "mute" }, { action: "unmute" }]);
   });
 
   it("streams the current view, then published views", async () => {
@@ -118,7 +127,8 @@ describe("screen server", () => {
       req.end();
     });
     expect(chunks.join("")).toContain("event: view");
-    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.1"');
+    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.2"');
+    expect(chunks.join("")).toContain('"speech_muted":false');
     expect(chunks.join("")).toContain('"presentation":null');
     expect(chunks.join("")).toContain('"step":null');
   });

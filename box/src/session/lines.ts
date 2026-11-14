@@ -13,19 +13,18 @@ export const LINES = {
   endOfSteps: "That was the last step. The simulated SOS button stays on screen.",
   helperWithdrew: "The person who accepted can no longer come. The SOS stays open.",
   responderMessage: (from: string, text: string) => `Message from ${from}: ${text}`,
-  nearbyEmergency: (boxName: string) => `Emergency at ${boxName}. See the screen.`,
   usageConfirmed: "Supply count updated.",
 } as const;
 
 /** What the mock-911 screen coaches the bystander to say. Phrasing for the call only, never medical advice. */
-export function coachingLines(o: { boxName: string; directions: string | null; multipleInjured: boolean; location?: GpsFix | null; configuredAddress?: string | null }): string[] {
+export function coachingLines(o: { directions: string | null; multipleInjured: boolean; location?: GpsFix | null; configuredAddress?: string | null }): string[] {
   const where = o.location
     ? `GPS coordinates: ${o.location.latitude.toFixed(5)}, ${o.location.longitude.toFixed(5)} (fix ${new Date(o.location.observedAt).toISOString()}).`
     : o.configuredAddress
       ? `GPS unavailable. Configured box address: ${o.configuredAddress}.`
       : "GPS unavailable. Tell the dispatcher your location.";
   return [
-    `Say where you are: ${o.boxName}. ${where}${o.directions ? ` Additional directions: ${o.directions}.` : ""}`,
+    `Say where you are. ${where}${o.directions ? ` Additional directions: ${o.directions}.` : ""}`,
     o.multipleInjured ? "Say that more than one person is hurt, and how many." : "Say what happened and how many people are hurt.",
     "Say what has been done so far.",
     "Answer the dispatcher's questions and stay on the line.",

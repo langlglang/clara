@@ -11,9 +11,7 @@
 <body>
 <div id="app">
   <header id="top">
-    <span id="brand">CLARA DEMO</span>
-    <span id="box-name"></span>
-    <span id="tag-sim" class="tag sim" hidden>SIMULATION</span>
+    <span id="brand">CLARA</span>
     <span id="voice-state" class="tag off" role="status" aria-live="polite">MIC OFF</span>
     <span id="status" class="tag status"><i class="dot"></i><span id="status-text">ONLINE</span></span>
     <span id="tag-link" class="tag lost" hidden><i class="dot"></i>SCREEN LOST THE BOX SERVICE</span>
@@ -21,13 +19,12 @@
 
   <div id="banners">
     <div id="coming" class="banner coming" hidden><i class="dot"></i><span id="coming-text"></span></div>
-    <div id="nearby-banner" class="banner nearby" hidden><b>EMERGENCY NEARBY</b><span id="nearby-banner-text"></span></div>
     <div id="notice" class="banner notice" hidden><span id="notice-text"></span></div>
   </div>
 
   <main id="main">
     <section id="idle" hidden>
-      <div class="lbl">CLARA DEMO</div>
+      <div class="lbl">VOICE ASSISTANCE</div>
       <h1>Clara</h1>
       <p id="idle-instruction">Open the lid to speak with Clara.</p>
       <div id="idle-activity" class="voice-activity off" hidden><span class="activity-dot" aria-hidden="true"></span><span id="activity-text"></span></div>
@@ -52,6 +49,7 @@
 
   <aside id="rail">
     <button data-action="sos" id="sos-button" class="sos">SOS<small>SIMULATED 911</small></button>
+    <button data-action="mute" id="mute-button" class="mute" aria-pressed="false">MUTE CLARA</button>
     <div id="tiles"></div>
   </aside>
 
@@ -75,6 +73,8 @@
       <div class="row"><button data-action="hide_911" class="strong">BACK TO CLARA</button></div>
     </div>
   </div>
+
+  <div id="sleep" role="button" tabindex="0" aria-label="Wake Clara screen"></div>
 
 </div>
 <script src="/screen/assets/app.js"></script>

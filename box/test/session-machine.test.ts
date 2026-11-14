@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { VOICE_TURN_VERSION, type Alert, type TurnResponse } from "@clara/contracts";
 import { FakeCloudLink } from "../src/cloud/fake.js";
@@ -7,6 +8,7 @@ import type { Board, BoardEvent, SpeechQueue } from "../src/ports.js";
 import { BoxSession, ManualClock, textTurn } from "../src/session/index.js";
 
 const fixture = (name: string) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
+const content = (name: string) => fileURLToPath(new URL(`../../content/${name}`, import.meta.url));
 
 class FakeBoard implements Board {
   readonly label = "fake";
@@ -49,12 +51,18 @@ class FakeBoard implements Board {
 
 class FakeSpeech implements SpeechQueue {
   said: string[] = [];
-  played: { text: string; wav?: Buffer }[] = [];
+  played: { text: string; wav?: Buffer; file?: string }[] = [];
   stops = 0;
   busy = false;
-  async say(item: { text: string; wav?: Buffer }) {
+  muted = false;
+  async say(item: { text: string; wav?: Buffer; file?: string }) {
+    if (this.muted) return;
     this.said.push(item.text);
     this.played.push(item);
+  }
+  setMuted(muted: boolean) {
+    this.muted = muted;
+    if (muted) this.stopAll();
   }
   stopAll() {
     this.stops += 1;
@@ -66,7 +74,7 @@ class FakeSpeech implements SpeechQueue {
 let n = 0;
 const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
 
-function setup() {
+function setup(contentDir?: string) {
   const clock = new ManualClock();
   const cloud = new FakeCloudLink();
   const board = new FakeBoard();
@@ -79,6 +87,7 @@ function setup() {
     cloud,
     board,
     speech,
+    ...(contentDir ? { contentDir } : {}),
     clock,
     newId: uuid,
   });
@@ -97,7 +106,40 @@ const alert = (state: Alert["state"], name = "Amina", eta: number | null = 6): A
 });
 
 describe("BoxSession lid", () => {
-  it("lid open enables conversation without requesting or showing guidance", async () => {
+  it("shows one greeting per lid-open session without sending a model turn", () => {
+    const contentDir = fileURLToPath(new URL("../../content/", import.meta.url));
+    const { session, speech, cloud } = setup(contentDir);
+    session.lidOpened();
+    session.lidOpened();
+    expect(session.view().presentation).toMatchObject({ kind: "answer", body: "I'm Clara. I'm here to help." });
+    expect(speech.played).toHaveLength(1);
+    expect(speech.played[0]).toMatchObject({ text: "", file: join(contentDir, "audio/clara-greeting-v1.wav") });
+    expect(cloud.types()).toEqual(["box.opened"]);
+    expect(cloud.turns).toHaveLength(0);
+    session.lidClosed();
+    session.lidOpened();
+    expect(speech.played).toHaveLength(2);
+    expect(cloud.types()).toEqual(["box.opened", "box.closed", "box.opened"]);
+  });
+
+  it("mutes Clara's speech while retaining the microphone and mock SOS", () => {
+    const { session, speech, clock } = setup();
+    session.attachVoice({ handsFree: true, start: () => {}, stop: () => {}, pressTalk: () => {} });
+    session.lidOpened();
+    session.press({ action: "mute" });
+    expect(session.view()).toMatchObject({ voice_available: true, speech_muted: true });
+    session.say("Visible answer");
+    expect(session.view().presentation?.body).toBe("Visible answer");
+    expect(speech.said).toEqual([]);
+    session.press({ action: "sos" });
+    clock.advance(5_000);
+    expect(session.view().phase).toBe("sos");
+    session.press({ action: "unmute" });
+    session.say("Audible again");
+    expect(speech.said).toContain("Audible again");
+  });
+
+  it("lid open enables conversation without requesting scenario guidance", async () => {
     const { session, cloud, board, speech } = setup();
     expect(session.view().phase).toBe("idle");
     board.lid(true);
@@ -111,6 +153,7 @@ describe("BoxSession lid", () => {
     const view = session.view();
     expect(view.phase).toBe("guiding");
     expect(view.step).toBeNull();
+    expect(view.presentation).toMatchObject({ kind: "answer", body: "I'm Clara. I'm here to help." });
     expect(session.turnState()?.allowed_steps.map((s) => s.step_id)).toEqual(["s1"]);
     expect(session.applyAction({ name: "select_step", step_id: "s1" })).toBe(true);
     expect(session.view().step?.item).toMatchObject({ slot: "A1", lit: true });
@@ -185,7 +228,7 @@ describe("BoxSession SOS", () => {
     clock.advance(3_000);
     const view = session.view();
     expect(view.phase).toBe("sos");
-    expect(view.sos?.coaching.join(" ")).toContain("Test Box");
+    expect(view.sos?.coaching.join(" ")).toContain("Tell the dispatcher your location");
     expect(cloud.types()).toContain("sos.countdown");
     expect(cloud.events.find((e) => e.type === "sos.opened")).toMatchObject({ need: "general", source: "touch" });
     expect(speech.said.join(" ")).toMatch(/simulated 911 call\. No real call/i);
@@ -267,12 +310,13 @@ describe("BoxSession pushes", () => {
     expect(session.view().coming).toBeNull();
   });
 
-  it("shows another box's emergency, full screen when idle, and clears it", () => {
-    const { session, cloud, board } = setup();
+  it("records another box's emergency without interrupting this box", () => {
+    const { session, cloud, board, speech } = setup();
     cloud.push({ type: "nearby.emergency", incident_id: "i9", from_box_id: "box-a", from_box_name: "Room 101", directions: "Ground floor" });
     expect(session.view().nearby).toHaveLength(1);
     expect(session.view().phase).toBe("idle");
-    expect(board.calls).toContain("buzz alert");
+    expect(board.calls).not.toContain("buzz alert");
+    expect(speech.said).toEqual([]);
     session.press({ action: "bringing_kit", incident_id: "i9" });
     expect(session.view().nearby[0]?.bringing).toBe(true);
     cloud.push({ type: "nearby.clear", incident_id: "i9" });
@@ -293,6 +337,26 @@ describe("BoxSession pushes", () => {
 });
 
 describe("BoxSession actions", () => {
+  it("lights the verified physical slot and shows its matching layout for each requested supply", () => {
+    const board = new FakeBoard();
+    const session = new BoxSession({
+      boxId: "box-test", board, cloud: new FakeCloudLink(),
+      scenario: loadScenario(content("scenarios/severe-bleeding.json")),
+      kit: loadKit(content("kits/clara-3slot-v1.json")), contentDir: content(""),
+    });
+    session.lidOpened();
+    for (const [sku, slot, channel] of [
+      ["SCISSORS", "top-left", 0], ["GLOVES", "top-right", 1], ["GAUZE", "bottom", 2],
+    ] as const) {
+      expect(session.applyAction({ name: "locate_item", sku })).toBe(true);
+      expect(board.calls.at(-1)).toBe(`light ${channel}`);
+      expect(session.view().presentation).toMatchObject({
+        kind: "item", item: { sku, slot, lit: true },
+        image_url: `/content/kits/layout-3slot-v1-${slot}.svg`,
+      });
+    }
+  });
+
   it("plays Cartesia guidance once when the returned text matches local content", () => {
     const { session, speech } = setup();
     session.lidOpened();
@@ -326,7 +390,7 @@ describe("BoxSession actions", () => {
     session.lidOpened();
     expect(session.applyAction({ name: "locate_item", sku: "sku_a" })).toBe(true);
     expect(session.view().step).toBeNull();
-    expect(session.view().presentation).toMatchObject({ kind: "item", title: "Test item A", body: "Listed in compartment A1.", source_label: "Demo kit manifest", item: { slot: "A1", lit: true } });
+    expect(session.view().presentation).toMatchObject({ kind: "item", title: "Test item A", body: "In the A1 compartment.", source_label: "Kit inventory", item: { slot: "A1", lit: true } });
     expect(board.calls).toContain("light 0");
     session.showCaption("Here is the item.", false);
     expect(session.view().presentation?.kind).toBe("item");

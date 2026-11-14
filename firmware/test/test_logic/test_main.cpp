@@ -54,6 +54,16 @@ void test_lights_lease_capped_and_modes() {
   TEST_ASSERT_EQUAL(255, l.level(0, kBreathPeriodMs / 2));
 }
 
+void test_lights_lease_survives_an_older_loop_timestamp() {
+  Lights l(3);
+  l.light(0, 1000, LedMode::Solid, 101);
+  l.update(100);  // The command was handled after the loop captured its clock.
+  TEST_ASSERT_EQUAL(0, l.litChannel());
+  TEST_ASSERT_EQUAL(255, l.level(0, 102));
+  l.update(1101);
+  TEST_ASSERT_EQUAL(-1, l.litChannel());
+}
+
 void test_rhythm_drives_every_led_and_stops() {
   Lights l(4);
   l.light(1, 5000, LedMode::Solid, 0);
@@ -147,6 +157,7 @@ int main() {
   RUN_TEST(test_debounce_reports_first_level_and_one_change_through_bounce);
   RUN_TEST(test_lights_one_at_a_time_and_lease);
   RUN_TEST(test_lights_lease_capped_and_modes);
+  RUN_TEST(test_lights_lease_survives_an_older_loop_timestamp);
   RUN_TEST(test_rhythm_drives_every_led_and_stops);
   RUN_TEST(test_buzzer_chime_ends_and_alert_is_bounded);
   RUN_TEST(test_pulse_no_finger_is_unavailable);

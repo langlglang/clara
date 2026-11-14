@@ -55,7 +55,9 @@ if (flag("webhook") !== null) {
   const url = flag("url") || "https://clara.living/api/photon/webhook";
   const versions = await call<{ apiVersions: Array<{ version: string; selectable: boolean; status: string }> }>("GET", "/webhooks/api-versions");
   const selectable = versions.apiVersions.filter((v) => v.selectable);
-  const picked = (selectable.find((v) => v.status === "latest") ?? selectable.filter((v) => v.status !== "preview").sort((a, b) => a.version.localeCompare(b.version)).pop())?.version;
+  // Prefer "latest", then the newest stable version; Photon's beta may only offer a preview version, so fall back to it.
+  const newest = (list: typeof selectable) => [...list].sort((a, b) => a.version.localeCompare(b.version)).pop();
+  const picked = (selectable.find((v) => v.status === "latest") ?? newest(selectable.filter((v) => v.status !== "preview")) ?? newest(selectable))?.version;
   if (!picked) throw new Error(`No selectable webhook API version in ${JSON.stringify(versions).slice(0, 300)}`);
   const created = await call<{ destination: { destinationId?: string }; signingSecret: string }>("POST", "/webhooks/destinations", {
     name: "Clara inbound replies",

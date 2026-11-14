@@ -54,7 +54,7 @@ export function readConfig(env: NodeJS.ProcessEnv, argv: readonly string[]): Box
   if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error("CLARA_SCREEN_PORT must be a port number.");
   return {
     sim,
-    serverUrl: flag(argv, "server") ?? env.CLARA_SERVER_URL ?? (sim ? null : "http://localhost:3000"),
+    serverUrl: flag(argv, "server") ?? env.CLARA_SERVER_URL ?? (sim ? null : "https://clara.living"),
     boxId: env.CLARA_BOX_ID ?? (sim ? "box-sim" : "box-demo"),
     boxName: env.CLARA_BOX_NAME ?? (sim ? "Simulated box" : "Clara box"),
     directions: env.CLARA_BOX_DIRECTIONS ?? null,

@@ -2,9 +2,23 @@
 
 **AI-guided first-aid boxes that bring a network of nearby help to the scene.** HackPrinceton Fall 2026, Healthcare track.
 
-Where professional help is far away (conflict zones, refugee camps, remote and high-poverty areas), the first responder is whoever is standing nearby. Clara is a box on the wall: open it and an AI talks you through the injury step by step, lights the compartment holding what you need, and alerts trained volunteers nearby through a companion app. The box only says someone is coming once a real person has accepted. Paramedics who arrive scan a QR code and get a live scene report: what happened, what was done, and when the tourniquet went on.
+Where professional help is far away (conflict zones, refugee camps, remote and high-poverty areas), the first responder is whoever is standing nearby. Clara is a box on the wall: open it and an AI talks you through the injury step by step, lights the compartment holding what you need, and alerts trained volunteers nearby through a companion app. The box only says someone is coming once a real person has accepted. Paramedics get a live scene report: what happened, what was done, and when the tourniquet went on.
 
 > Clara is a hackathon proof of concept. It is never used on a patient, the demo scenarios are fictional, and the 911 call is simulated.
+
+## Live demo
+
+**https://clara.living** (hosted on Render's free plan: the first visit after 15 idle minutes takes about a minute to wake it, and demo data resets on restart)
+
+| Page | Link |
+| --- | --- |
+| Companion app (volunteers' phones) | https://clara.living/app |
+| Join the network | https://clara.living/join |
+| Dispatch and rides console | https://clara.living/dashboard |
+| Network and boxes console | https://clara.living/maintainer |
+| Kit map | https://clara.living/map |
+
+A real box connects by setting `CLARA_SERVER_URL=https://clara.living` in `/etc/clara-box.env` on the Pi (see `box/scripts/systemd/clara-box.env.example`).
 
 ## What's in the repo
 

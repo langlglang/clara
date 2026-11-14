@@ -1,13 +1,13 @@
 import { fail, json, readJson } from "../../../../lib/http";
 import { applyProfileRules, parseProfilePatch } from "../../../../lib/profile";
-import { runtime } from "../../../../lib/server";
+import { ensureRuntime } from "../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
 /** One volunteer's profile, with the web app's vehicle kind and how many devices get push alerts. */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await ctx.params;
-  const rt = runtime();
+  const rt = await ensureRuntime();
   const volunteer = rt.network.store.getVolunteer(id);
   if (!volunteer) return fail(404, "not_found", "No volunteer with that id.");
   return json({ volunteer, vehicle: rt.vehicles.get(id) ?? (volunteer.vehicle_seats > 0 ? "car" : "none"), push_devices: rt.push.devices(id) });
@@ -22,7 +22,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const { id } = await ctx.params;
   const read = await readJson(req);
   if (!read.ok) return read.response;
-  const rt = runtime();
+  const rt = await ensureRuntime();
   const current = rt.network.store.getVolunteer(id);
   if (!current) return fail(404, "not_found", "No volunteer with that id. The demo server may have restarted; sign up again.");
   const parsed = parseProfilePatch(read.body);

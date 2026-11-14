@@ -1,6 +1,6 @@
 import { AlertResponseSchema, VolunteerSchema } from "@clara/contracts";
 import { fail, issues, json, readJson } from "../../../../../lib/http";
-import { runtime } from "../../../../../lib/server";
+import { ensureRuntime } from "../../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!read.ok) return read.response;
   const parsed = RespondSchema.safeParse(read.body);
   if (!parsed.success) return fail(400, "bad_request", "Expected { volunteer_id, action }.", { issues: issues(parsed.error) });
-  const rt = runtime();
+  const rt = await ensureRuntime();
   const result = rt.network.respond(id, parsed.data.volunteer_id, parsed.data.action);
   switch (result.outcome) {
     case "answered":

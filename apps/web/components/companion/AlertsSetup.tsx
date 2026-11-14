@@ -9,7 +9,23 @@ import { currentSubscription, disablePush, enablePush, isIos, isStandalone, perm
  * call as a backup (only offered when there's a phone number). Buttons here are secondary; the screen's own
  * primary button stays the one orange button.
  */
-export function AlertsSetup({ volunteerId, hasPhone, callConsent, onConsent }: { volunteerId: string; hasPhone: boolean; callConsent: boolean; onConsent(value: boolean): Promise<void> | void }) {
+export type TextChannel = "app" | "imessage" | "whatsapp" | "sms";
+
+export function AlertsSetup({
+  volunteerId,
+  hasPhone,
+  callConsent,
+  onConsent,
+  channel: initialChannel = "app",
+}: {
+  volunteerId: string;
+  hasPhone: boolean;
+  callConsent: boolean;
+  onConsent(value: boolean): Promise<void> | void;
+  channel?: TextChannel;
+}) {
+  const [channel, setChannel] = useState<TextChannel>(initialChannel);
+  useEffect(() => setChannel(initialChannel), [initialChannel]);
   const [state, setState] = useState<"checking" | "unsupported" | "ios-browser" | "off" | "denied" | "on">("checking");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ text: string; tone: "ok" | "error" } | null>(null);
@@ -53,6 +69,19 @@ export function AlertsSetup({ volunteerId, hasPhone, callConsent, onConsent }: {
     setBusy(null);
     setState("off");
     setMsg({ text: "Alerts are off for this device. They still appear in the app while it's open.", tone: "ok" });
+  }
+
+  async function chooseChannel(next: TextChannel) {
+    setBusy("channel");
+    setMsg(null);
+    try {
+      await api(`/api/volunteers/${encodeURIComponent(volunteerId)}`, { method: "PATCH", body: JSON.stringify({ channel: next }) });
+      setChannel(next);
+    } catch (e) {
+      setMsg({ text: e instanceof ApiError ? e.message : "Couldn't save that.", tone: "error" });
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function test() {
@@ -130,8 +159,37 @@ export function AlertsSetup({ volunteerId, hasPhone, callConsent, onConsent }: {
             </span>
           </label>
         </div>
+      ) : null}
+      {hasPhone ? (
+        <div className="card">
+          <label className="row" style={{ alignItems: "flex-start", gap: 12, minHeight: 44 }}>
+            <input
+              type="checkbox"
+              checked={channel !== "app"}
+              disabled={busy === "channel"}
+              onChange={(e) => void chooseChannel(e.target.checked ? "imessage" : "app")}
+              style={{ width: 24, height: 24, marginTop: 2, accentColor: "var(--accent)", flex: "none" }}
+            />
+            <span>
+              <b>Also text me (iMessage/WhatsApp/SMS)</b>
+              <span className="small muted" style={{ display: "block" }}>
+                Clara texts each alert too: reply 1 if you can come, 2 if you can&apos;t. Never in quiet hours. Text the Clara number once first so it can reach you.
+              </span>
+            </span>
+          </label>
+          {channel !== "app" ? (
+            <label className="row" style={{ gap: 8 }}>
+              <span>Text me over</span>
+              <select value={channel} disabled={busy === "channel"} onChange={(e) => void chooseChannel(e.target.value as TextChannel)}>
+                <option value="imessage">iMessage</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="sms">SMS</option>
+              </select>
+            </label>
+          ) : null}
+        </div>
       ) : (
-        <p className="small muted">Add a phone number in your profile if you&apos;d like a phone call as a backup.</p>
+        <p className="small muted">Add a phone number in your profile if you&apos;d like a phone call or texts as a backup.</p>
       )}
     </div>
   );

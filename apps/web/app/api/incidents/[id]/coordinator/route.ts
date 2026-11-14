@@ -1,5 +1,5 @@
 import { fail, json } from "../../../../../lib/http";
-import { runtime } from "../../../../../lib/server";
+import { ensureRuntime } from "../../../../../lib/server";
 import { coordinatorView } from "../../../../../lib/views";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await ctx.params;
-  const rt = runtime();
+  const rt = await ensureRuntime();
   if (!rt.network.incident(id)) return fail(404, "not_found", "No incident with that id.");
   return json(coordinatorView(rt, id));
 }

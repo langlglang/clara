@@ -39,6 +39,16 @@ export interface CallBook {
   recent(): CallLogEntry[];
   /** Resolves when every call started so far has finished (tests). */
   idle(): Promise<void>;
+  /** What was decided, the hourly-cap history and the log, as plain JSON (persistence snapshots). */
+  exportState(): CallBookSnapshot;
+  /** Restores exportState's output (validated by lib/snapshot.ts), so nobody is called twice after a restart. */
+  importState(snapshot: CallBookSnapshot): void;
+}
+
+export interface CallBookSnapshot {
+  decided: string[];
+  history: Record<string, number[]>;
+  entries: CallLogEntry[];
 }
 
 export interface CallBookOptions {
@@ -171,6 +181,14 @@ export function createCallBook({ network, rides, twilio, baseUrl, fetch: fetchIm
       return out;
     },
     recent: () => entries.map((e) => ({ ...e })),
+    exportState: () => ({ decided: [...decided], history: Object.fromEntries([...history].map(([k, v]) => [k, [...v]])), entries: entries.map((e) => ({ ...e })) }),
+    importState(snapshot) {
+      decided.clear();
+      history.clear();
+      for (const key of snapshot.decided) decided.add(key);
+      for (const [k, v] of Object.entries(snapshot.history)) history.set(k, [...v]);
+      entries.splice(0, entries.length, ...snapshot.entries.slice(0, MAX_LOG).map((e) => ({ ...e })));
+    },
     async idle() {
       while (pending.size) await Promise.allSettled([...pending]);
     },

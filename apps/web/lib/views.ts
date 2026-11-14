@@ -4,6 +4,7 @@ import type { CoordinatorLog, CoordinatorMode } from "@clara/coordinator";
 import type { BoxMessage, Runtime } from "./server";
 import type { Hospital, RideView, VehicleKind } from "./rides";
 import type { CallLogEntry } from "./calls";
+import type { PersistenceStatus } from "./snapshot";
 
 /**
  * The JSON the API routes answer with, built on the server from the network facade. Client pages import these
@@ -118,13 +119,15 @@ export interface StateSnapshot {
   vehicles: Record<string, VehicleKind>;
   hospital: Hospital;
   ambulance_eta_min: number | null;
+  /** Whether state is saved to Postgres (also the health check's answer to "will this survive a restart?"). */
+  persistence: PersistenceStatus;
   server_time: string;
 }
 
 export interface MaintainerResponse {
   rows: MaintainerRow[];
   /** Push and phone-call fallback status for the console. */
-  outreach: { push_vapid: "env" | "generated"; push_devices: number; calls_configured: boolean; calls: CallLogEntry[] };
+  outreach: { push_vapid: "env" | "generated" | "saved"; push_devices: number; calls_configured: boolean; calls: CallLogEntry[] };
   alerts: MaintainerAlert[];
   simulated_boxes: string[];
   server_time: string;
@@ -271,6 +274,7 @@ export function stateSnapshot(rt: Runtime, site: { name: string; center: LatLng 
     vehicles: Object.fromEntries(rt.network.store.listVolunteers().map((v) => [v.volunteer_id, rt.vehicles.get(v.volunteer_id) ?? (v.vehicle_seats > 0 ? "car" : "none")])),
     hospital: rt.rides.hospital,
     ambulance_eta_min: rt.ambulanceEtaMin,
+    persistence: { ...rt.persistence },
     server_time: rt.network.clock().toISOString(),
   };
 }

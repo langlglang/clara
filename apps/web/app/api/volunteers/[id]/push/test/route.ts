@@ -1,6 +1,6 @@
 import { fail, json } from "../../../../../../lib/http";
 import { TEST_PAYLOAD } from "../../../../../../lib/notify";
-import { runtime } from "../../../../../../lib/server";
+import { ensureRuntime } from "../../../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ const lastTest = ((globalThis as { [KEY]?: Map<string, number> })[KEY] ??= new M
 /** "Send me a test alert": a plainly-labeled test notification to each of the volunteer's devices (one per 10 s). */
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await ctx.params;
-  const rt = runtime();
+  const rt = await ensureRuntime();
   if (!rt.network.store.getVolunteer(id)) return fail(404, "not_found", "No volunteer with that id.");
   if (rt.push.devices(id) === 0) return fail(409, "conflict", "This phone isn't subscribed to alerts yet. Turn on alerts first.");
   const now = Date.now();

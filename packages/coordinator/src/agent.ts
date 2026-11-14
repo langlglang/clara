@@ -142,7 +142,6 @@ function filesToMemory(files: unknown): MemoryFile[] {
 /** The deep agent runner. Per-incident filesystem and todos persist between runs in `memory`. */
 export function deepAgentRunner(opts: ModelOptions & { modelName: string }): Runner {
   const model = createModel(opts);
-  const carried = new Map<string, { files?: unknown; todos?: PlanItem[] }>();
 
   return async (input: RunInput) => {
     const subagents: SubAgent[] = [
@@ -184,7 +183,7 @@ export function deepAgentRunner(opts: ModelOptions & { modelName: string }): Run
       name: "clara-response-coordinator",
     });
 
-    const prior = carried.get(input.incidentId);
+    const prior = input.state.agentMemory;
     const recent = input.state.log.actions
       .filter((a) => a.kind === "act")
       .slice(-8)
@@ -208,7 +207,8 @@ export function deepAgentRunner(opts: ModelOptions & { modelName: string }): Run
       metadata: { incident_id: input.incidentId, run: input.run },
     } as never)) as { files?: unknown; todos?: PlanItem[] };
 
-    carried.set(input.incidentId, { files: result.files, todos: result.todos });
+    // Kept on the incident state (not in this closure) so it is saved in persistence snapshots.
+    input.setAgentMemory({ files: result.files, todos: result.todos });
     if (Array.isArray(result.todos)) input.setPlan(result.todos.map((t) => ({ content: t.content, status: t.status })));
     input.setMemory(filesToMemory(result.files));
   };

@@ -1,6 +1,6 @@
 import { haversineKm, incidentEvents, type Network } from "@clara/network";
 import { CARE_NOTICE, DEFAULT_CARE, DRIVER_FASTER_BY_MIN, estimateTimeToCare, type CareThreshold, type Need, type TimeToCare } from "./care.js";
-import type { AgentName, CoordinatorLog, RideProposal, RidesAdapter, ToolCallEntry } from "./types.js";
+import type { AgentName, CoordinatorLog, PlanItem, RideProposal, RidesAdapter, ToolCallEntry } from "./types.js";
 
 /**
  * The coordinator's tool layer. Every limit is enforced here, in code, whatever the planner (deep agent or rules)
@@ -43,6 +43,8 @@ export interface IncidentState {
   lastEstimate?: { run: number; estimate: TimeToCare };
   /** Rides requested with request_ride. */
   rideRequests?: number;
+  /** The deep agent's virtual filesystem and todos, carried from run to run (and saved in persistence snapshots). */
+  agentMemory?: { files?: unknown; todos?: PlanItem[] };
 }
 
 export interface ToolContext {

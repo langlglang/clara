@@ -97,7 +97,7 @@ export function ProfileEditor({ volunteer, vehicle, onSaved, onForget }: { volun
       <h2 id="alerts-h" style={{ marginTop: 10 }}>
         Alerts
       </h2>
-      <AlertsSetup volunteerId={volunteer.volunteer_id} hasPhone={Boolean(volunteer.phone)} callConsent={volunteer.call_consent ?? false} onConsent={setConsent} />
+      <AlertsSetup volunteerId={volunteer.volunteer_id} hasPhone={Boolean(volunteer.phone)} callConsent={volunteer.call_consent ?? false} onConsent={setConsent} channel={volunteer.channel} />
 
       <button type="button" className="btn block" onClick={onForget}>
         Sign out on this phone

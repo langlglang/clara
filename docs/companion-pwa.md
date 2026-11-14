@@ -1,4 +1,4 @@
-# Companion app as a PWA: onboarding, push alerts, drivers, phone-call fallback
+# Companion app as a PWA: onboarding, push alerts, drivers, phone-call fallback, text alerts
 
 The volunteer app (`/app`, sign-up at `/join`) is a Progressive Web App. It installs to the home screen, opens on a weak connection, gets loud push alerts with answer buttons, and falls back to a phone call (Twilio) when an alert goes unseen. HackPrinceton demo: Clara never replaces emergency services and never calls them.
 
@@ -34,8 +34,8 @@ Notification buttons: alerts get **I'M COMING / CAN'T** (POST `/api/alerts/{id}/
 
 ## Push (server)
 
-- `lib/push.ts`: subscriptions in memory, keyed by volunteer id, up to 5 devices each. Every send has an 8 s deadline; a 404/410 drops the subscription.
-- VAPID keys from `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`. Without them the server generates a pair at start, logs that, and keeps it in memory; subscriptions are in memory too, so both reset together on a restart and phones re-subscribe (the app does this on open).
+- `lib/push.ts`: subscriptions in memory (saved in the Postgres snapshot when `DATABASE_URL` is set, see [persistence.md](persistence.md)), keyed by volunteer id, up to 5 devices each. Every send has an 8 s deadline; a 404/410 drops the subscription.
+- VAPID keys from `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`. Without them the server generates a pair at start and logs that. With a database the pair is saved in the snapshot with the subscriptions and both are restored together (source `saved`); without one both are in memory, reset together on a restart, and phones re-subscribe (the app does this on open). If the key changes (env keys set later), saved subscriptions are dropped at restore.
 - `lib/notify.ts`: the runtime listens to the network; every alert created in state `sent` (first wave, escalation, coordinator extras) is pushed: **EMERGENCY NEARBY** · "Severe bleeding · Clinic tent · 300 m (about 4 min). Can you come?" with `{ alert_id, volunteer_id, incident_id }`. Every new ride offer is pushed: **RIDE NEEDED** · "Clinic tent → District Hospital (fictional) · 1 seat · 1.0 km from you. Can you drive?". No patient names; nothing says help is already there. Quiet hours skip the push (the alert still waits in the app).
 
 Routes: `GET /api/push/key`, `POST|DELETE /api/volunteers/[id]/push`, `POST /api/volunteers/[id]/push/test`, `GET|PATCH /api/volunteers/[id]`.
@@ -51,6 +51,26 @@ Routes: `GET /api/push/key`, `POST|DELETE /api/volunteers/[id]/push`, `POST /api
 
 **Twilio trial accounts can only call numbers you have verified in the Twilio console**, and they play a trial notice before the message. Buy a number with voice capability for `TWILIO_FROM_NUMBER`.
 
+## Text alerts (Photon: iMessage, WhatsApp, SMS)
+
+`lib/photon.ts` (plain fetch against the Photon Beta API, `https://api.photon.codes/v1/projects/{PHOTON_PROJECT_ID}`):
+
+- A volunteer who ticked **Also text me (iMessage/WhatsApp/SMS)** in the alerts step or Profile (`channel` ≠ `app`) and gave an E.164 number gets each alert as a text, as well as the push: "CLARA ALERT (demo): Severe bleeding at Clinic tent, 300 m (~4 min). Reply 1 if you're coming, 2 if you can't." Ride offers: "RIDE NEEDED (demo): … Reply 1 to drive, 2 if not." Never in quiet hours; removing the phone number turns texts off.
+- Sending is `POST /messages` with `{ spaceId, senderId, content: { type: "text", format: "plain", text } }` and an `Idempotency-Key`. **A shared iMessage line can't send the first message**: the volunteer needs a line assignment and must text the Clara number once. Clara texts into the Space of their last message (remembered from the webhook, else found with `GET /messages?direction=received`); with no thread it logs `no_thread`.
+- Without `PHOTON_API_KEY` / `PHOTON_PROJECT_ID` it only logs `would message +1******0199`.
+- `POST /api/photon/webhook` takes `message.received` events, verified with Standard Webhooks (HMAC-SHA256 with the `whsec_` secret over `webhook-id.webhook-timestamp.body`, 5-minute window; 400 otherwise, deduped on `webhook-id`). The sender's phone maps to the volunteer and their newest open alert or ride offer: "1"/"yes"/"coming" → coming (or accept the ride), "2"/"no" → can't, through `network.respond` / `rides.answer`. Clara texts back a short confirmation; other text gets the instructions.
+
+Setup (run in your own terminal; secrets are printed there only, never written to files):
+
+```sh
+export PHOTON_API_KEY=pho_sk_...   PHOTON_PROJECT_ID=pho_prj_01m7cbytt4fahstv8xerqw8w8z
+npx tsx scripts/photon-setup.ts                       # checks the key, lists shared iMessage line assignments
+npx tsx scripts/photon-setup.ts --assign +15551234567 # gives a volunteer phone a shared line; they text it "hi" once
+npx tsx scripts/photon-setup.ts --webhook             # registers https://clara.living/api/photon/webhook, prints whsec_...
+```
+
+Then set `PHOTON_WEBHOOK_SECRET` on Render (`PHOTON_PROJECT_ID` is `pho_prj_01m7cbytt4fahstv8xerqw8w8z`, already in render.yaml).
+
 ## Drivers and rides (`apps/web/lib/rides.ts`)
 
 - Each ride goes to the nearest of three fictional hospitals (`DEMO_HOSPITALS`); the offer shows pickup (the box) → hospital, distance and drive time, and seats needed (`seats_needed`, default 1; drivers with fewer seats are "not suitable").
@@ -62,10 +82,12 @@ Routes: `GET /api/push/key`, `POST|DELETE /api/volunteers/[id]/push`, `POST /api
 
 | Variable | Default | |
 | --- | --- | --- |
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | generated in memory | `npx web-push generate-vapid-keys` once, then set both |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | generated (kept in the database snapshot, if any) | `npx web-push generate-vapid-keys` once, then set both |
 | `VAPID_SUBJECT` | `mailto:clara-demo@example.com` | a `mailto:` you read |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | unset (calls logged only) | all three needed |
 | `PUBLIC_BASE_URL` | `https://clara.living` | origin Twilio calls back on |
+| `PHOTON_API_KEY`, `PHOTON_PROJECT_ID` | unset (texts logged only) | Photon project key (`pho_sk_`) and `pho_prj_` id |
+| `PHOTON_WEBHOOK_SECRET` | unset (inbound replies refused) | `whsec_` from `scripts/photon-setup.ts --webhook` |
 
 ## What only a real phone shows
 
@@ -73,4 +95,5 @@ Routes: `GET /api/push/key`, `POST|DELETE /api/volunteers/[id]/push`, `POST /api
 - iPhone: push works only from the home-screen app on iOS 16.4+; action buttons may not show on iOS (a tap opens the app).
 - The install prompt (Android Chrome) and Add to Home Screen (iPhone).
 - Real Twilio calls and key presses.
+- Real Photon texts and replies.
 - GPS accuracy indoors.

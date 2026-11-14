@@ -1,5 +1,5 @@
 import { fail, sseResponse } from "../../../../../lib/http";
-import { runtime } from "../../../../../lib/server";
+import { ensureRuntime } from "../../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await ctx.params;
-  const rt = runtime();
+  const rt = await ensureRuntime();
   if (!rt.network.store.getBox(id)) return fail(404, "not_found", `Unknown box "${id}".`);
   return sseResponse(req, (out) => {
     const open = rt.network.openIncidentForBox(id);

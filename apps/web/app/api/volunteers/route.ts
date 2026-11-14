@@ -3,7 +3,7 @@ import { E164 } from "../../../lib/alertText";
 import { fail, issues, json, readJson } from "../../../lib/http";
 import { applyProfileRules } from "../../../lib/profile";
 import { VEHICLE_KINDS, type VehicleKind } from "../../../lib/rides";
-import { runtime } from "../../../lib/server";
+import { ensureRuntime } from "../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,7 @@ export async function POST(req: Request): Promise<Response> {
   if (!ruled.ok) return fail(400, "bad_request", ruled.message);
   const merged: Record<string, unknown> = { ...draft, ...ruled.patch };
   for (const k of Object.keys(merged)) if (merged[k] === undefined) delete merged[k];
-  const rt = runtime();
+  const rt = await ensureRuntime();
   const volunteer = rt.network.registerVolunteer(merged as typeof draft);
   rt.vehicles.set(volunteer.volunteer_id, ruled.vehicle);
   rt.emit({ kind: "profile", volunteer_id: volunteer.volunteer_id });

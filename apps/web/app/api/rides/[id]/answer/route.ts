@@ -1,5 +1,5 @@
 import { fail, json, readJson } from "../../../../../lib/http";
-import { runtime } from "../../../../../lib/server";
+import { ensureRuntime } from "../../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!read.ok) return read.response;
   const body = (read.body ?? {}) as { driver_id?: unknown; action?: unknown };
   if (typeof body.driver_id !== "string" || (body.action !== "accept" && body.action !== "decline")) return fail(400, "bad_request", 'Expected { driver_id, action: "accept" | "decline" }.');
-  const r = runtime().rides.answer(id, body.driver_id, body.action);
+  const r = (await ensureRuntime()).rides.answer(id, body.driver_id, body.action);
   switch (r.outcome) {
     case "accepted":
     case "declined":

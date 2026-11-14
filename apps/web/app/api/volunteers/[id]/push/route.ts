@@ -1,6 +1,6 @@
 import { fail, json, readJson } from "../../../../../lib/http";
 import { parseSubscription } from "../../../../../lib/push";
-import { runtime } from "../../../../../lib/server";
+import { ensureRuntime } from "../../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const read = await readJson(req);
   if (!read.ok) return read.response;
-  const rt = runtime();
+  const rt = await ensureRuntime();
   if (!rt.network.store.getVolunteer(id)) return fail(404, "not_found", "No volunteer with that id.");
   const sub = parseSubscription((read.body as { subscription?: unknown } | undefined)?.subscription);
   if (!sub) return fail(400, "bad_request", "Expected { subscription: { endpoint, keys: { p256dh, auth } } }.");
@@ -23,5 +23,5 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   if (!read.ok) return read.response;
   const endpoint = (read.body as { endpoint?: unknown } | undefined)?.endpoint;
   if (endpoint !== undefined && typeof endpoint !== "string") return fail(400, "bad_request", "Expected { endpoint } or no body.");
-  return json({ devices: runtime().push.remove(id, endpoint) });
+  return json({ devices: (await ensureRuntime()).push.remove(id, endpoint) });
 }

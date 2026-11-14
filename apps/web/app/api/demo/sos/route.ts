@@ -1,6 +1,6 @@
 import { fail, json } from "../../../../lib/http";
 import { demoSosBatch, type Need } from "../../../../lib/demo";
-import { runtime } from "../../../../lib/server";
+import { ensureRuntime } from "../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export async function POST(req: Request): Promise<Response> {
   const boxId = url.searchParams.get("box") ?? "box-clinic";
   const need = (url.searchParams.get("need") ?? "bleeding") as Need;
   if (!NEEDS.includes(need)) return fail(400, "bad_request", `need must be one of ${NEEDS.join(", ")}.`);
-  const rt = runtime();
+  const rt = await ensureRuntime();
   if (!rt.network.store.getBox(boxId)) return fail(404, "not_found", `Unknown box "${boxId}".`);
   const result = rt.network.ingest(demoSosBatch(boxId, need, rt.network.clock()));
   if (!result.ok) return fail(400, "bad_request", result.error);

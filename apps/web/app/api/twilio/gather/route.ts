@@ -1,4 +1,4 @@
-import { runtime } from "../../../../lib/server";
+import { ensureRuntime } from "../../../../lib/server";
 import { gatherReplyTwiml, validTwilioSignature } from "../../../../lib/twilio";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ const twiml = (body: string, status = 200) => new Response(body, { status, heade
  * over PUBLIC_BASE_URL + path + query and the sorted POST params); anything else gets 403.
  */
 export async function POST(req: Request): Promise<Response> {
-  const rt = runtime();
+  const rt = await ensureRuntime();
   if (!rt.twilio) return new Response("Calls are not configured.", { status: 403 });
   const url = new URL(req.url);
   const text = await req.text().catch(() => "");

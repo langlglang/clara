@@ -58,10 +58,12 @@ export function ridePushPayload(network: Network, ride: Ride, driverId: string):
 
 /**
  * A listener for the runtime's app changes: each ride offer (suggested driver or backup, once the dispatcher
- * approved it) gets one push to that driver's devices. Offers are told apart by driver and offered_at.
+ * approved it) gets one push to that driver's devices. Offers are told apart by driver and offered_at. `alreadyTold`
+ * holds the open offers of rides restored from a snapshot, so a restart doesn't push them again.
  */
-export function ridePushListener(network: Network, push: PushBook): (change: { kind: string; ride?: Ride }) => void {
+export function ridePushListener(network: Network, push: PushBook, alreadyTold: Iterable<Ride> = []): (change: { kind: string; ride?: Ride }) => void {
   const told = new Set<string>();
+  for (const ride of alreadyTold) for (const f of ride.offers) told.add(`${ride.ride_id}/${f.driver_id}/${f.offered_at}`);
   return (change) => {
     if (change.kind !== "ride" || !change.ride) return;
     const ride = change.ride;

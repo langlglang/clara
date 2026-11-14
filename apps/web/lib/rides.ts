@@ -452,6 +452,16 @@ export function createRideBook(o: RideBookOptions) {
         if (dirty) changed(ride);
       }
     },
+    /** Every ride as plain JSON (persistence snapshots). */
+    exportState: (): Ride[] => [...rides.values()].map(copy),
+    /**
+     * Replaces the rides with a snapshot's (validated by lib/snapshot.ts). Nothing to re-arm: rides start no timers,
+     * and tick() expires offers by their stored expires_at.
+     */
+    importState(list: readonly Ride[]) {
+      rides.clear();
+      for (const r of list) rides.set(r.ride_id, copy(r));
+    },
     get: (rideId: string) => (rides.has(rideId) ? view(rides.get(rideId)!) : undefined),
     forIncident(incidentId: string): RideView | undefined {
       const r = [...rides.values()].filter((x) => x.incident_id === incidentId).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];

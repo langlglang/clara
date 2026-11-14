@@ -85,5 +85,8 @@ export function applyProfileRules(current: Volunteer, currentVehicle: VehicleKin
     // Removing the number withdraws consent to calls.
     patch.call_consent = false;
   }
+  const channel = patch.channel ?? current.channel;
+  if ("channel" in patch && channel !== "app" && !phone) return { ok: false, message: "Add a phone number before choosing text alerts." };
+  if (!phone && channel !== "app") patch.channel = "app";
   return { ok: true, patch, vehicle };
 }

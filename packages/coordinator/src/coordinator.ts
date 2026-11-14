@@ -1,4 +1,5 @@
 import type { Incident } from "@clara/contracts";
+import { z } from "zod";
 import type { Network, NetworkChange } from "@clara/network";
 import { createToolLayer, type IncidentState, type ToolLayer } from "./tools.js";
 import { rulesRunner } from "./rules.js";
@@ -53,7 +54,49 @@ export interface Coordinator {
   /** Resolves when no run is pending or in flight (tests). */
   idle(): Promise<void>;
   stop(): void;
+  /** Logs, memory, counters and bookkeeping per incident, as plain JSON (persistence snapshots). */
+  exportState(): CoordinatorSnapshot;
+  /**
+   * Restores exportState's output (validated; throws on invalid data, changing nothing). A run that was queued or in
+   * flight when the snapshot was taken is marked interrupted; the next trigger or periodic check plans again.
+   */
+  importState(snapshot: unknown): void;
 }
+
+const RunSnapshotSchema = z.looseObject({ run: z.number(), outcome: z.enum(["running", "ok", "error", "timeout"]), ended_at: z.string().nullable(), error: z.string().nullable() });
+const LogSnapshotSchema = z.looseObject({
+  incident_id: z.string().min(1),
+  status: z.enum(["idle", "queued", "running", "stopped"]),
+  stopped_reason: z.string().nullable(),
+  plan: z.array(z.unknown()),
+  actions: z.array(z.unknown()),
+  notes: z.array(z.unknown()),
+  flags: z.array(z.unknown()),
+  subagents: z.array(z.unknown()),
+  memory: z.array(z.unknown()),
+  runs: z.array(RunSnapshotSchema),
+  extra_alerts: z.number().int().min(0),
+  updated_at: z.string(),
+});
+export const CoordinatorSnapshotSchema = z.object({
+  slots: z.array(
+    z.object({
+      incident_id: z.string().min(1),
+      log: LogSnapshotSchema,
+      kit_requests: z.array(z.string()),
+      ride_proposals: z.array(z.looseObject({ ride_id: z.string(), driver_id: z.string() })),
+      last_estimate: z.looseObject({ run: z.number() }).nullable(),
+      ride_requests: z.number().int().min(0),
+      agent_memory: z.looseObject({}).nullable(),
+      runs: z.number().int().min(0),
+      last_run_at: z.number(),
+      level: z.string(),
+      alert_states: z.record(z.string(), z.string()),
+      closed: z.boolean(),
+    }),
+  ),
+});
+export type CoordinatorSnapshot = z.infer<typeof CoordinatorSnapshotSchema>;
 
 /** Resolves the mode from the environment: CLARA_COORDINATOR=off|rules|on (default on), deep agent needs a key. */
 export function resolveMode(env: CoordinatorEnv, enabled?: boolean): CoordinatorMode {
@@ -229,6 +272,9 @@ export function createCoordinator(options: CoordinatorOptions): Coordinator {
           if (slot.state.log.subagents.length > 50) slot.state.log.subagents.shift();
           changed();
         },
+        setAgentMemory: (memory) => {
+          slot.state.agentMemory = memory;
+        },
         setMemory: (files) => {
           slot.state.log.memory = files.slice(0, 20);
           changed();
@@ -380,6 +426,62 @@ export function createCoordinator(options: CoordinatorOptions): Coordinator {
       off();
       if (interval) clearInterval(interval);
       for (const s of slots.values()) if (s.timer) clearTimeout(s.timer);
+    },
+    exportState() {
+      return structuredClone({
+        slots: [...slots.entries()].map(([incident_id, s]) => ({
+          incident_id,
+          log: s.state.log,
+          kit_requests: [...s.state.kitRequests],
+          ride_proposals: s.state.rideProposals,
+          last_estimate: s.state.lastEstimate ?? null,
+          ride_requests: s.state.rideRequests ?? 0,
+          agent_memory: s.state.agentMemory ?? null,
+          runs: s.runs,
+          last_run_at: s.lastRunAt,
+          level: s.level,
+          alert_states: Object.fromEntries(s.alertStates),
+          closed: s.closed,
+        })),
+      }) as unknown as CoordinatorSnapshot;
+    },
+    importState(snapshot) {
+      const parsed = CoordinatorSnapshotSchema.parse(snapshot);
+      for (const s of slots.values()) if (s.timer) clearTimeout(s.timer);
+      slots.clear();
+      const at = clock().toISOString();
+      for (const raw of structuredClone(parsed.slots)) {
+        const log = raw.log as unknown as CoordinatorLog;
+        // A run cut off by the restart: say so instead of showing it running forever.
+        for (const r of log.runs) {
+          if (r.outcome !== "running") continue;
+          r.outcome = "error";
+          r.error = "Interrupted by a server restart.";
+          r.ended_at = at;
+        }
+        const interrupted = log.status === "running" || log.status === "queued";
+        if (interrupted) log.status = raw.closed ? "stopped" : "idle";
+        // An open incident whose run was cut off is due a periodic check at once.
+        if (interrupted && !raw.closed) raw.last_run_at = Math.max(1, Date.parse(at) - PERIODIC_MS);
+        slots.set(raw.incident_id, {
+          state: {
+            log,
+            kitRequests: new Set(raw.kit_requests),
+            rideProposals: raw.ride_proposals as unknown as IncidentState["rideProposals"],
+            ...(raw.last_estimate ? { lastEstimate: raw.last_estimate as unknown as NonNullable<IncidentState["lastEstimate"]> } : {}),
+            rideRequests: raw.ride_requests,
+            ...(raw.agent_memory ? { agentMemory: raw.agent_memory as IncidentState["agentMemory"] } : {}),
+          },
+          timer: null,
+          pending: [],
+          running: null,
+          runs: raw.runs,
+          lastRunAt: raw.last_run_at,
+          level: raw.level,
+          alertStates: new Map(Object.entries(raw.alert_states)),
+          closed: raw.closed,
+        });
+      }
     },
   };
 }

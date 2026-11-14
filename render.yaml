@@ -6,7 +6,8 @@ services:
     name: clara
     runtime: node
     # Free: spins down after 15 minutes with no requests (first request after that waits about a minute).
-    # A connected box's heartbeat keeps it up. Data is in memory, so a restart or spin-down resets it.
+    # A connected box's heartbeat keeps it up. State lives in memory and is snapshotted to the clara-db Postgres
+    # below (docs/persistence.md), so a restart, redeploy or spin-down picks up where it left off.
     plan: free
     region: virginia
     buildCommand: npm ci --include=dev && npm run build -w @clara/web
@@ -16,6 +17,14 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "24"
+      # Snapshot persistence (apps/web/lib/persist.ts). Internal connection string: private network only.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: clara-db
+          property: connectionString
+      # Next leaves SIGTERM to the app, which saves one last snapshot and then exits.
+      - key: NEXT_MANUAL_SIG_HANDLE
+        value: "true"
       # Claude (voice turns) and Cartesia (speech-to-text and voice). Entered in the dashboard.
       - key: ANTHROPIC_API_KEY
         sync: false
@@ -43,7 +52,7 @@ services:
       - key: LANGSMITH_API_KEY
         sync: false
       # Web push (companion PWA). Set a fixed VAPID pair so subscriptions survive restarts; without it the server
-      # generates one in memory at start. Generate with: npx web-push generate-vapid-keys
+      # generates one at start and keeps it in the database snapshot. Generate with: npx web-push generate-vapid-keys
       - key: VAPID_PUBLIC_KEY
         sync: false
       - key: VAPID_PRIVATE_KEY
@@ -60,3 +69,23 @@ services:
       # Origin Twilio calls back on; its request signatures are checked against this.
       - key: PUBLIC_BASE_URL
         value: https://clara.living
+      # Text alerts over Photon (photon.codes Beta API). Without key + project id, texts are only logged ("would message ...").
+      - key: PHOTON_API_KEY
+        sync: false
+      - key: PHOTON_PROJECT_ID
+        value: pho_prj_01m7cbytt4fahstv8xerqw8w8z
+      # whsec_... printed by `npx tsx scripts/photon-setup.ts --webhook`; inbound replies are refused without it.
+      - key: PHOTON_WEBHOOK_SECRET
+        sync: false
+
+databases:
+  # Snapshot store for the web service (one row, table clara_snapshot, created by the app).
+  # Note: Render's free Postgres expires 30 days after creation (with a grace period to upgrade); after that,
+  # create a new one (or upgrade) and the app starts fresh with the demo seed.
+  - name: clara-db
+    plan: free
+    region: virginia
+    databaseName: clara
+    user: clara
+    # No entries: reachable only from Render services in the same region over the private network.
+    ipAllowList: []

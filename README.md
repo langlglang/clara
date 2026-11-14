@@ -8,7 +8,7 @@ Where professional help is far away (conflict zones, refugee camps, remote and h
 
 ## Live demo
 
-**https://clara.living** (hosted on Render's free plan: the first visit after 15 idle minutes takes about a minute to wake it, and demo data resets on restart)
+**https://clara.living** (hosted on Render's free plan: the first visit after 15 idle minutes takes about a minute to wake it; state is saved to Postgres, so restarts and redeploys keep it)
 
 | Page | Link |
 | --- | --- |
@@ -73,10 +73,15 @@ For each open emergency a LangChain [deepagents](https://github.com/langchain-ai
 Volunteers join at [clara.living/join](https://clara.living/join): first aid nearby, driving patients to hospital (no medical skills needed), or both; then skills (self-reported), vehicle and seats, where they usually are with an alert radius (0.5–10 km), availability and quiet hours. The app installs to the home screen and gets loud push alerts with **I'M COMING / CAN'T** (or **I CAN DRIVE / CAN'T** for ride offers), even when closed. If an alert or ride offer is still unseen after 30 s, Clara can phone a volunteer who gave a number and agreed (press 1 / 2), once per alert, via Twilio.
 
 - **iPhone:** push alerts only work after **Share → Add to Home Screen** and opening Clara from there (iOS 16.4+). In a Safari tab, alerts show only while the page is open.
-- **Push keys:** set `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` (`npx web-push generate-vapid-keys`); without them the server generates a pair in memory and phones re-subscribe after each restart.
+- **Push keys:** set `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` (`npx web-push generate-vapid-keys`); without them the server generates a pair and keeps it in the database snapshot with the subscriptions (with no database, phones re-subscribe after each restart).
 - **Calls:** set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (and `PUBLIC_BASE_URL`, default `https://clara.living`). Without them calls are only logged and the maintainer console says "Calls: not configured". **A Twilio trial account can only call numbers verified in the Twilio console.** Clara never calls emergency services.
+- **Texts:** volunteers can tick **Also text me (iMessage/WhatsApp/SMS)** and answer alerts by replying 1 / 2, via [Photon](https://photon.codes) (Beta API). Set `PHOTON_API_KEY`, `PHOTON_PROJECT_ID`, `PHOTON_WEBHOOK_SECRET`; setup steps in [docs/companion-pwa.md](docs/companion-pwa.md#text-alerts-photon-imessage-whatsapp-sms). Without them texts are only logged.
 
 Details: [docs/companion-pwa.md](docs/companion-pwa.md).
+
+## Persistence (survives restarts and redeploys)
+
+The server keeps everything in memory in one process and, when `DATABASE_URL` is set, snapshots it to Postgres: boxes, volunteers, events, incidents and alerts, rides, push subscriptions (and a generated VAPID pair), call bookkeeping and coordinator logs. It loads the snapshot before serving the first request, saves within about 2 s of a change (at most every 2 s) and once more on SIGTERM. Two instances during a deploy can't overwrite each other: a save only lands if no newer instance has saved. Without `DATABASE_URL` (local dev, tests) nothing changes. `/api/state` reports `persistence` and the maintainer console shows "Saved · 3 s ago" or "Not saving (no database)". On Render, `render.yaml` creates a free Postgres (it expires after 30 days). Details: [docs/persistence.md](docs/persistence.md).
 
 ## Credits
 

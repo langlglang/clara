@@ -1,12 +1,12 @@
 import { fail, json, readJson } from "../../../../../lib/http";
-import { runtime } from "../../../../../lib/server";
+import { ensureRuntime } from "../../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
 /** The box was refilled: counts start again from its manifest (or `{ manifest: { sku: count } }`). */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await ctx.params;
-  const rt = runtime();
+  const rt = await ensureRuntime();
   const read = await readJson(req);
   if (!read.ok) return read.response;
   let manifest: Record<string, number> | undefined;

@@ -1,5 +1,5 @@
 import { fail, json, readJson } from "../../../../../lib/http";
-import { runtime, type BoxMessage } from "../../../../../lib/server";
+import { ensureRuntime, type BoxMessage } from "../../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const body = (read.body ?? {}) as { volunteer_id?: unknown; text?: unknown };
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (typeof body.volunteer_id !== "string" || !text || text.length > MAX_TEXT) return fail(400, "bad_request", `Expected { volunteer_id, text } with 1 to ${MAX_TEXT} characters.`);
-  const rt = runtime();
+  const rt = await ensureRuntime();
   const view = rt.network.incident(id);
   if (!view) return fail(404, "not_found", "No incident with that id.");
   if (view.incident.closed) return fail(409, "conflict", "This emergency has already closed.");

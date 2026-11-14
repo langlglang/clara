@@ -6,7 +6,7 @@ import { estimateEta, haversineKm, type Network } from "@clara/network";
  * the box's name and the volunteer's straight-line distance. No patient names, no promise that help is there.
  */
 
-const NEED_WORDS: Record<string, string> = { bleeding: "Severe bleeding", breathing: "Breathing / CPR", general: "First aid" };
+export const NEED_WORDS: Record<string, string> = { bleeding: "Severe bleeding", breathing: "Breathing / CPR", general: "First aid" };
 const NEED_SPOKEN: Record<string, string> = { bleeding: "severe bleeding", breathing: "a breathing emergency, CPR may be needed", general: "someone who needs first aid" };
 
 export interface AlertWords {

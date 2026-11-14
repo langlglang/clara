@@ -1,12 +1,12 @@
 import { fail, json } from "../../../../lib/http";
-import { runtime } from "../../../../lib/server";
+import { ensureRuntime } from "../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
 /** The EMS scene report behind a secret link. Every line cites the box events it came from. */
 export async function GET(_req: Request, ctx: { params: Promise<{ token: string }> }): Promise<Response> {
   const { token } = await ctx.params;
-  const rt = runtime();
+  const rt = await ensureRuntime();
   try {
     const report = rt.network.reportByToken(token, rt.reportOptions);
     return report ? json({ report, server_time: rt.network.clock().toISOString() }) : fail(404, "not_found", "No scene report at this link.");

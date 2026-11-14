@@ -2,8 +2,9 @@ import { generateVAPIDKeys, sendNotification } from "web-push";
 
 /**
  * Web push for the companion app. Subscriptions live in memory beside the network (keyed by volunteer id, several
- * devices each), and so do the VAPID keys when the environment has none: a restart resets both together, so a
- * subscription is never left signed by a key the server forgot. Every send has a deadline; a 404/410 from the push
+ * devices each), and so do the VAPID keys when the environment has none. With persistence (DATABASE_URL, see
+ * lib/persist.ts) both are saved in the same snapshot and restored together; without it a restart resets both
+ * together, so a subscription is never left signed by a key the server forgot. Every send has a deadline; a 404/410 from the push
  * service means the subscription is dead and it is dropped.
  */
 
@@ -42,18 +43,22 @@ export interface Vapid {
   publicKey: string;
   privateKey: string;
   subject: string;
-  /** "env" from VAPID_* variables; "generated" at start (lost on restart). */
-  source: "env" | "generated";
+  /** "env" from VAPID_* variables; "generated" at start; "saved": generated earlier and restored from the database snapshot. */
+  source: "env" | "generated" | "saved";
 }
 
 export type VapidEnv = { VAPID_PUBLIC_KEY?: string; VAPID_PRIVATE_KEY?: string; VAPID_SUBJECT?: string };
 
-/** VAPID keys from the environment, or a fresh pair kept in memory (never written anywhere). */
-export function resolveVapid(env: VapidEnv, log: (line: string) => void = console.log, generate = generateVAPIDKeys): Vapid {
+/**
+ * VAPID keys from the environment; else the generated pair a restored snapshot carried (`saved`), so restored
+ * subscriptions keep working; else a fresh pair kept in memory (saved only in the persistence snapshot, if any).
+ */
+export function resolveVapid(env: VapidEnv, log: (line: string) => void = console.log, generate = generateVAPIDKeys, saved?: { publicKey: string; privateKey: string } | null): Vapid {
   const subject = env.VAPID_SUBJECT?.trim() || "mailto:clara-demo@example.com";
   const pub = env.VAPID_PUBLIC_KEY?.trim();
   const priv = env.VAPID_PRIVATE_KEY?.trim();
   if (pub && priv) return { publicKey: pub, privateKey: priv, subject, source: "env" };
+  if (saved?.publicKey && saved.privateKey) return { publicKey: saved.publicKey, privateKey: saved.privateKey, subject, source: "saved" };
   const keys = generate();
   log("[push] VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY not set: generated a key pair in memory (push subscriptions reset on restart).");
   return { publicKey: keys.publicKey, privateKey: keys.privateKey, subject, source: "generated" };
@@ -98,6 +103,10 @@ export interface PushBook {
   send(volunteerId: string, payload: PushPayload): Promise<SendResult>;
   /** Resolves when every send started so far has finished (tests). */
   idle(): Promise<void>;
+  /** Every device per volunteer, as plain JSON (persistence snapshots). */
+  exportState(): Record<string, PushSubscriptionJson[]>;
+  /** Restores exportState's output; malformed subscriptions are dropped. */
+  importState(subscriptions: Record<string, unknown>): void;
 }
 
 export function createPushBook({ vapid, sender = webPushSender, timeoutMs = PUSH_TIMEOUT_MS, log = console.log }: { vapid: Vapid; sender?: PushSender; timeoutMs?: number; log?: (line: string) => void }): PushBook {
@@ -177,6 +186,14 @@ export function createPushBook({ vapid, sender = webPushSender, timeoutMs = PUSH
     },
     async idle() {
       while (pending.size) await Promise.allSettled([...pending]);
+    },
+    exportState: () => Object.fromEntries([...subs].map(([id, list]) => [id, list.map((s) => structuredClone(s))])),
+    importState(subscriptions) {
+      subs.clear();
+      for (const [id, list] of Object.entries(subscriptions)) {
+        const good = (Array.isArray(list) ? list : []).map(parseSubscription).filter((s): s is PushSubscriptionJson => s !== null).slice(-MAX_DEVICES);
+        if (good.length) subs.set(id, good);
+      }
     },
   };
   return book;

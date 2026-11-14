@@ -25,6 +25,13 @@ describe("replyJsonSchema", () => {
     expect(named("show_visual")).toBeUndefined();
   });
 
+  it("offers a single camera action without a second confirmation turn", () => {
+    const camera = { ...state, camera_available: true, pending_camera_consent: "cloud_interpretation" as const };
+    expect(named("request_camera", camera)).toBeDefined();
+    expect(named("capture_camera", camera)).toBeUndefined();
+    expect(replyZodSchema(camera).safeParse({ transcript: "take a photo", reply: "", action: { name: "capture_camera" } }).success).toBe(false);
+  });
+
   it("leaves out actions with nothing to choose from, and triage when unavailable", () => {
     const empty = { ...state, allowed_steps: [], questions: [], manifest: [] };
     expect(variants(empty).map((v) => v.properties.name.enum[0])).toEqual(["suggest_sos"]);

@@ -32,7 +32,7 @@ export function defaultCameraDevice(): string {
 export function captureUsbJpeg(device: string, signal: AbortSignal): Promise<Buffer | null> {
   if (!/^\/dev\/(video\d+|v4l\/by-id\/[A-Za-z0-9_.-]+)$/.test(device) || signal.aborted) return Promise.resolve(null);
   return new Promise((resolve) => {
-    const child = spawn("v4l2-ctl", ["-d", device, "--set-fmt-video=width=640,height=480,pixelformat=MJPG", "--stream-mmap=3", "--stream-skip=2", "--stream-count=1", "--stream-to=/dev/stdout"], { stdio: ["ignore", "pipe", "ignore"] });
+    const child = spawn("v4l2-ctl", ["-d", device, "--set-fmt-video=width=640,height=480,pixelformat=MJPG", "--stream-mmap=3", "--stream-skip=2", "--stream-count=1", "--stream-to=-"], { stdio: ["ignore", "pipe", "ignore"] });
     const chunks: Buffer[] = [];
     let size = 0;
     let done = false;
@@ -77,6 +77,15 @@ export class CameraCapture {
     if (this.currentSession() !== sessionId) return null;
     this.pending = { sessionId, purpose, consentId: randomUUID(), expiresAt: this.now() + CONSENT_MS, granted: false };
     return CAMERA_PROMPTS[purpose];
+  }
+
+  /** An explicit spoken camera request authorizes one capture and cloud upload in this lid session. */
+  grantFromRequest(sessionId: string, heard: string): boolean {
+    if (this.currentSession() !== sessionId || /\b(?:do not|don't|dont|never|not|without)\b/i.test(heard) ||
+      !/\b(camera|photo|picture)\b/i.test(heard) ||
+      !/\b(take|capture|use|look|inspect|check|analy[sz]e|see|show|describe)\b/i.test(heard)) return false;
+    this.pending = { sessionId, purpose: "cloud_interpretation", consentId: randomUUID(), expiresAt: this.now() + CONSENT_MS, granted: true };
+    return true;
   }
 
   /** Only an explicit spoken phrase after the question grants one capture. */

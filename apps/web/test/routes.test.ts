@@ -84,6 +84,7 @@ describe("box API", () => {
     expect(typeof body.reply).toBe("string");
     expect((await postTurn(post("/api/boxes/box-clinic/turns", { ...turn, schema_version: "x" }), params({ id: "box-clinic" }))).status).toBe(400);
     expect((await postTurn(post("/api/boxes/box-clinic/turns", { ...turn, schema_version: "voice-turn/0.1" }), params({ id: "box-clinic" }))).status).toBe(400);
+    expect((await postTurn(post("/api/boxes/box-clinic/turns", { ...turn, schema_version: "voice-turn/0.5" }), params({ id: "box-clinic" }))).status).toBe(400);
   });
 
   it("returns canonical scenario text for an allowed selection", async () => {

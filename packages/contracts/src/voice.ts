@@ -2,10 +2,10 @@
 import { z } from "zod";
 
 /**
- * Voice turn API, `voice-turn/0.5`. The box sends one turn per utterance; the server answers
+ * Voice turn API, `voice-turn/0.6`. The box sends one turn per utterance; the server answers
  * with what it heard, a short reply and at most one action. See docs/contracts.md and docs/voice.md.
  */
-export const VOICE_TURN_VERSION = "voice-turn/0.5";
+export const VOICE_TURN_VERSION = "voice-turn/0.6";
 
 /** A clip is 16 kHz mono 16-bit PCM WAV: 32 bytes per millisecond. */
 export const CLIP_SAMPLE_RATE = 16_000;
@@ -137,9 +137,9 @@ export function actionAllowed(action: Action, state: TurnState): boolean {
     case "read_pulse":
       return state.pulse_available === true;
     case "request_camera":
-      return state.camera_available === true && !state.pending_camera_consent;
+      return state.camera_available === true;
     case "capture_camera":
-      return state.pending_camera_consent === "cloud_interpretation";
+      return false; // Legacy wire member; the 0.6 flow uses the explicit camera request itself.
     case "answer_emergency_question":
       return state.pending_emergency_question?.task_id === action.task_id && state.pending_emergency_question.question_id === action.question_id;
   }

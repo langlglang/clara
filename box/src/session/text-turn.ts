@@ -56,7 +56,7 @@ export async function textTurn(
   if (session.sessionId !== sessionId || !session.turnState()) return { ok: false, reason: "no_session" };
   // Text turns know the exact input; do not let a mismatched server transcript become an SOS answer.
   const actionApplied = response.action && response.client_turn_id === request.client_turn_id && session.sessionId === sessionId &&
-    (!["answer_emergency_question", "capture_camera", "show_visual"].includes(response.action.name) || response.heard === words)
+    (!["answer_emergency_question", "request_camera", "capture_camera", "show_visual"].includes(response.action.name) || response.heard === words)
     ? session.applyAction(response.action, "voice", ["answer_emergency_question", "request_camera", "capture_camera", "show_visual"].includes(response.action.name) ? response : undefined) : false;
   session.remember("clara", response.reply);
   const moved = actionApplied && response.action?.name === "select_step";

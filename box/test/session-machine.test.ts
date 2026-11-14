@@ -121,7 +121,7 @@ describe("background sensor tasks", () => {
     expect(session.view().presentation?.body).not.toMatch(/\d+ beats per minute/);
   });
 
-  it("does not offer cloud camera without a credential and requires the exact one-time voice consent", async () => {
+  it("captures one photo from an explicit spoken request, without a second consent turn", async () => {
     let active: BoxSession | null = null;
     const frame = Buffer.concat([Buffer.from([0xff, 0xd8]), Buffer.alloc(128), Buffer.from([0xff, 0xd9])]);
     const camera = new CameraCapture(() => active?.sessionId ?? null, async () => Buffer.from(frame));
@@ -138,21 +138,18 @@ describe("background sensor tasks", () => {
     }) });
     enabled.session.lidOpened();
     expect(enabled.session.turnState()?.camera_available).toBe(true);
-    const prompt = "May I take one photo and send it to Clara's cloud to help describe what it shows? Say 'Yes, send the photo' if you agree.";
     const requestAction = { name: "request_camera" as const };
-    const requestResponse: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: uuid(), heard: "Can you use the camera?", reply: prompt,
-      action: requestAction, answered_by: "model", reason: null, speech: null };
-    expect(enabled.session.applyAction(requestAction, "voice", requestResponse)).toBe(true);
     const turnId = uuid();
-    enabled.session.heard("Yes", turnId);
-    const captureAction = { name: "capture_camera" as const };
-    const captureResponse: TurnResponse = { ...requestResponse, client_turn_id: turnId, heard: "Yes", reply: "I'll take and inspect one photo now.", action: captureAction };
-    expect(enabled.session.applyAction(captureAction, "voice", captureResponse)).toBe(false);
-    enabled.session.heard("Yes, send the photo", turnId);
-    expect(enabled.session.applyAction(captureAction, "voice", { ...captureResponse, heard: "Yes, send the photo" })).toBe(true);
+    const requestResponse: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: turnId, heard: "Can you use the camera?", reply: "I'll take one photo and send it to Clara's cloud to describe what I can see. You can keep talking with me.",
+      action: requestAction, answered_by: "model", reason: null, speech: null };
+    enabled.session.heard("Can you use the camera?", turnId);
+    expect(enabled.session.applyAction(requestAction, "voice", requestResponse)).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(enabled.session.view().presentation).toMatchObject({ kind: "answer", title: "Camera observation" });
-    expect(enabled.session.applyAction(captureAction, "voice", { ...captureResponse, heard: "Yes, send the photo" })).toBe(false);
+    expect(enabled.session.applyAction(requestAction, "voice", requestResponse)).toBe(false);
+    const unrelatedId = uuid();
+    enabled.session.heard("The camera is plugged in", unrelatedId);
+    expect(enabled.session.applyAction(requestAction, "voice", { ...requestResponse, client_turn_id: unrelatedId, heard: "The camera is plugged in" })).toBe(false);
   });
 
   it("reports a failed local capture as a camera problem, without uploading", async () => {
@@ -163,14 +160,12 @@ describe("background sensor tasks", () => {
     let uploads = 0;
     Object.assign(setupResult.cloud, { inspectCamera: async () => { uploads++; throw new Error("unexpected upload"); } });
     session.lidOpened();
-    const prompt = "May I take one photo and send it to Clara's cloud to help describe what it shows? Say 'Yes, send the photo' if you agree.";
     const requestAction = { name: "request_camera" as const };
-    const request: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: uuid(), heard: "Use the camera", reply: prompt,
-      action: requestAction, answered_by: "model", reason: null, speech: null };
-    expect(session.applyAction(requestAction, "voice", request)).toBe(true);
     const turnId = uuid();
-    session.heard("Yes, send the photo", turnId);
-    expect(session.applyAction({ name: "capture_camera" }, "voice", { ...request, client_turn_id: turnId, heard: "Yes, send the photo", action: { name: "capture_camera" } })).toBe(true);
+    const request: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: turnId, heard: "Use the camera", reply: "I'll take one photo and send it to Clara's cloud to describe what I can see. You can keep talking with me.",
+      action: requestAction, answered_by: "model", reason: null, speech: null };
+    session.heard("Use the camera", turnId);
+    expect(session.applyAction(requestAction, "voice", request)).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(uploads).toBe(0);
     expect(session.view().presentation?.body).toContain("couldn't capture a photo");

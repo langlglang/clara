@@ -94,16 +94,12 @@ export function createKeywordStubModel(): ReplyModel {
       const visual = /\b(show|see|picture|visual|illustration|diagram)\b/i.test(said)
         ? turn.available_visuals?.find((v) => (v.visual_id !== "minor_cut_rinse_cover" || minorCutVisualAllowed(said)) && [...tokens(v.label)].some((w) => heard.has(w)))
         : undefined;
-      const cameraConsent = turn.pending_camera_consent === "cloud_interpretation" &&
-        /^(yes,? send the photo(?: to clara)?)[.!?]?$/i.test(said.trim());
       const pulse = turn.pulse_available && /\b(pulse|heart rate|bpm)\b/i.test(said) && /\b(read|measure|check|what|show|get)\b/i.test(said);
       const camera = turn.camera_available && /\b(camera|photo|picture|look at|see this)\b/i.test(said) && /\b(show|look|see|inspect|check|take|use|photo|picture)\b/i.test(said);
       const nextStep = step ?? entry;
       const relevantQuestion = /\b(blood|bleed|bleeding|wound|injured|hurt|pain)\b/i.test(said) && turn.current_step;
       const action = sos
         ? { name: "suggest_sos" }
-        : cameraConsent
-          ? { name: "capture_camera" }
         : pulse
           ? { name: "read_pulse" }
         : camera

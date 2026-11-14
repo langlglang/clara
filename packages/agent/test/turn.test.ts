@@ -71,6 +71,7 @@ describe("handleTurn", () => {
     expect(response.speech?.mime).toBe("audio/wav");
     expect(v.said).toEqual(["Checked demo guidance text."]);
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.1" }).success).toBe(false);
+    expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.5" }).success).toBe(false);
   });
 
   it("refuses selected guidance missing from the server bundle", async () => {

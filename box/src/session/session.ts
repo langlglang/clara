@@ -137,7 +137,6 @@ export class BoxSession {
   private countdown: Countdown | null = null;
   private sos: { need: Need; openedAt: number; overlay: boolean } | null = null;
   private emergencyTaskId: string | null = null;
-  private cameraPending: { sessionId: string; expiresAt: number } | null = null;
   private readonly background = new Map<"pulse" | "camera", AbortController>();
   private latestPulse: PulseObservation | null = null;
   private completedTasks: ScreenPresentation[] = [];
@@ -249,7 +248,6 @@ export class BoxSession {
     this.lidOpen = false;
     this.cancelBackground();
     if (this.sessionId) this.o.camera?.endSession(this.sessionId);
-    this.cameraPending = null;
     this.latestPulse = null;
     this.completedTasks = [];
     this.clearLightCue();
@@ -508,8 +506,6 @@ export class BoxSession {
     const state = { ...this.engine.turnState(this.recent),
       pulse_available: Boolean(this.o.pulseReader),
       camera_available: Boolean(this.o.camera && this.o.cloud.inspectCamera && this.o.cameraCloudEnabled),
-      ...(this.cameraPending?.sessionId === this.sessionId && this.clock.now() < this.cameraPending.expiresAt
-        ? { pending_camera_consent: "cloud_interpretation" as const } : {}),
       available_visuals: VISUALS.filter((visual) => {
       if (visual.id === "kit_overview" && this.o.kit.layoutRevision !== "3slot-v1") return false;
       if (visual.sku && (this.o.kit.get(visual.sku)?.on_hand ?? 0) <= 0) return false;
@@ -606,28 +602,15 @@ export class BoxSession {
         this.startPulseTask(this.sessionId);
         return true;
       case "request_camera": {
-        if (!this.o.camera || !this.sessionId || !response) return false;
-        const prompt = this.o.camera.requestConsent(this.sessionId, "cloud_interpretation");
-        if (!prompt || response.reply !== prompt) {
-          this.o.camera.endSession(this.sessionId);
-          return false;
-        }
-        this.cameraPending = { sessionId: this.sessionId, expiresAt: this.clock.now() + 60_000 };
-        if (this.sos) this.sos.overlay = false;
-        this.presentation = { kind: "question", title: "Camera permission", body: prompt, image_url: null, item: null, source_label: null };
-        this.publish();
-        return true;
-      }
-      case "capture_camera": {
         const report = response ? this.heardByTurn.get(response.client_turn_id) : null;
-        if (!this.o.camera || !this.sessionId || !report || report.sessionId !== this.sessionId || !response || response.heard !== report.text ||
-          !this.cameraPending || this.cameraPending.sessionId !== this.sessionId || this.clock.now() >= this.cameraPending.expiresAt ||
-          !this.o.camera.acceptConsent(this.sessionId, "cloud_interpretation", report.text)) return false;
-        this.cameraPending = null;
+        if (!this.o.camera || !this.sessionId || !report || report.sessionId !== this.sessionId || !response ||
+          response.heard !== report.text || !this.o.camera.grantFromRequest(this.sessionId, report.text)) return false;
         this.heardByTurn.delete(response.client_turn_id);
         this.startCameraTask(this.sessionId);
         return true;
       }
+      case "capture_camera":
+        return false; // Retained in the wire union for old clients, but never offered in the current voice turn.
       case "record_usage":
         // Proposed only: the count changes after a tap on Confirm.
         this.pendingUsage = action.items.map((item) => ({ ...item, name: this.o.kit.get(item.sku)?.name ?? item.sku }));

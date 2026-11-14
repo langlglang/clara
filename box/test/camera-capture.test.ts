@@ -61,4 +61,15 @@ describe("CameraCapture", () => {
     expect(captured).toMatchObject({ purpose: "cloud_interpretation", consentId: expect.any(String) });
     expect(await camera.captureOnce("s1", "cloud_interpretation", signal)).toBeNull();
   });
+
+  it("treats an explicit camera request as a single-use cloud grant", async () => {
+    const camera = new CameraCapture(() => "s1", async () => frame());
+    const signal = new AbortController().signal;
+    expect(camera.grantFromRequest("s1", "The camera is plugged in")).toBe(false);
+    expect(camera.grantFromRequest("s1", "Do not take a photo")).toBe(false);
+    expect(camera.grantFromRequest("other", "Take a photo")).toBe(false);
+    expect(camera.grantFromRequest("s1", "Please take a photo")).toBe(true);
+    expect(await camera.captureOnce("s1", "cloud_interpretation", signal)).toMatchObject({ purpose: "cloud_interpretation" });
+    expect(await camera.captureOnce("s1", "cloud_interpretation", signal)).toBeNull();
+  });
 });

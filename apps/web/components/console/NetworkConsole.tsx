@@ -7,7 +7,18 @@ import type { MaintainerResponse, StateSnapshot } from "../../lib/views";
 import { StatusPill, TopBar } from "../TopBar";
 import { ConsoleMap, MapLegend, helperCounts } from "./ConsoleMap";
 
+const CALL_WORDS: Record<string, string> = { placed: "called", failed: "call failed", would_call: "would call (no Twilio)", capped: "skipped: hourly cap", quiet: "skipped: quiet hours" };
 const human = (sku: string) => sku.replace(/_/g, " ");
+const VAPID_WORDS: Record<string, string> = { env: "from env", saved: "generated, kept in the database", generated: "generated at start (reset on restart)" };
+
+/** "Saved · 3 s ago" / "Not saving (no database)" for the persistence line. */
+function persistWords(p: StateSnapshot["persistence"], now: number): { text: string; tone: string } {
+  if (!p.enabled) return { text: "Not saving (no database): a restart resets the demo", tone: "t-grey" };
+  if (!p.saving) return { text: `Not saving: ${p.last_error ?? "stopped"}`, tone: "t-amber" };
+  if (p.last_error) return { text: `Save failing, retrying: ${p.last_error}`, tone: "t-amber" };
+  if (!p.last_saved_at) return { text: "Saving…", tone: "t-grey" };
+  return { text: `Saved · ${agoWords(p.last_saved_at, now)}`, tone: "t-green" };
+}
 
 /**
  * Network and boxes (feature 15, maintainer backend): an always-on live map of helpers and boxes, and each box's
@@ -58,6 +69,35 @@ export function NetworkConsole() {
             <span className="muted mono">{agoWords(a.at, now)}</span>
           </div>
         ))}
+        <span className="lbl" style={{ marginTop: 8 }}>
+          Outreach
+        </span>
+        {m ? (
+          <div className="stack small" style={{ gap: 4 }}>
+            <span>
+              Push: {m.outreach.push_devices} device{m.outreach.push_devices === 1 ? "" : "s"} subscribed
+              <span className="muted"> · keys {VAPID_WORDS[m.outreach.push_vapid] ?? m.outreach.push_vapid}</span>
+            </span>
+            <span className={m.outreach.calls_configured ? "t-green" : "t-grey"}>Calls: {m.outreach.calls_configured ? "Twilio configured" : "not configured"}</span>
+            {m.outreach.calls.slice(0, 6).map((c, i) => (
+              <div key={i} className="row between">
+                <span>
+                  {c.kind === "ride" ? "Ride" : "Alert"} · {c.to} · {CALL_WORDS[c.status] ?? c.status}
+                </span>
+                <span className="muted mono">{agoWords(c.at, now)}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <span className="lbl" style={{ marginTop: 8 }}>
+          Storage
+        </span>
+        {s?.persistence ? (
+          <div className="stack small" style={{ gap: 4 }}>
+            <span className={persistWords(s.persistence, now).tone}>{persistWords(s.persistence, now).text}</span>
+            {s.persistence.restored_from ? <span className="muted">Restored at start from the state saved {agoWords(s.persistence.restored_from, now)}</span> : null}
+          </div>
+        ) : null}
         {m?.simulated_boxes.length ? (
           <p className="small muted" style={{ marginTop: 8 }}>
             Demo: boxes marked SIMULATED get a simulated heartbeat every 30 s (CLARA_SIMULATED_BOXES).

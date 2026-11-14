@@ -1,6 +1,6 @@
 import { TurnRequestSchema } from "@clara/contracts";
 import { fail, issues, json, readJson } from "../../../../../lib/http";
-import { runtime } from "../../../../../lib/server";
+import { ensureRuntime } from "../../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const receivedAt = Date.now();
   const { id } = await ctx.params;
-  const rt = runtime();
+  const rt = await ensureRuntime();
   if (!rt.network.store.getBox(id)) return fail(404, "not_found", `Unknown box "${id}".`);
   const read = await readJson(req);
   if (!read.ok) return read.response;

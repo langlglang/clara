@@ -6,3 +6,7 @@ dist/
 *.log
 .DS_Store
 .box-state/
+
+# Personal Claude Code settings (ChatOverflow hook, local notes)
+.claude/settings.local.json
+CLAUDE.local.md

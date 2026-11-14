@@ -14,7 +14,7 @@ const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">Op
 export interface MapPin {
   id: string;
   at: LatLng;
-  kind: "box" | "volunteer" | "you" | "emergency" | "hospital";
+  kind: "box" | "volunteer" | "driver" | "you" | "emergency" | "hospital";
   tone: "red" | "amber" | "green" | "grey" | "blue" | "white";
   /** Short text on the pin (one or two characters). */
   glyph?: string;
@@ -94,7 +94,7 @@ export function LeafletMap({ pins, center, zoom = 15, label, tall, fill, rings =
     for (const l of lines) L.polyline(l.points.map((x) => [x.lat, x.lng] as [number, number]), { color: l.color, weight: 5, opacity: 0.9, interactive: false }).addTo(layer);
     for (const p of pins) {
       const html = `<span class="pin" data-kind="${p.kind}" data-tone="${p.tone}" data-pulse="${p.pulse ? "true" : "false"}" data-selected="${selected === p.id}">${escapeHtml(p.glyph ?? "")}</span>`;
-      const size = p.kind === "emergency" ? 32 : p.kind === "box" || p.kind === "hospital" ? 28 : 20;
+      const size = p.kind === "emergency" ? 32 : p.kind === "box" || p.kind === "hospital" ? 28 : p.kind === "driver" ? 24 : 20;
       const marker = L.marker([p.at.lat, p.at.lng], {
         icon: L.divIcon({ html, className: "pin-box", iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
         title: p.title,

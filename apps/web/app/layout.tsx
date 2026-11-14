@@ -4,9 +4,13 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Clara",
   description: "AI-guided first-aid boxes and a response network of nearby volunteers. HackPrinceton proof of concept.",
+  applicationName: "Clara",
+  // Installed to the iPhone home screen, the companion app opens full-screen (and can get push, iOS 16.4+).
+  appleWebApp: { capable: true, title: "Clara", statusBarStyle: "black-translucent" },
+  formatDetection: { telephone: false },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#18181B" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#18181B", viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

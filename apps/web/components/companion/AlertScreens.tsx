@@ -259,6 +259,12 @@ function OnTheWay({
   );
 }
 
+const TRIP_LINE: Record<string, string> = {
+  to_pickup: "On the way to pickup.",
+  patient_in_car: "Patient in the car. Drive to the hospital.",
+  at_hospital: "Arrived at hospital. Thank you for driving.",
+};
+
 /** Driver ride offer: pickup / hospital / ambulance times, accept within the timer; one accept wins. */
 export function RideScreen({ item, volunteerId, refresh, announce, now }: { item: RideOfferItem; volunteerId: string; refresh(): Promise<void>; announce(t: string): void; now: number }) {
   const { ride, box, my_offer } = item;
@@ -293,22 +299,42 @@ export function RideScreen({ item, volunteerId, refresh, announce, now }: { item
           <Tile label="Hospital" value={ride.hospital_minutes !== null ? `${ride.hospital_minutes} min` : "—"} />
           <Tile label="Ambulance" value={item.ambulance_eta_min === null ? "?" : `${item.ambulance_eta_min}+`} tone="red" />
         </div>
+        <span className="small">
+          <b>{box?.name ?? "The box"}</b> → <b>{ride.hospital.name}</b>
+          {ride.hospital_km !== null ? ` · ${ride.hospital_km.toFixed(1)} km, about ${ride.hospital_minutes} min` : ""} · {ride.seats_needed} seat{ride.seats_needed === 1 ? "" : "s"}
+        </span>
         <span className="muted small">
           {[ride.note, box ? `Pickup: ${box.directions}` : null, "Dispatcher approved"].filter(Boolean).join(" · ")}
         </span>
         {won ? (
           <>
             <p>
-              <b>You accepted.</b> The box was told your name and pickup time.
+              <b>{TRIP_LINE[ride.trip?.step ?? "to_pickup"]}</b>
+              {ride.trip?.step === "to_pickup" || !ride.trip ? " The box was told your name and pickup time." : ""}
             </p>
-            {box ? (
-              <a className="btn primary block huge" href={directionsUrl(box.location.lat, box.location.lng)} target="_blank" rel="noreferrer">
+            {ride.trip?.step === "at_hospital" ? null : (
+              <button
+                type="button"
+                className="btn primary block huge"
+                aria-disabled={busy !== null || undefined}
+                onClick={() => {
+                  const step = ride.trip?.step === "patient_in_car" ? "at_hospital" : "patient_in_car";
+                  void act(step, () => postJson(`/api/rides/${encodeURIComponent(ride.ride_id)}/progress`, { driver_id: volunteerId, step }), () => (step === "at_hospital" ? "Marked: arrived at hospital." : "Marked: patient in the car."));
+                }}
+              >
+                {busy ? "Sending…" : ride.trip?.step === "patient_in_car" ? "Arrived at hospital" : "Patient in car"}
+              </button>
+            )}
+            {box && ride.trip?.step !== "patient_in_car" && ride.trip?.step !== "at_hospital" ? (
+              <a className="btn block" href={directionsUrl(box.location.lat, box.location.lng)} target="_blank" rel="noreferrer">
                 Directions to pickup
               </a>
             ) : null}
-            <a className="btn block" href={directionsUrl(ride.hospital.location.lat, ride.hospital.location.lng)} target="_blank" rel="noreferrer">
-              Directions to hospital
-            </a>
+            {ride.trip?.step !== "at_hospital" ? (
+              <a className="btn block" href={directionsUrl(ride.hospital.location.lat, ride.hospital.location.lng)} target="_blank" rel="noreferrer">
+                Directions to hospital
+              </a>
+            ) : null}
           </>
         ) : open ? (
           <>

@@ -3,8 +3,9 @@
 // polling while the live line is down, refresh when the tab comes back); each change is announced once in a polite
 // live region, compared with the last answer so nothing is said on load; a new alert plays the tone and vibrates
 // (helpAlert.ts); the tab title says so while an alert is open; switching sections moves focus to the new heading.
-// Sophi's six-digit circle join becomes the volunteer sign-up kept in localStorage; the screens follow the Field
-// Kit phone design (Home, Map, Alerts, Profile).
+// Sophi's six-digit circle join becomes the volunteer sign-up kept in localStorage (onboarding at /join); the screens
+// follow the Field Kit phone design (Home, Map, Alerts, Profile). The app registers the service worker (public/sw.js)
+// for push alerts and the offline shell; ?alert= or ?ride= (from a notification) opens the Alerts section.
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -15,37 +16,31 @@ import type { InboxItem, InboxResponse, KitMapResponse, RideOfferItem } from "..
 import { LeafletMap, type MapPin } from "../LeafletMap";
 import { pinStatus } from "../KitMapView";
 import { Tile } from "../TopBar";
+import { registerSw } from "../../lib/pushClient";
 import { AlertScreen, RideScreen } from "./AlertScreens";
-import { SignUp } from "./SignUp";
+import { ProfileEditor } from "./ProfileEditor";
 
 export const VOLUNTEER_KEY = "clara.volunteer_id";
 type Tab = "home" | "map" | "alerts" | "profile";
 
-export function CompanionApp({ joinOnly = false }: { joinOnly?: boolean }) {
+export function CompanionApp() {
   // Read localStorage after mount so the server render and the first client render match.
   const [volunteerId, setVolunteerId] = useState<string | null | undefined>(undefined);
   useEffect(() => {
-    setVolunteerId(window.localStorage.getItem(VOLUNTEER_KEY));
+    const id = window.localStorage.getItem(VOLUNTEER_KEY);
+    setVolunteerId(id);
+    // Not signed up on this phone: onboarding lives at /join.
+    if (id === null) window.location.replace("/join");
+    else void registerSw();
   }, []);
 
-  if (volunteerId === undefined) return <p className="lbl">Opening Clara…</p>;
-  if (volunteerId === null || joinOnly)
-    return (
-      <SignUp
-        already={volunteerId !== null}
-        onJoined={(v) => {
-          window.localStorage.setItem(VOLUNTEER_KEY, v.volunteer_id);
-          if (joinOnly) window.location.assign("/app");
-          else setVolunteerId(v.volunteer_id);
-        }}
-      />
-    );
+  if (!volunteerId) return <p className="lbl">Opening Clara…</p>;
   return (
     <Signed
       volunteerId={volunteerId}
       onForget={() => {
         window.localStorage.removeItem(VOLUNTEER_KEY);
-        setVolunteerId(null);
+        window.location.assign("/join");
       }}
     />
   );
@@ -57,6 +52,11 @@ function Signed({ volunteerId, onForget }: { volunteerId: string; onForget(): vo
   const live = useLive<InboxResponse>(`/api/volunteers/${encodeURIComponent(volunteerId)}/inbox`, { pollMs: 3_000 });
   const { announce, region } = useAnnouncer();
   const [tab, setTab] = useState<Tab>("home");
+  // Opened from a notification (/app?alert=… or ?ride=…): go straight to the alert.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.has("alert") || q.has("ride")) setTab("alerts");
+  }, []);
   const now = useNow(1_000);
   const inbox = live.data;
   const items = inbox?.items ?? [];
@@ -119,7 +119,7 @@ function Signed({ volunteerId, onForget }: { volunteerId: string; onForget(): vo
     return (
       <section className="stack">
         <h1>Sign up again</h1>
-        <p className="muted">This demo server doesn&apos;t know your sign-up any more (it keeps everything in memory and may have restarted).</p>
+        <p className="muted">This demo server doesn&apos;t know your sign-up any more (it keeps everything in memory and may have restarted). Alerts on this phone stop until you sign up again.</p>
         <button type="button" className="btn primary block huge" onClick={onForget}>
           Sign up again
         </button>
@@ -161,7 +161,7 @@ function Signed({ volunteerId, onForget }: { volunteerId: string; onForget(): vo
             ) : null}
           </>
         ) : null}
-        {inbox && tab === "profile" ? <Profile volunteer={inbox.volunteer} vehicle={inbox.home.vehicle} onForget={onForget} /> : null}
+        {inbox && tab === "profile" ? <ProfileEditor volunteer={inbox.volunteer} vehicle={inbox.home.vehicle} onSaved={live.refresh} onForget={onForget} /> : null}
       </div>
       <nav aria-label="Sections" className="bottom-nav">
         <div>
@@ -337,26 +337,3 @@ function MapTab({ inbox, goAlerts }: { inbox: InboxResponse; goAlerts(): void })
   );
 }
 
-function Profile({ volunteer, vehicle, onForget }: { volunteer: Volunteer; vehicle: string; onForget(): void }) {
-  return (
-    <section aria-labelledby="me-h" className="stack">
-      <h1 id="me-h" tabIndex={-1}>
-        {volunteer.name}
-      </h1>
-      <div className="card">
-        <span className="lbl">Skills</span>
-        <span>{volunteer.skills.map((s) => SKILL_LABEL[s] ?? s).join(", ")}</span>
-        <span className="lbl">Languages</span>
-        <span>{volunteer.languages.join(", ").toUpperCase() || "None given"}</span>
-        <span className="lbl">Vehicle</span>
-        <span>{volunteer.vehicle_seats > 0 ? `${vehicleWord(vehicle)}, ${volunteer.vehicle_seats} seats` : "No vehicle"}</span>
-        <span className="lbl">Reach me by</span>
-        <span>{volunteer.channel === "app" ? "This app" : volunteer.channel}</span>
-      </div>
-      <button type="button" className="btn block" onClick={onForget}>
-        Sign out on this phone
-      </button>
-      <p className="small muted">Signing out forgets your id on this phone only.</p>
-    </section>
-  );
-}

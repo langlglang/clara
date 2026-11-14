@@ -105,5 +105,6 @@
     { "question_id": "still_bleeding", "text": "Is it still bleeding?" },
     { "question_id": "awake", "text": "Are they awake and talking to you?" }
   ],
-  "triage_available": true
+  "triage_available": true,
+  "care": { "reach_hospital_within_min": 60, "note": "Fictional demo threshold, not medical guidance." }
 }

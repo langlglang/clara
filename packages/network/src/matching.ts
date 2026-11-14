@@ -45,7 +45,14 @@ export interface Candidate {
 export interface RankOptions {
   /** Volunteer ids to leave out (already alerted, or busy with another incident). */
   exclude?: ReadonlySet<string>;
+  /** The network's radius (default MATCH_RADIUS_KM). A volunteer's own `alert_radius_km` can only narrow it. */
   radiusKm?: number;
+}
+
+/** How far from a box this volunteer may be alerted: their own radius when set, never beyond the network's. */
+export function radiusFor(volunteer: Volunteer, networkRadiusKm: number = MATCH_RADIUS_KM): number {
+  const own = volunteer.alert_radius_km;
+  return own === undefined ? networkRadiusKm : Math.min(own, networkRadiusKm);
 }
 
 /**
@@ -61,7 +68,7 @@ export function rankVolunteers(volunteers: readonly Volunteer[], boxLocation: La
       const distance_km = haversineKm(v.location, boxLocation);
       return { volunteer: v, distance_km, eta: estimateEta(distance_km, v.vehicle_seats), matching_skills: v.skills.filter((s) => wanted.includes(s)) };
     })
-    .filter((c) => c.matching_skills.length > 0 && c.distance_km <= radius)
+    .filter((c) => c.matching_skills.length > 0 && c.distance_km <= radiusFor(c.volunteer, radius))
     .sort(
       (a, b) =>
         a.eta.minutes - b.eta.minutes ||

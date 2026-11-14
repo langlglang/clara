@@ -5,8 +5,8 @@
       "name": "clara-web",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "web"],
-      "port": 3000,
-      "env": { "CLARA_MODEL": "stub", "CLARA_TURN_BUDGET_MS": "6500" }
+      "port": 3010,
+      "env": { "PORT": "3010", "CLARA_MODEL": "stub", "CLARA_TURN_BUDGET_MS": "6500", "CLARA_COORDINATOR": "rules" }
     }
   ]
 }

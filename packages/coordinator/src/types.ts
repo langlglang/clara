@@ -1,10 +1,11 @@
 import type { Network } from "@clara/network";
+import type { TimeToCare } from "./care.js";
 
 /** How the coordinator plans: the LangChain deep agent, the deterministic rules planner, or not at all. */
 export type CoordinatorMode = "deep_agent" | "rules" | "off";
 
 /** Who made a tool call: the main coordinator or one of its subagents. */
-export type AgentName = "coordinator" | "responder-scout" | "logistics" | "general-purpose" | "rules";
+export type AgentName = "coordinator" | "responder-scout" | "logistics" | "time-to-care" | "general-purpose" | "rules";
 
 export interface PlanItem {
   content: string;
@@ -83,7 +84,20 @@ export interface CoordinatorLog {
   runs: RunEntry[];
   /** Alerts the coordinator added beyond the automatic waves. */
   extra_alerts: number;
+  /** The latest estimate_time_to_care result (simulated ambulance vs volunteer driver), or null before one. */
+  time_to_care?: TimeToCare | null;
+  /** The ride the coordinator requested itself with request_ride (offers sent without prior approval), or null. */
+  ride_request?: RideRequestEntry | null;
   updated_at: string;
+}
+
+export interface RideRequestEntry {
+  at: string;
+  run: number;
+  ride_id: string;
+  reason: string;
+  offered_to: string[];
+  verdict: string;
 }
 
 export interface CoordinatorChange {
@@ -102,6 +116,17 @@ export interface RideDriverOption {
   pickup_minutes: number;
   suitable: boolean;
   reasons: string[];
+  hospital_minutes?: number;
+  carries_lying_down?: boolean;
+  carries_wheelchair?: boolean;
+}
+
+/** What a ride to hospital would look like for an incident, without opening a ride (for estimate_time_to_care). */
+export interface RidePreview {
+  hospital: { name: string; drive_minutes: number } | null;
+  seats_needed: number;
+  /** Free drivers in range (suitable or not). */
+  drivers: RideDriverOption[];
 }
 
 /** A ride as the ride book describes it (subset of apps/web RideView). */
@@ -119,12 +144,20 @@ export interface RideSummary {
 
 /**
  * The ride operations the coordinator may use. Rides live in apps/web (lib/rides.ts); the web app passes its ride
- * book here. There is deliberately no approve: offers to drivers only go out when a dispatcher approves.
+ * book here. There is deliberately no approve: offers to drivers only go out when a dispatcher approves, or through
+ * requestNow when request_ride's time-to-care bar is met (code-checked in tools.ts).
  */
 export interface RidesAdapter {
   forIncident(incidentId: string): RideSummary | undefined;
   /** Opens (or returns) the incident's ride plan in `planning`; it offers nothing to anyone. */
   request(incidentId: string, note: string | null): RideSummary | undefined;
+  /** Hospital and free drivers for an incident, without opening anything. */
+  preview?(incidentId: string): RidePreview | undefined;
+  /**
+   * Opens the ride (or reuses a plan with no open offers) and sends offers to the best suitable drivers right away
+   * (push + call fallback, first accept wins). Only request_ride calls this, behind its time-to-care checks.
+   */
+  requestNow?(incidentId: string, note: string | null): { ok: true; ride: RideSummary; offered_to: string[] } | { ok: false; error: string };
 }
 
 /** A dispatcher-facing ride proposal (the dispatcher still approves or ignores it). */

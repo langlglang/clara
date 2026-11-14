@@ -1,8 +1,10 @@
-import { SKILLS_FOR_NEED, estimateEta, haversineKm, incidentEvents, type Candidate, type EscalationView, type Eta, type KitPin, type MaintainerAlert, type MaintainerRow, type ReportLabel, type SceneReport } from "@clara/network";
+import { SKILLS_FOR_NEED, estimateEta, radiusFor, haversineKm, incidentEvents, type Candidate, type EscalationView, type Eta, type KitPin, type MaintainerAlert, type MaintainerRow, type ReportLabel, type SceneReport } from "@clara/network";
 import type { Alert, BoxRecord, Incident, LatLng, Volunteer } from "@clara/contracts";
 import type { CoordinatorLog, CoordinatorMode } from "@clara/coordinator";
 import type { BoxMessage, Runtime } from "./server";
 import type { Hospital, RideView, VehicleKind } from "./rides";
+import type { CallLogEntry } from "./calls";
+import type { PersistenceStatus } from "./snapshot";
 
 /**
  * The JSON the API routes answer with, built on the server from the network facade. Client pages import these
@@ -65,8 +67,12 @@ export interface HomeStats {
   /** Boxes within 1 km of you. */
   kits_nearby: number;
   vehicle: VehicleKind;
-  /** The network's alert radius (fixed for now; volunteers can't change it yet). */
+  /** The volunteer's own alert radius, or the network default. */
   alert_radius_km: number;
+  /** Devices subscribed to push alerts. */
+  push_devices: number;
+  /** Whether phone-call fallback can really dial (Twilio configured). */
+  calls_configured: boolean;
   last_response: { box_name: string; at: string; state: string; how: string | null } | null;
 }
 
@@ -113,11 +119,15 @@ export interface StateSnapshot {
   vehicles: Record<string, VehicleKind>;
   hospital: Hospital;
   ambulance_eta_min: number | null;
+  /** Whether state is saved to Postgres (also the health check's answer to "will this survive a restart?"). */
+  persistence: PersistenceStatus;
   server_time: string;
 }
 
 export interface MaintainerResponse {
   rows: MaintainerRow[];
+  /** Push and phone-call fallback status for the console. */
+  outreach: { push_vapid: "env" | "generated" | "saved"; push_devices: number; calls_configured: boolean; calls: CallLogEntry[] };
   alerts: MaintainerAlert[];
   simulated_boxes: string[];
   server_time: string;
@@ -173,7 +183,6 @@ export function sceneOf(rt: Runtime, incident: Incident): SceneStats {
   };
 }
 
-const ALERT_RADIUS_KM = 10;
 const NEARBY_KM = 1;
 
 function homeStats(rt: Runtime, volunteer: Volunteer): HomeStats {
@@ -190,7 +199,9 @@ function homeStats(rt: Runtime, volunteer: Volunteer): HomeStats {
     helpers_nearby: helpers.length,
     kits_nearby: kits.length,
     vehicle: rt.vehicles.get(volunteer.volunteer_id) ?? (volunteer.vehicle_seats > 0 ? "car" : "none"),
-    alert_radius_km: ALERT_RADIUS_KM,
+    alert_radius_km: radiusFor(volunteer),
+    push_devices: rt.push.devices(volunteer.volunteer_id),
+    calls_configured: rt.calls.configured,
     last_response: last,
   };
 }
@@ -217,6 +228,7 @@ export function inboxFor(rt: Runtime, volunteerId: string): InboxResponse | null
       messages: rt.messages.get(incident.incident_id) ?? [],
     };
   });
+  rt.rides.markSeen(volunteerId);
   const rides = rt.rides.forDriver(volunteerId).map((ride): RideOfferItem => {
     const box = rt.network.store.getBox(ride.box_id)?.box ?? null;
     const my = [...ride.offers].reverse().find((f) => f.driver_id === volunteerId) ?? null;
@@ -262,6 +274,7 @@ export function stateSnapshot(rt: Runtime, site: { name: string; center: LatLng 
     vehicles: Object.fromEntries(rt.network.store.listVolunteers().map((v) => [v.volunteer_id, rt.vehicles.get(v.volunteer_id) ?? (v.vehicle_seats > 0 ? "car" : "none")])),
     hospital: rt.rides.hospital,
     ambulance_eta_min: rt.ambulanceEtaMin,
+    persistence: { ...rt.persistence },
     server_time: rt.network.clock().toISOString(),
   };
 }

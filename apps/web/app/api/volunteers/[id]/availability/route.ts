@@ -1,5 +1,5 @@
 import { fail, json, readJson } from "../../../../../lib/http";
-import { runtime } from "../../../../../lib/server";
+import { ensureRuntime } from "../../../../../lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!read.ok) return read.response;
   const available = (read.body as { available?: unknown } | undefined)?.available;
   if (typeof available !== "boolean") return fail(400, "bad_request", "Expected { available: true | false }.");
-  const volunteer = runtime().network.updateVolunteer(id, { available });
+  const volunteer = (await ensureRuntime()).network.updateVolunteer(id, { available });
   return volunteer ? json({ volunteer }) : fail(404, "not_found", "No volunteer with that id.");
 }

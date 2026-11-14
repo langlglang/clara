@@ -1,16 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { EVENTS_VERSION, type BoxEvent } from "@clara/contracts";
 import { createClaraAgent, type ClaraAgent, type ClaraAgentEnv } from "@clara/agent";
-import { createCoordinator, type Coordinator, type CoordinatorChange, type CoordinatorEnv, type RidesAdapter } from "@clara/coordinator";
+import { DEFAULT_CARE, createCoordinator, type CareThreshold, type Coordinator, type CoordinatorChange, type CoordinatorEnv, type Need, type RidesAdapter } from "@clara/coordinator";
 import { DEMO_BOXES, createNetwork, randomIds, type MaintainerAlert, type Network, type NetworkOptions, type ReportOptions } from "@clara/network";
-import { createRideBook, type RideBook, type RideChange, type VehicleKind } from "./rides";
+import { createRideBook, type Ride, type RideBook, type RideChange, type VehicleKind } from "./rides";
+import { createCallBook, type CallBook } from "./calls";
+import { ridePushListener, wireAlertPushes } from "./notify";
+import { createPushBook, resolveVapid, type PushBook, type PushSender, type VapidEnv } from "./push";
+import { createTextBook, photonConfig, wireTexts, type PhotonConfig, type PhotonEnv, type TextBook } from "./photon";
+import { publicBaseUrl, twilioConfig, type FetchLike, type TwilioConfig, type TwilioEnv } from "./twilio";
+import { createPersistence, type Persistence } from "./persist";
+import { PERSISTENCE_OFF, parseSnapshot, type PersistenceStatus, type RuntimeState, type Snapshot } from "./snapshot";
 import bleeding from "../../../content/scenarios/severe-bleeding.json";
 
 /**
  * One response network and one Clara agent per server process. Kept on globalThis so `next dev` hot reloads
  * (and Next's separate route bundles) all share the same in-memory network. Seeded with the fictional demo
  * site on first use; a 1 s interval drives escalation, expiry and offline detection (the network starts no
- * timers itself).
+ * timers itself). With DATABASE_URL the state is restored from (and saved to) a Postgres snapshot: route
+ * handlers get the runtime through `ensureRuntime()`, which waits for that load (lib/persist.ts).
  */
 
 export const TICK_MS = 1_000;
@@ -48,22 +56,45 @@ export interface Runtime {
   simulatedBoxes: string[];
   /** Labels the scene report uses for step and scenario ids (from content/). */
   reportOptions: ReportOptions;
+  /** Web push subscriptions per volunteer and the VAPID keys (both in memory). */
+  push: PushBook;
+  /** The phone-call fallback (Twilio, or "would call" logs without it). */
+  calls: CallBook;
+  /** Twilio settings (null: calls only log) and the public origin Twilio calls back on. */
+  twilio: TwilioConfig | null;
+  publicBaseUrl: string;
+  /** Text alerts over Photon (iMessage/WhatsApp/SMS), or "would message" logs without it. */
+  texts: TextBook;
+  photon: PhotonConfig | null;
   /** App-level live changes (box stream and /api/stream listen here as well as on the network). */
   subscribe(listener: (change: AppChange) => void): () => void;
   emit(change: AppChange): void;
+  /** Everything above that changes at run time, as plain JSON (persistence snapshots). */
+  exportState(): RuntimeState;
+  /** Persistence status for /api/state (filled in by lib/persist.ts; PERSISTENCE_OFF without a database). */
+  persistence: PersistenceStatus;
   stop(): void;
 }
 
 /** Vehicles for the seeded drivers (fictional). */
 const DEMO_VEHICLES: Record<string, VehicleKind> = { "vol-tomas": "van", "vol-priya": "car", "vol-samir": "car" };
 
+/** The server's environment: the agent's keys plus web push (VAPID_*) and Twilio (TWILIO_*, PUBLIC_BASE_URL). */
+export type WebEnv = ClaraAgentEnv & VapidEnv & TwilioEnv & PhotonEnv;
+
 export interface RuntimeOptions extends NetworkOptions {
-  env?: ClaraAgentEnv;
+  env?: WebEnv;
+  /** Replace web-push's sender (tests). */
+  pushSender?: PushSender;
+  /** Replace fetch for Twilio (tests). */
+  fetch?: FetchLike;
   agent?: ClaraAgent;
   /** Start the tick loop (default true). Tests turn it off and call tick themselves. */
   timers?: boolean;
+  /** Start from this (already checked) snapshot instead of the demo seed. See restoreRuntime for unchecked data. */
+  snapshot?: Snapshot;
   /** Replace the coordinator (tests). */
-  coordinator?: (deps: { network: Network; rides: RidesAdapter }) => Coordinator;
+  coordinator?: (deps: { network: Network; rides: RidesAdapter; careFor: (need: Need) => CareThreshold; ambulanceEtaMin: number | null }) => Coordinator;
 }
 
 const stepLabels: Record<string, string> = Object.fromEntries(bleeding.steps.map((s: { step_id: string; label: string }) => [s.step_id, s.label]));
@@ -77,6 +108,10 @@ export const REPORT_OPTIONS: ReportOptions = {
   stepLabels,
   scenarioLabels: { [bleeding.scenario_id]: bleeding.title },
 };
+
+/** Demo time-to-care thresholds per need: the scenario's care block, else DEFAULT_CARE. Fictional, not medical guidance. */
+const SCENARIO_CARE: Partial<Record<Need, CareThreshold>> = { bleeding: (bleeding as { care?: CareThreshold }).care };
+export const careFor = (need: Need): CareThreshold => SCENARIO_CARE[need] ?? DEFAULT_CARE[need] ?? DEFAULT_CARE.general;
 
 function simulatedBoxIds(env: ClaraAgentEnv): string[] {
   const raw = env.CLARA_SIMULATED_BOXES;
@@ -92,11 +127,15 @@ function simulatedBoxIds(env: ClaraAgentEnv): string[] {
 const SIM_BATTERY: Record<string, number> = { "box-clinic": 86, "box-room-101": 64, "box-water-point": 23 };
 
 export function createRuntime(options: RuntimeOptions = {}): Runtime {
-  const env: ClaraAgentEnv = { CLARA_TURN_BUDGET_MS: "6500", ...(options.env ?? (process.env as ClaraAgentEnv)) };
+  const env: WebEnv = { CLARA_TURN_BUDGET_MS: "6500", ...(options.env ?? (process.env as WebEnv)) };
+  const snap = options.snapshot ?? null;
   const network = createNetwork(options);
-  network.seedDemo();
+  // The demo seed only for a fresh start: a restored snapshot already holds the boxes and volunteers.
+  if (snap) network.store.importState(snap.store);
+  else network.seedDemo();
   const agent = options.agent ?? createClaraAgent(env, { guidance: resolveGuidance, log: (line) => console.log(line) });
-  const maintainerAlerts: MaintainerAlert[] = [];
+  const maintainerAlerts: MaintainerAlert[] = snap ? snap.maintainer_alerts.slice(0, MAX_MAINTAINER_ALERTS) : [];
+  const messages = new Map<string, BoxMessage[]>(snap ? Object.entries(snap.messages) : []);
   network.subscribe((change) => {
     if (change.kind !== "maintainer") return;
     maintainerAlerts.unshift(change.alert);
@@ -113,21 +152,57 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       }
     }
   };
-  const vehicles = new Map<string, VehicleKind>(Object.entries(DEMO_VEHICLES));
+  const vehicles = new Map<string, VehicleKind>(Object.entries(snap ? snap.vehicles : DEMO_VEHICLES));
   const rides = createRideBook({
     network,
     ids: options.ids ?? randomIds,
     vehicleOf: (id) => vehicles.get(id) ?? ((network.store.getVolunteer(id)?.vehicle_seats ?? 0) > 0 ? "car" : "none"),
     emit,
   });
-  // The coordinator only proposes rides; approving an offer stays with the dispatcher (no approve here).
-  const ridesAdapter: RidesAdapter = { forIncident: (id) => rides.forIncident(id), request: (id, note) => rides.request(id, note) };
-  const coordinator = options.coordinator
-    ? options.coordinator({ network, rides: ridesAdapter })
-    : createCoordinator({ network, rides: ridesAdapter, env: env as CoordinatorEnv, timers: options.timers !== false, log: (line) => console.log(line) });
-  coordinator.subscribe((change) => emit(change));
+  if (snap) rides.importState(snap.rides);
   const ambulance = Number(env.CLARA_AMBULANCE_ETA_MIN);
   const ambulanceEtaMin = env.CLARA_AMBULANCE_ETA_MIN && Number.isFinite(ambulance) && ambulance > 0 ? Math.round(ambulance) : null;
+  // The coordinator proposes rides for the dispatcher to approve. Its one way to send offers itself is requestNow,
+  // which its request_ride tool calls only behind the code-checked time-to-care bar (packages/coordinator/src/tools.ts).
+  const ridesAdapter: RidesAdapter = {
+    forIncident: (id) => rides.forIncident(id),
+    request: (id, note) => rides.request(id, note),
+    preview: (id) => rides.preview(id),
+    requestNow: (id, note) => rides.requestNow(id, note),
+  };
+  const coordinator = options.coordinator
+    ? options.coordinator({ network, rides: ridesAdapter, careFor, ambulanceEtaMin })
+    : createCoordinator({ network, rides: ridesAdapter, careFor, ambulanceEtaMin, env: env as CoordinatorEnv, timers: options.timers !== false, log: (line) => console.log(line) });
+  if (snap) coordinator.importState(snap.coordinator);
+  coordinator.subscribe((change) => emit(change));
+
+  const push = createPushBook({ vapid: resolveVapid(env, undefined, undefined, snap?.push.vapid), ...(options.pushSender ? { sender: options.pushSender } : {}) });
+  if (snap) {
+    // Subscriptions only work with the key they were made with; after a key change the phones must turn alerts on again.
+    if (snap.push.public_key === push.vapid.publicKey) push.importState(snap.push.subscriptions);
+    else if (Object.keys(snap.push.subscriptions).length) console.log("[persist] VAPID key changed since the snapshot: dropped the saved push subscriptions (volunteers re-enable alerts in the app).");
+  }
+  wireAlertPushes(network, push);
+  const onRide = ridePushListener(network, push, snap?.rides ?? []);
+  listeners.add((change) => onRide(change as { kind: string; ride?: Ride }));
+  const twilio = twilioConfig(env);
+  const calls = createCallBook({ network, rides, twilio, baseUrl: publicBaseUrl(env), ...(options.fetch ? { fetch: options.fetch } : {}) });
+  if (snap) calls.importState(snap.calls);
+  const photon = photonConfig(env);
+  const texts = createTextBook({ network, rides, photon, ...(options.fetch ? { fetch: options.fetch } : {}) });
+  // Other books are saved under `extra` once they expose exportState/importState (duck-typed, so adding one is enough).
+  const extras: Record<string, Partial<Persistable>> = { texts: texts as Partial<Persistable> };
+  if (snap?.extra) {
+    for (const [name, value] of Object.entries(snap.extra)) {
+      try {
+        extras[name]?.importState?.(value);
+      } catch (error) {
+        console.error(`[persist] couldn't restore ${name}; it starts empty:`, error);
+      }
+    }
+  }
+  const onRideText = wireTexts(network, texts);
+  listeners.add((change) => onRideText(change as { kind: string; ride?: Ride }));
 
   const simulatedBoxes = simulatedBoxIds(env).filter((id) => network.store.getBox(id));
   const heartbeat = () => {
@@ -152,6 +227,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       try {
         network.tick();
         rides.tick();
+        calls.tick();
       } catch (error) {
         console.error("[network] tick failed:", error);
       }
@@ -161,7 +237,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     beat.unref?.();
     timers.push(tick, beat);
   }
-  console.log(`[clara] network seeded (${network.store.listBoxes().length} boxes); agent ${agent.describe}; coordinator ${coordinator.describe}; simulated boxes: ${simulatedBoxes.join(", ") || "none"}`);
+  console.log(`[clara] network ${snap ? `restored from the snapshot saved ${snap.saved_at}` : "seeded"} (${network.store.listBoxes().length} boxes); agent ${agent.describe}; coordinator ${coordinator.describe}; simulated boxes: ${simulatedBoxes.join(", ") || "none"}; push VAPID ${push.vapid.source}; calls ${twilio ? "Twilio" : "not configured (logs only)"}; texts ${photon ? "Photon" : "not configured (logs only)"}`);
 
   return {
     network,
@@ -169,7 +245,13 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     rides,
     coordinator,
     vehicles,
-    messages: new Map(),
+    push,
+    calls,
+    twilio,
+    texts,
+    photon,
+    publicBaseUrl: publicBaseUrl(env),
+    messages,
     ambulanceEtaMin,
     maintainerAlerts,
     subscribe(listener) {
@@ -177,6 +259,27 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       return () => void listeners.delete(listener);
     },
     emit,
+    exportState(): RuntimeState {
+      const extra: Record<string, unknown> = {};
+      for (const [name, book] of Object.entries(extras)) if (typeof book.exportState === "function") extra[name] = book.exportState();
+      return {
+        store: network.store.exportState(),
+        rides: rides.exportState(),
+        vehicles: Object.fromEntries(vehicles),
+        messages: structuredClone(Object.fromEntries(messages)),
+        maintainer_alerts: structuredClone(maintainerAlerts),
+        push: {
+          subscriptions: push.exportState(),
+          public_key: push.vapid.publicKey,
+          // A generated pair is saved with the subscriptions it signs; keys from the environment never are.
+          vapid: push.vapid.source === "env" ? null : { publicKey: push.vapid.publicKey, privateKey: push.vapid.privateKey },
+        },
+        calls: calls.exportState(),
+        coordinator: coordinator.exportState(),
+        ...(Object.keys(extra).length ? { extra } : {}),
+      };
+    },
+    persistence: { ...PERSISTENCE_OFF },
     simulatedBoxes,
     reportOptions: REPORT_OPTIONS,
     stop: () => {
@@ -186,20 +289,107 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   };
 }
 
-const KEY = Symbol.for("clara.web.runtime");
-type Holder = { [KEY]?: Runtime };
+/** A book whose state can be saved in the snapshot's `extra` section. */
+export interface Persistable {
+  exportState(): unknown;
+  importState(value: unknown): void;
+}
 
-/** The process's runtime, created on first use. */
+/**
+ * A runtime from a stored snapshot (unchecked JSON). An unknown version or invalid data is logged loudly and the
+ * server starts fresh (demo seed) instead of crashing; `rejected` then says why.
+ */
+export function restoreRuntime(raw: unknown, options: RuntimeOptions = {}): { runtime: Runtime; restored: Snapshot | null; rejected: string | null } {
+  if (raw === null || raw === undefined) return { runtime: createRuntime(options), restored: null, rejected: null };
+  const parsed = parseSnapshot(raw);
+  if (!parsed.ok) {
+    console.error(`[persist] !!! the saved state can't be used (${parsed.reason}); starting fresh with the demo seed.`);
+    return { runtime: createRuntime(options), restored: null, rejected: parsed.reason };
+  }
+  try {
+    return { runtime: createRuntime({ ...options, snapshot: parsed.snapshot }), restored: parsed.snapshot, rejected: null };
+  } catch (error) {
+    const reason = `restore failed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300);
+    console.error(`[persist] !!! ${reason}; starting fresh with the demo seed.`);
+    return { runtime: createRuntime(options), restored: null, rejected: reason };
+  }
+}
+
+const KEY = Symbol.for("clara.web.runtime");
+const BOOT = Symbol.for("clara.web.boot");
+const SIGNALS = Symbol.for("clara.web.signals");
+type Holder = { [KEY]?: Runtime; [BOOT]?: Promise<Runtime>; [SIGNALS]?: { persistence: Persistence | null } };
+
+/** The process's runtime, created on first use, in memory only. Route handlers use ensureRuntime(). */
 export function runtime(): Runtime {
   const g = globalThis as Holder;
   g[KEY] ??= createRuntime();
   return g[KEY];
 }
 
+/**
+ * The process's runtime once it is ready: without DATABASE_URL at once (in memory, as before); with it, after the
+ * saved snapshot has been loaded (the first request after boot waits for that; later ones don't). Never rejects:
+ * a database problem is logged and the server runs in memory.
+ */
+export function ensureRuntime(): Promise<Runtime> {
+  const g = globalThis as Holder;
+  if (g[KEY]) return Promise.resolve(g[KEY]);
+  const url = process.env.DATABASE_URL?.trim();
+  if (!url) return Promise.resolve(runtime());
+  g[BOOT] ??= bootWithDatabase(url).catch((error: unknown) => {
+    console.error("[persist] boot with the database failed; running in memory:", error);
+    return runtime();
+  });
+  return g[BOOT];
+}
+
+async function bootWithDatabase(url: string): Promise<Runtime> {
+  const g = globalThis as Holder;
+  const persistence = createPersistence({ url });
+  const loaded = await persistence.load();
+  if (g[KEY]) return g[KEY]; // a test (or an earlier boot) put one in place meanwhile
+  const { runtime: rt, restored, rejected } = restoreRuntime(loaded.raw);
+  if (rejected && loaded.ok) await persistence.keepRejected(rejected);
+  rt.persistence = persistence.status;
+  persistence.attach(rt, restored?.saved_at ?? null);
+  g[KEY] = rt;
+  installSignalHandlers(persistence);
+  console.log(`[persist] ${restored ? `restored the state saved ${restored.saved_at}` : loaded.ok ? "no usable saved state: started fresh" : "database unreachable: running in memory, not saving"}; generation ${persistence.status.generation}.`);
+  return rt;
+}
+
+/**
+ * Render sends SIGTERM before stopping an instance: make one last save, then exit. With NEXT_MANUAL_SIG_HANDLE set
+ * (render.yaml) Next leaves the signal to us and we exit after the save; without it Next's own handler shuts down
+ * alongside (it first waits for open requests, which gives the save time).
+ */
+function installSignalHandlers(persistence: Persistence) {
+  const g = globalThis as Holder;
+  if (g[SIGNALS]) {
+    g[SIGNALS].persistence = persistence;
+    return;
+  }
+  const holder = { persistence: persistence as Persistence | null };
+  g[SIGNALS] = holder;
+  let stopping = false;
+  const onSignal = (signal: NodeJS.Signals) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`[persist] ${signal}: saving before exit.`);
+    void (holder.persistence?.flush() ?? Promise.resolve()).finally(() => {
+      if (process.env.NEXT_MANUAL_SIG_HANDLE) process.exit(signal === "SIGINT" ? 130 : 143);
+    });
+  };
+  process.on("SIGTERM", onSignal);
+  process.on("SIGINT", onSignal);
+}
+
 /** Tests: swap in a runtime (or clear it with null). */
 export function setRuntime(next: Runtime | null): void {
   const g = globalThis as Holder;
   g[KEY]?.stop();
+  delete g[BOOT];
   if (next) g[KEY] = next;
   else delete g[KEY];
 }

@@ -2,7 +2,8 @@
 // Same shape as Sophi's memory store: one interface a database can implement later, synchronous steps so each
 // change is atomic, copies out so callers can't mutate stored rows, and idempotent ids (event_id here, where
 // Sophi used client_help_id).
-import type { BoxEvent, BoxRecord, Incident, Volunteer } from "@clara/contracts";
+import { BoxEventSchema, BoxRecordSchema, IncidentSchema, VolunteerSchema, type BoxEvent, type BoxRecord, type Incident, type Volunteer } from "@clara/contracts";
+import { z } from "zod";
 
 /** A registered box with what the server keeps beside the contract's BoxRecord. */
 export interface BoxEntry {
@@ -44,6 +45,32 @@ export type StoreChange =
 
 export type StoreListener = (change: StoreChange) => void;
 
+/** Heartbeats kept per box in a snapshot (they only carry the battery, which the box record already holds). */
+export const SNAPSHOT_HEARTBEATS_PER_BOX = 5;
+
+const IsoTime = z.string().min(1).max(64);
+
+/** Everything the store holds, as plain JSON (persistence snapshots). Checked with the contract schemas on import. */
+export const StoreSnapshotSchema = z.object({
+  boxes: z.array(
+    z.object({
+      box: BoxRecordSchema,
+      manifest: z.record(z.string(), z.number().int().min(0)),
+      open_session_id: z.string().nullable(),
+      restock_seq: z.number().int().min(0),
+      restocked_at: IsoTime.nullable(),
+      low_alerted: z.boolean(),
+      offline_alerted: z.boolean(),
+    }),
+  ),
+  volunteers: z.array(VolunteerSchema),
+  events: z.array(z.object({ seq: z.number().int().min(1), received_at: IsoTime, event: BoxEventSchema })),
+  /** The highest sequence number given out (old heartbeats are trimmed, so it can exceed the last event's). */
+  last_seq: z.number().int().min(0),
+  incidents: z.array(z.object({ incident: IncidentSchema, sos_event_id: z.string().min(1), nearby_box_ids: z.array(z.string()) })),
+});
+export type StoreSnapshot = z.infer<typeof StoreSnapshotSchema>;
+
 /**
  * Everything the network keeps. Synchronous for the in-memory demo; a Supabase store would wrap the same steps
  * in transactions (and the facade would become async).
@@ -76,6 +103,11 @@ export interface Store {
 
   /** Live changes for boxes, dashboards and apps. Returns the unsubscribe function. */
   subscribe(listener: StoreListener): () => void;
+
+  /** Everything held, as plain JSON (old heartbeats left out). */
+  exportState(): StoreSnapshot;
+  /** Replaces everything with a snapshot. Validates first and throws on invalid data, leaving the store unchanged; emits nothing. */
+  importState(snapshot: unknown): void;
 }
 
 const copy = <T>(value: T): T => structuredClone(value);
@@ -83,8 +115,9 @@ const copy = <T>(value: T): T => structuredClone(value);
 export function createMemoryStore(): Store {
   const boxes = new Map<string, BoxEntry>();
   const volunteers = new Map<string, Volunteer>();
-  const events: StoredEvent[] = [];
+  let events: StoredEvent[] = [];
   const eventIds = new Set<string>();
+  let seq = 0;
   const incidents = new Map<string, IncidentEntry>();
   const listeners = new Set<StoreListener>();
 
@@ -117,14 +150,14 @@ export function createMemoryStore(): Store {
     addEvent(event, receivedAt) {
       if (eventIds.has(event.event_id)) return null;
       eventIds.add(event.event_id);
-      const stored: StoredEvent = { seq: events.length + 1, received_at: receivedAt, event: copy(event) };
+      const stored: StoredEvent = { seq: ++seq, received_at: receivedAt, event: copy(event) };
       events.push(stored);
       emit({ kind: "event", event });
       return copy(stored);
     },
     hasEvent: (id) => eventIds.has(id),
     eventsForBox: (boxId) => events.filter((e) => e.event.box_id === boxId).map(copy),
-    lastSeq: () => events.length,
+    lastSeq: () => seq,
 
     getIncident: (id) => (incidents.has(id) ? copy(incidents.get(id)!) : undefined),
     listIncidents: () => [...incidents.values()].map(copy),
@@ -148,6 +181,39 @@ export function createMemoryStore(): Store {
     subscribe(listener) {
       listeners.add(listener);
       return () => void listeners.delete(listener);
+    },
+
+    exportState() {
+      // Every event except old heartbeats: the newest few per box are enough (battery and last seen live on the box).
+      const keepBeat = new Set<number>();
+      const perBox = new Map<string, number>();
+      for (let i = events.length - 1; i >= 0; i--) {
+        const e = events[i]!;
+        if (e.event.type !== "box.heartbeat") continue;
+        const n = perBox.get(e.event.box_id) ?? 0;
+        if (n < SNAPSHOT_HEARTBEATS_PER_BOX) keepBeat.add(e.seq);
+        perBox.set(e.event.box_id, n + 1);
+      }
+      return copy({
+        boxes: [...boxes.values()],
+        volunteers: [...volunteers.values()],
+        events: events.filter((e) => e.event.type !== "box.heartbeat" || keepBeat.has(e.seq)),
+        last_seq: seq,
+        incidents: [...incidents.values()],
+      });
+    },
+    importState(snapshot) {
+      const s = StoreSnapshotSchema.parse(snapshot);
+      boxes.clear();
+      volunteers.clear();
+      incidents.clear();
+      eventIds.clear();
+      for (const b of s.boxes) boxes.set(b.box.box_id, b as BoxEntry);
+      for (const v of s.volunteers) volunteers.set(v.volunteer_id, v);
+      events = [...s.events].sort((a, b) => a.seq - b.seq) as StoredEvent[];
+      for (const e of events) eventIds.add(e.event.event_id);
+      seq = Math.max(s.last_seq, events.at(-1)?.seq ?? 0);
+      for (const i of s.incidents) incidents.set(i.incident.incident_id, i);
     },
   };
 }

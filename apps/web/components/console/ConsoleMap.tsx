@@ -28,13 +28,16 @@ export function ConsoleMap({
     const out: MapPin[] = [];
     for (const v of state.volunteers) {
       const driver = v.vehicle_seats > 0;
+      const extras = [v.carries_lying_down ? "can take someone lying down" : null, v.carries_wheelchair ? "wheelchair" : null, v.usual_availability ?? null].filter(Boolean).join(" · ");
       out.push({
         id: v.volunteer_id,
         at: v.location,
-        kind: "volunteer",
+        // Drivers (including home drivers with no first-aid skill) get a square car marker showing their free seats.
+        kind: driver ? "driver" : "volunteer",
+        ...(driver ? { glyph: String(v.vehicle_seats) } : {}),
         tone: !v.available ? "grey" : driver ? "white" : "blue",
         title: `${v.name}${v.available ? "" : " (unavailable)"}`,
-        detail: `${v.skills.map((s) => SKILL_LABEL[s] ?? s).join(", ")}${driver ? ` · ${state.vehicles[v.volunteer_id] ?? "vehicle"}, ${v.vehicle_seats} seats` : " · on foot"}`,
+        detail: `${v.skills.map((s) => SKILL_LABEL[s] ?? s).join(", ")}${driver ? ` · ${state.vehicles[v.volunteer_id] ?? "vehicle"}, ${v.vehicle_seats} seats` : " · on foot"}${extras ? ` · ${extras}` : ""}`,
       });
     }
     for (const b of state.boxes) {
@@ -54,8 +57,10 @@ export function ConsoleMap({
       });
     }
     out.push({ id: "hospital", at: state.hospital.location, kind: "hospital", tone: "white", glyph: "H", title: state.hospital.name, detail: "Hospital" });
+    if (ride && ride.hospital.name !== state.hospital.name)
+      out.push({ id: "ride-hospital", at: ride.hospital.location, kind: "hospital", tone: "white", glyph: "H", title: ride.hospital.name, detail: "Ride destination" });
     return out;
-  }, [state]);
+  }, [state, ride]);
 
   const rings = useMemo(
     () => state.incidents.filter((i) => !i.incident.closed && i.box).map((i) => ({ at: i.box!.location, radiusM: 1000 })),
@@ -68,7 +73,7 @@ export function ConsoleMap({
     const driverId = ride.winner?.driver_id ?? ride.offers.find((f) => f.state === "offered")?.driver_id ?? ride.suggested?.driver_id;
     const driver = state.volunteers.find((v) => v.volunteer_id === driverId);
     if (!box) return [];
-    const points: LatLng[] = [...(driver ? [driver.location] : []), box.location, state.hospital.location];
+    const points: LatLng[] = [...(driver ? [driver.location] : []), box.location, ride.hospital.location];
     return [{ points, color: "#38BDF8" }];
   }, [ride, state]);
 
@@ -96,7 +101,7 @@ export function MapLegend() {
       <span className="t-amber">■ Low stock</span>
       <span className="t-red">● Emergency / in use</span>
       <span className="t-blue">● Helper on foot</span>
-      <span>● Driver</span>
+      <span>■ Driver (seats)</span>
       <span className="t-grey">■ Offline</span>
     </div>
   );

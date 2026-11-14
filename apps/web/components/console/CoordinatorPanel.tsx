@@ -1,6 +1,7 @@
 "use client";
 
 import { clockShort } from "../../lib/client";
+import type { CareVerdict, RideRequestEntry, TimeToCare } from "@clara/coordinator";
 import type { CoordinatorView } from "../../lib/views";
 import { StatusPill } from "../TopBar";
 
@@ -59,6 +60,8 @@ export function CoordinatorPanel({ c }: { c: CoordinatorView }) {
         </ul>
       ) : null}
 
+      {log?.time_to_care ? <TimeToCareBlock t={log.time_to_care} request={log.ride_request ?? null} /> : null}
+
       {acts.length ? (
         <div className="stack" style={{ gap: 3 }}>
           <span className="lbl">Actions</span>
@@ -92,7 +95,50 @@ export function CoordinatorPanel({ c }: { c: CoordinatorView }) {
           ))}
         </div>
       ) : null}
-      <span className="small muted">Advisory only: it can alert listed helpers, ask a nearby box for its kit and propose a driver. You approve rides.</span>
+      <span className="small muted">
+        Advisory: it can alert listed helpers, ask a nearby box for its kit and propose a driver for you to approve. It requests a ride itself only when the simulated ambulance is late and a driver is 10+ min faster; you can cancel or reassign.
+      </span>
     </section>
+  );
+}
+
+const VERDICT: Record<CareVerdict, { text: string; tone: "green" | "amber" | "red" | "grey" }> = {
+  ambulance_in_time: { text: "AMBULANCE IN TIME", tone: "green" },
+  ambulance_late_driver_faster: { text: "AMBULANCE LATE · DRIVER FASTER", tone: "amber" },
+  both_late: { text: "BOTH LATE", tone: "red" },
+  no_driver: { text: "AMBULANCE LATE · NO DRIVER", tone: "red" },
+  unknown: { text: "UNKNOWN", tone: "grey" },
+};
+const TONE_CLASS = { green: "t-green", amber: "t-amber", red: "t-red", grey: "muted" } as const;
+const mins = (n: number) => `~${Math.max(0, Math.ceil(n))} min`;
+
+/** Time to care: the simulated ambulance vs the best volunteer driver against the scenario's demo deadline. */
+function TimeToCareBlock({ t, request }: { t: TimeToCare; request: RideRequestEntry | null }) {
+  const v = VERDICT[t.verdict];
+  return (
+    <div className="stack" style={{ gap: 3 }} aria-label="Time to care">
+      <div className="row between">
+        <span className="lbl">Time to care</span>
+        <span className={`small mono ${TONE_CLASS[v.tone]}`}>
+          <b>{v.text}</b>
+        </span>
+      </div>
+      <span className="small mono">
+        <span className="lbl">Ambulance</span>{" "}
+        {t.ambulance ? `scene ${mins(t.ambulance.scene_in_min)}, hospital ${mins(t.ambulance.hospital_in_min)}` : "ETA not set"}{" "}
+        <span className="muted">(simulated 911 call, demo ETA)</span>
+      </span>
+      <span className="small mono">
+        <span className="lbl">Driver</span> {t.driver ? `${t.driver.name}, pickup ${mins(t.driver.pickup_min)}, hospital ${mins(t.driver.hospital_in_min)}` : "no suitable driver free"}
+      </span>
+      <span className="small mono">
+        <span className="lbl">Deadline</span> {t.deadline.reach_hospital_within_min} min from SOS <span className="muted">(demo value) · {Math.max(0, Math.floor(t.deadline.minutes_left))} min left</span>
+      </span>
+      {request ? (
+        <span className="small t-amber">
+          <b>Ride requested by coordinator:</b> {request.reason} <span className="muted">(offered to {request.offered_to.join(", ")})</span>
+        </span>
+      ) : null}
+    </div>
   );
 }

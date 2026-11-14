@@ -17,6 +17,8 @@ export interface RunInput {
   setPlan(items: PlanItem[]): void;
   recordSubagent(name: string, task: string, result: string): void;
   setMemory(files: MemoryFile[]): void;
+  /** Keeps the deep agent's filesystem and todos for its next run on this incident (saved in persistence snapshots). */
+  setAgentMemory(memory: { files?: unknown; todos?: PlanItem[] }): void;
   log: Logger;
 }
 

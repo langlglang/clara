@@ -55,6 +55,10 @@ export function parseReply(text: string, state: TurnState): ModelReply {
   }
   const broken = checkHonesty(reply.reply);
   if (broken) throw new RejectedReply("invalid_reply", `Server note: your previous reply broke a rule. ${broken.note}`);
+  if (state.camera_answer_pending && /\b(?:the (?:photo|image|frame) shows?|i (?:can )?see|is visible|looks like)\b/i.test(reply.reply) &&
+    !/\b(may|might|appears?|seems?|possibly|unclear|uncertain|can(?:not|'t) tell|not clear)\b/i.test(reply.reply)) {
+    throw new RejectedReply("invalid_reply", "Server note: one camera frame is uncertain. Qualify visual claims as what the photo may show, or ask the person to describe it.");
+  }
   return reply;
 }
 

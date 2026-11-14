@@ -36,6 +36,12 @@ describe("parseReply", () => {
     expect(() => parse({ transcript: "x", reply: "It sounds like a fracture.", action: { name: "suggest_sos" } })).toThrow(/diagnose/);
   });
 
+  it("requires uncertainty when a camera answer asserts what a frame shows", () => {
+    const cameraState = { ...state, camera_answer_pending: true };
+    expect(() => parseReply(JSON.stringify({ transcript: "look", reply: "The photo shows a red line on your finger.", action: null }), cameraState)).toThrow(/frame is uncertain/);
+    expect(parseReply(JSON.stringify({ transcript: "look", reply: "The photo may show a red line on a finger. Is it bleeding heavily?", action: null }), cameraState).action).toBeNull();
+  });
+
   it("rejects invalid JSON", () => {
     expect(() => parseReply("{not json", state)).toThrow(RejectedReply);
   });

@@ -3,6 +3,7 @@
 #include <unity.h>
 
 #include <cstring>
+#include <cmath>
 
 #include "buzzer.h"
 #include "debounce.h"
@@ -89,34 +90,41 @@ void test_buzzer_chime_ends_and_alert_is_bounded() {
 
 void test_pulse_no_finger_is_unavailable() {
   PulseEstimator p;
-  p.sample(1000, false, 0);
+  p.sample(1000, 0);
   PulseResult r = p.result(0);
   TEST_ASSERT_EQUAL(-1, r.bpm);
   TEST_ASSERT_TRUE(r.quality == PulseQuality::Unavailable);
 }
 
-void test_pulse_steady_beats_are_valid() {
-  PulseEstimator p;
-  uint32_t t = 0;
-  for (int i = 0; i < 6; ++i, t += 800) p.sample(90000, true, t);  // 75 bpm
-  PulseResult r = p.result(t - 800);
-  TEST_ASSERT_TRUE(r.quality == PulseQuality::Valid);
-  TEST_ASSERT_EQUAL(75, r.bpm);
-  // Stale: no beat for 3 s.
-  TEST_ASSERT_TRUE(p.result(t + 3000).quality == PulseQuality::Suspect);
-  TEST_ASSERT_EQUAL(-1, p.result(t + 3000).bpm);
+void feedPulse(PulseEstimator& p, uint32_t durationMs, uint32_t periodMs) {
+  for (uint32_t t = 0; t <= durationMs; t += 40) {
+    const float phase = 6.2831853f * static_cast<float>(t % periodMs) / periodMs;
+    const uint32_t ir = static_cast<uint32_t>(100000.0f + 2500.0f * std::sin(phase));
+    p.sample(ir, t);
+  }
 }
 
-void test_pulse_irregular_or_few_beats_are_suspect() {
+void test_pulse_steady_waveform_is_valid() {
   PulseEstimator p;
-  p.sample(90000, true, 0);
-  p.sample(90000, true, 800);
-  TEST_ASSERT_TRUE(p.result(900).quality == PulseQuality::Suspect);
-  const uint32_t times[] = {1300, 2500, 2900, 4200};
-  for (uint32_t t : times) p.sample(90000, true, t);
-  TEST_ASSERT_TRUE(p.result(4300).quality == PulseQuality::Suspect);
-  p.sample(100, false, 4400);  // finger lifted
-  TEST_ASSERT_TRUE(p.result(4400).quality == PulseQuality::Unavailable);
+  feedPulse(p, 8000, 800);  // Synthetic 75 bpm optical waveform at 25 FIFO records/s.
+  PulseResult r = p.result(8000);
+  TEST_ASSERT_TRUE(r.quality == PulseQuality::Valid);
+  TEST_ASSERT_EQUAL(75, r.bpm);
+  TEST_ASSERT_TRUE(p.result(8300).quality == PulseQuality::Unavailable);  // No new FIFO records.
+}
+
+void test_pulse_flat_noisy_or_broken_signal_never_reports_a_number() {
+  PulseEstimator p;
+  for (uint32_t t = 0; t <= 8000; t += 40) p.sample(100000 + (t % 3) * 10, t);
+  TEST_ASSERT_TRUE(p.result(8000).quality != PulseQuality::Valid);
+  TEST_ASSERT_EQUAL(-1, p.result(8000).bpm);
+  feedPulse(p, 8000, 800);
+  p.sample(100000, 8300);  // Lost FIFO records; old beat times cannot be reused.
+  TEST_ASSERT_EQUAL(-1, p.result(8300).bpm);
+  p.sample(261000, 8340);  // 18-bit ADC saturation.
+  TEST_ASSERT_TRUE(p.result(8340).quality == PulseQuality::Unavailable);
+  p.sample(100, 8380);  // Finger lifted.
+  TEST_ASSERT_TRUE(p.result(8380).quality == PulseQuality::Unavailable);
 }
 
 void test_line_buffer_frames_and_drops_oversize() {
@@ -142,8 +150,8 @@ int main() {
   RUN_TEST(test_rhythm_drives_every_led_and_stops);
   RUN_TEST(test_buzzer_chime_ends_and_alert_is_bounded);
   RUN_TEST(test_pulse_no_finger_is_unavailable);
-  RUN_TEST(test_pulse_steady_beats_are_valid);
-  RUN_TEST(test_pulse_irregular_or_few_beats_are_suspect);
+  RUN_TEST(test_pulse_steady_waveform_is_valid);
+  RUN_TEST(test_pulse_flat_noisy_or_broken_signal_never_reports_a_number);
   RUN_TEST(test_line_buffer_frames_and_drops_oversize);
   return UNITY_END();
 }

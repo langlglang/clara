@@ -97,7 +97,7 @@ export class ScenarioEngine {
   /** Goes to a step only when it is allowed now (one of the current step's `next`, or the current one). */
   goTo(stepId: string, source: Source): StepIntent[] | null {
     const current = this.current;
-    if (!current) return null;
+    if (!current) return stepId === this.scenario.start ? this.start(source) : null;
     if (stepId === current.step_id) return this.repeat();
     if (!current.next.includes(stepId)) return null;
     return this.advance(stepId, source);
@@ -112,7 +112,7 @@ export class ScenarioEngine {
   /** What the model may pick: the next steps, plus the current one so "say that again" works. */
   allowedSteps(): ScenarioStep[] {
     const current = this.current;
-    return current ? [current, ...this.allowedNext()] : [];
+    return current ? [current, ...this.allowedNext()] : [this.step(this.scenario.start)];
   }
 
   canBack(): boolean {

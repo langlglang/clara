@@ -7,13 +7,15 @@ import { z } from "zod";
 
 export const SERIAL_BAUD = 115_200;
 export const SERIAL_MAX_LINE = 1_024;
+export const SERIAL_PROTOCOL = "1.1";
 
 /** ESP32 → Pi. */
 export const FromBoardSchema = z.discriminatedUnion("t", [
-  z.strictObject({ t: z.literal("hello"), fw: z.string().max(32), boot: z.string().max(32), leds: z.number().int().min(0).max(16) }),
+  z.strictObject({ t: z.literal("hello"), proto: z.literal(SERIAL_PROTOCOL), fw: z.string().max(32), boot: z.string().max(32), leds: z.number().int().min(0).max(16) }),
   z.strictObject({ t: z.literal("lid"), open: z.boolean(), seq: z.number().int().min(0) }),
   z.strictObject({ t: z.literal("mount"), on_wall: z.boolean(), seq: z.number().int().min(0) }),
   z.strictObject({ t: z.literal("pulse"), bpm: z.number().int().min(0).max(250).nullable(), quality: z.enum(["valid", "suspect", "unavailable"]), seq: z.number().int().min(0) }),
+  z.strictObject({ t: z.literal("sensor.raw"), id: z.number().int().min(0), seq: z.number().int().min(0), sample_seq: z.number().int().min(0), sampled_uptime_ms: z.number().int().min(0), red: z.number().int().min(0).max(262_143).nullable(), ir: z.number().int().min(0).max(262_143).nullable(), quality: z.enum(["valid", "unavailable"]) }),
   z.strictObject({ t: z.literal("ack"), id: z.number().int().min(0), ok: z.boolean(), err: z.string().max(80).optional() }),
 ]);
 export type FromBoard = z.infer<typeof FromBoardSchema>;
@@ -27,6 +29,8 @@ export const ToBoardSchema = z.discriminatedUnion("t", [
   z.strictObject({ t: z.literal("buzz"), id: z.number().int().min(0), pattern: z.enum(["chime", "alert", "off"]) }),
   z.strictObject({ t: z.literal("pulse.start"), id: z.number().int().min(0) }),
   z.strictObject({ t: z.literal("pulse.stop"), id: z.number().int().min(0) }),
+  /** One new red/IR sample from the wired MAX30102, after the command was received. */
+  z.strictObject({ t: z.literal("sensor.read"), id: z.number().int().min(0) }),
   z.strictObject({ t: z.literal("ping"), id: z.number().int().min(0) }),
 ]);
 export type ToBoard = z.infer<typeof ToBoardSchema>;

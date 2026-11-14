@@ -43,7 +43,7 @@ export function goodBoard(options: { leds?: number; boot?: string; lidOpen?: boo
   return (command: Record<string, unknown>, port: FakePort) => {
     port.send({ t: "ack", id: command.id, ok: true });
     if (command.t === "ping") {
-      port.send({ t: "hello", fw: "clara-0.1.0", boot: options.boot ?? "b1", leds: options.leds ?? 6 });
+      port.send({ t: "hello", proto: "1.1", fw: "clara-0.2.0", boot: options.boot ?? "b1", leds: options.leds ?? 6 });
       port.send({ t: "lid", open: options.lidOpen ?? false, seq: seq++ });
       port.send({ t: "mount", on_wall: true, seq: seq++ });
     }

@@ -1,6 +1,33 @@
 # Interface and message contracts — proposal v0.7
 
-**No schemas or implementations exist yet.** This document is the source for initial schemas in future `contracts/`. JSON examples are illustrative; generate JSON Schema/Protobuf and compatibility tests before integration. All clocks use UTC RFC 3339 plus a monotonic `uptime_ms` where ordering matters. IDs are opaque UUIDs. `null` is never a fake reading.
+**Interaction update:** the implemented screen now exposes only the simulated SOS flow as a touch action; legacy step-navigation actions remain in the internal `ScreenPressSchema` for compatibility but have no visible controls. Lid open does not produce a voice turn. The proposed generic presentation contract is specified below and in [conversation runtime](conversation-runtime.md).
+
+## Pi → kiosk screen — implemented `screen-view/1.1`
+
+The Pi sends whole `ScreenView` snapshots over a local, token-protected Server-Sent Events stream. `schema_version: "screen-view/1.1"` adds `voice_state` to the `1.0` presentation surface; `revision` is a monotonically increasing view update counter, not a schema version. The page rejects unknown schema majors. `lid_open` is the physical lid state, independent of `phase`: a user can open simulated SOS with the lid closed, and the microphone must still display **MIC OFF**. `voice_state` is `off`, `starting`, `ready`, `listening`, `processing`, `speaking`, or `unavailable`; ready means the mic is open, listening means voice activity was detected, and processing means a final utterance was sent. Existing `step` remains for older consumers, but the current page renders `presentation` when present. A null presentation means the idle view. Old consumers can ignore new fields and continue to use `step`; a new consumer must handle null and all enumerated kinds.
+
+```json
+{
+  "schema_version": "screen-view/1.1", "revision": 7, "phase": "guiding",
+  "lid_open": true, "voice_state": "listening", "box_name": "Clara Demo", "online": true,
+  "presentation": {
+    "kind": "item", "title": "Find gauze", "body": "Compartment A1",
+    "image_url": null, "item": {"sku":"GAUZE-01","name":"Gauze","slot":"A1","lit":true,"missing":false},
+    "source_label": "Demo kit manifest"
+  },
+  "step": null
+}
+```
+
+The initial producers are local spoken answer/question captions, a demo kit inventory lookup, and versioned scenario guidance. `diagram`, `reading`, `handoff`, and `status` are renderer-ready types without producers. A reading producer must later bind a real connected-hardware result ID, units, time and quality before showing a number. Item producers must use the current manifest, not model-generated slot text; the physical slot mapping still needs an assembly check. The `presentation` field is a display snapshot, not permission for the model to choose arbitrary medical instructions or assets. The Pi producer, kiosk consumer, example above and compatibility tests change together; future meaning changes require a new major.
+
+The broad `2.4` envelope below is still proposed. The Pi ↔ ESP32 link has an implemented, smaller [serial `1.1` schema](../packages/contracts/src/serial.ts); its wire messages and hardware status are described in [the firmware guide](../firmware/README.md). The Pi's implemented local `LocationProvider.current()` returns a fresh `GpsFix { latitude, longitude, observedAt, accuracyM }` or null; invalid/stale NMEA is not a fix. It accepts a checksummed 9600-baud RMC sentence only when status and fix time are valid, with a 15 s receipt and 30 s fix-time freshness limit. Mock SOS coaching uses that result or the configured address `1455 California Ave`, explicitly labeled as configured. This local location does not populate the proposed outbound `location.observation` message or send a volunteer alert. The installed receiver emitted a valid RMC/GGA fix and the service connected to its port; mock SOS display with that live fix remains unverified. JSON examples in this document are illustrative. All clocks use UTC RFC 3339 plus a monotonic `uptime_ms` where ordering matters. IDs are opaque UUIDs. `null` is never a fake reading.
+
+## Implemented Pi ↔ ESP32 serial `1.1`
+
+The ESP32 and Pi use 115200-baud newline JSON, maximum 1 KiB per line. `hello` requires `proto:"1.1"`, a per-reset `boot` identifier, firmware version and installed LED count; the Pi rejects an older hello. The current board has three installed LED channels (GPIO18, GPIO19, GPIO23), a lid switch on GPIO33, and MAX30102 I²C on GPIO21/22. The Pi's `sensor.read` command has an integer `id`. The ESP32 ACKs it, then returns `sensor.raw` with the same `id`, an advanced `sample_seq`, a reconstructed monotonic sample time after the request, red/IR counts and `quality:"valid"`; after one second without a new sample it returns null counts with `quality:"unavailable"`. A missing sensor or closed lid is NACKed. The Pi returns null on unavailable, timeout, malformed values or disconnect. It never substitutes a fixture or generated reading. Raw `valid` describes transport freshness, not medical accuracy.
+
+`pulse.start` and `pulse.stop` are separate commands. The ESP32's demo-only signal processor reports a numeric BPM only after contact, continuous 25-record/s input, non-saturated signal, enough prominent peaks and consistent recent intervals; otherwise the `pulse` event has `bpm:null`. It calculates no SpO₂. The Pi keeps raw sensor data out of ordinary logs. These serial messages are a working adapter design, **not** implementation of the full `2.4` envelope, inventory-authorized light commands, or clinical validation. Change the serial protocol literal, producer, Zod consumer, examples and compatibility tests together.
 
 ## Versioning and transport
 
@@ -31,15 +58,15 @@ Required: version, event ID, source, type, sequence, occurrence time, payload. `
 | MCU → screen | `power.health` | `fault_codes[]`; `battery_mv?`, `external_power?` only with installed measurement hardware | Optional telemetry. Omit unknown readings; do not emit from a controller with no voltage-sense path. |
 | Screen → cloud | `session.hello` | `box_id`, `capabilities[]`, `protocol_hash`, `manifest_rev`, `consent_grants[]` | Start/restore authenticated session |
 | Screen → cloud | `utterance.partial` / `utterance.final` | `turn_id`, `text`, `language`, `confidence` | Partial cannot advance a demo step |
-| Screen → cloud | `user.action` | `action` (`next`, `back`, `repeat`, `stop`, `sos`), `step_package_id?` | Local action takes effect before network send |
+| Screen → cloud | `user.action` | `action` (`next`, `back`, `repeat`, `stop`, `sos`), `step_package_id?` | Historical 2.4 proposal; the current kiosk exposes only mock SOS and overlay controls. Do not implement step-navigation actions from this draft. |
 | Screen → cloud | `media.capture` | `consent_id`, `frame_id`, `captured_at`, `purpose`, `sha256` | Single frame metadata; media goes via scoped upload |
-| Screen → cloud | `location.observation` | `consent_id`, `latitude`, `longitude`, `accuracy_m`, `observed_at`, `source_model` | Optional fresh GT-U7 fix; never replaces verified site address and is omitted without a fix or consent |
+| Screen → cloud | `location.observation` | `consent_id`, `latitude`, `longitude`, `accuracy_m`, `observed_at`, `source_model` | Proposed outbound message only. The local USB GNSS fix used for mock SOS coaching is not sent. A future producer must require a fresh fix and separate consent; never replace a configured site address with an inferred one. |
 | Screen → MCU | `sensor.read.request` | `request_id`, `device_id`, `measurement_type`, `deadline_ms` | Starts a fresh wired sensor observation; ACK is not a result |
 | MCU → screen | `sensor.reading` | `request_id`, `device_id`, `model`, `sample_seq`, `sampled_uptime_ms`, `measurements[]`, `quality` | New I²C result; Pi validates and adds UTC receive time |
 | Screen → MCU | `light.set.request` | `request_id`, `step_package_id`, `kit_revision`, `manifest_rev`, `slot_id`, `channel`, `lease_ms`, `deadline_ms` | Set exactly one verified compartment output; Pi resolves slot to channel before sending |
 | Screen → MCU | `light.clear.request` | `request_id`, `reason`, `deadline_ms` | Turn all compartment outputs off |
 | MCU → screen | `light.status` | `request_id`, `state`, `channel?`, `lease_expires_uptime_ms?` | Completion or rejection; `on` means output asserted, not verified light emission |
-| Cloud → screen | `step.present` | `step_package` below | Atomic synchronized presentation |
+| Cloud → screen | `step.present` | `step_package` below | Proposed legacy scenario package presentation; general visual cards are specified by `presentation/1.0` below. |
 | Cloud → screen | `agent.status` | `state`, `turn_id`, `message?` | Working/offline/failed; never implies emergency call success |
 | Screen → cloud | `turn.cancel` | `turn_id`, `reason` | Late tool/agent results must be ignored |
 | Screen/app → cloud | `emergency.status` | `state`, `source`, `observed_at` | Demo only: `mock_opened` or `mock_failed`; no real call state |
@@ -147,7 +174,7 @@ Each physical box is sealed/labeled with model and revision; restocker scans eac
 
 The ESP32 starts every buzzer output off, clears the alarm on lease expiry, lid close, USB disconnect or reset, and treats `off` as higher priority than any pattern. The open snapshot is a local file on the Pi referenced by `snapshot_ref`; it never travels in a session event, `media.capture`, `network.alert` or `handoff_card`. A snapshot or buzzer failure never delays `lid.opened` handling.
 
-## Voice turn API — `voice-turn/0.1` (proposed)
+## Voice turn API — implemented `voice-turn/0.2`
 
 A request/response HTTP contract between the box and the server, separate from the event envelope. Producer: `box/` (cloud client). Consumer: `server/` (`POST /v1/boxes/{box_id}/turns`). Shared zod schemas live in `packages/contracts`; the box and server import the same file, and `packages/contracts` tests cover both shapes. Design: [voice](voice.md).
 
@@ -155,12 +182,12 @@ Request (JSON, at most 1.5 MB):
 
 ```json
 {
-  "schema_version": "voice-turn/0.1", "client_turn_id": "uuid", "session_id": "uuid",
+  "schema_version": "voice-turn/0.2", "client_turn_id": "uuid", "session_id": "uuid",
   "language": "en",
   "input": { "type": "audio", "mime": "audio/wav", "data_base64": "…", "duration_ms": 2400 },
   "state": {
-    "scenario_id": "severe_bleeding", "step_id": "start",
-    "allowed_steps": [{ "step_id": "pressure", "label": "Press hard on the wound" }],
+    "scenario_id": "severe_bleeding", "step_id": null,
+    "allowed_steps": [{ "step_id": "start", "label": "Tell me what happened" }],
     "questions": [{ "question_id": "where", "text": "Where is the bleeding?" }],
     "manifest": [{ "sku": "GAUZE-01", "name": "gauze roll", "on_hand": 2 }],
     "triage_available": true,
@@ -175,19 +202,23 @@ Response:
 
 ```json
 {
-  "schema_version": "voice-turn/0.1", "client_turn_id": "uuid",
+  "schema_version": "voice-turn/0.2", "client_turn_id": "uuid",
   "heard": "my friend's leg is bleeding a lot",
-  "reply": "",
-  "action": { "name": "select_step", "step_id": "pressure" },
+  "reply": "Tell me what happened and what you need help with.",
+  "action": { "name": "select_step", "step_id": "start" },
   "answered_by": "model",
   "reason": null,
-  "speech": null
+  "speech": { "mime": "audio/wav", "sample_rate": 16000, "data_base64": "…" }
 }
 ```
 
-`action` is null or one of `select_step{step_id}`, `ask_clarifying{question_id}`, `locate_item{sku}`, `record_usage{items[{sku, qty}]}`, `start_triage`, `suggest_sos`. Every ID must come from the request's `state`; the server never returns an ID it was not given, and the box rejects one anyway. `answered_by` is `model` or `fixed`; with `fixed`, `reason` is one of `not_heard`, `no_model`, `timeout`, `model_error`, `invalid_reply`, `refusal`. `speech` is null or `{ "mime": "audio/wav", "sample_rate": 16000, "data_base64": "…" }`; it is null with `select_step` (the box plays the step's local audio) and whenever text-to-speech failed (the box speaks `reply` itself). `heard` is null when nothing was transcribed.
+`action` is null or one of `select_step{step_id}`, `ask_clarifying{question_id}`, `locate_item{sku}`, `record_usage{items[{sku, qty}]}`, `start_triage`, `suggest_sos`. `record_usage` remains in the wire type but is **not offered by the current model schema**, because the minimal screen has no confirmation control. Every ID must come from the request's `state`; the server never returns an ID it was not given, and the box rejects one anyway. `answered_by` is `model` or `fixed`; with `fixed`, `reason` is one of `not_heard`, `no_model`, `timeout`, `model_error`, `invalid_reply`, `refusal`. `speech` is null or `{ "mime": "audio/wav", "sample_rate": 16000, "data_base64": "…" }`; null means text-to-speech failed and the Pi speaks the same `reply` locally. `heard` is null when nothing was transcribed.
 
-Rules: the clip is never stored or logged on either side. A `select_step` changes the box's step only after the box checks the ID is in its own allowed list. `suggest_sos` never opens SOS; only a tap does. `record_usage` only proposes a usage list (see `supply.usage_proposed`). Compatibility tests must cover: an unknown `step_id`/`question_id`/`sku` rejected, empty allowed lists (the action is then not offered), text and audio inputs, a fixed reply with each `reason`, and a response with and without `speech`.
+Rules: the clip is never stored or logged on either side. For `select_step`, the server maps the chosen ID to canonical scenario text from its own versioned bundle, discards model wording, and synthesizes that exact text with Cartesia. An unknown scenario/step returns `invalid_reply` with no action. The Pi checks the ID was offered **and** the returned text matches its local bundle before showing or speaking guidance; a mismatch is refused. Before any guidance is shown, only the entry content ID is offered. `suggest_sos` starts the **simulated** SOS countdown; it never calls 911. `record_usage` only proposes a usage list when a future confirmation path exists (see `supply.usage_proposed`). `0.1` requests/responses are rejected rather than silently reinterpreted. Compatibility tests must cover: an unknown `step_id`/`question_id`/`sku` rejected, empty allowed lists (the action is then not offered), text and audio inputs, selected guidance with and without `speech`, a fixed reply with each `reason`, and old-version rejection.
+
+## Generic presentation — proposed `presentation/1.0`
+
+This is a future contract, not a message the current box or cloud sends. A `presentation.show` request has `request_id`, `session_id`, `turn_id`, `presentation_id`, `input_seq`, `kind` (`answer`, `question`, `diagram`, `item`, `reading`, `guidance`, `handoff`, `status`), `title`, `text`, `speech_segments[{segment_id,text}]`, `source_ref`, optional `asset_id`, `measurement_result_id`, `manifest_rev`, `slot_id`, and a deadline. The result is `committed`, `rejected`, `cancelled`, or `timed_out` with a reason. The Pi owns the commit order; a result with an older `input_seq` cannot replace a newer presentation. Each spoken segment references the committed presentation ID. A guidance card needs an approved protocol bundle and exact text; a reading needs a fresh connected-hardware result; an item card needs a verified manifest and matching layout asset. Asset references resolve only from allowlisted, versioned content. A failure leaves the previous card and simulated SOS available. Adding this wire message later requires a schema, producer, consumer, examples, and compatibility tests in the same change.
 
 ## Responder alerts — separate later contract `responder-alert/0.1`
 

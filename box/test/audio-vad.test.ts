@@ -33,6 +33,16 @@ function feed(endpointer: Endpointer, samples: Int16Array) {
 }
 
 describe("Endpointer (docs/voice.md: 0.7 s silence, 0.3 s minimum, 15 s maximum)", () => {
+  it("reports when speech starts and when it ends or is cancelled", () => {
+    const activity: boolean[] = [];
+    const endpointer = new Endpointer({}, (active) => activity.push(active));
+    feed(endpointer, signal([{ ms: 300, loud: false }, { ms: 500, loud: true }, { ms: 800, loud: false }]));
+    expect(activity).toEqual([true, false]);
+    feed(endpointer, signal([{ ms: 300, loud: false }, { ms: 500, loud: true }]));
+    endpointer.reset();
+    expect(activity).toEqual([true, false, true, false]);
+  });
+
   it("finds one utterance between silences, with pre-roll and a short tail", () => {
     const segments = feed(new Endpointer(), signal([{ ms: 1_000, loud: false }, { ms: 1_000, loud: true }, { ms: 1_500, loud: false }]));
     expect(segments).toHaveLength(1);
@@ -107,6 +117,21 @@ class FakeStreamMic implements StreamingMicrophone {
 }
 
 describe("VadListener", () => {
+  it("reports speech activity and mic stream availability", () => {
+    const mic = new FakeStreamMic();
+    const listener = createListener(mic);
+    const activity: boolean[] = [];
+    const availability: boolean[] = [];
+    listener.start(() => {}, (active) => activity.push(active), (available) => availability.push(available));
+    expect(availability).toEqual([true]);
+    mic.send(signal([{ ms: 300, loud: false }, { ms: 500, loud: true }]));
+    expect(activity).toEqual([true]);
+    mic.onEnd?.(new Error("disconnected"));
+    expect(activity).toEqual([true, false]);
+    expect(availability).toEqual([true, false]);
+    listener.stop();
+  });
+
   it("is chosen for a streaming mic and turns an utterance into a 16 kHz WAV clip", () => {
     const mic = new FakeStreamMic();
     const listener = createListener(mic);

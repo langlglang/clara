@@ -61,7 +61,7 @@ export class Endpointer {
   private silentRun = 0;
   private speechFrames = 0;
 
-  constructor(options: EndpointerOptions = {}) {
+  constructor(options: EndpointerOptions = {}, private readonly onActivity?: (active: boolean) => void) {
     this.o = {
       sampleRate: CLIP_SAMPLE_RATE,
       frameMs: 20,
@@ -84,6 +84,7 @@ export class Endpointer {
 
   /** Forgets any partial utterance (used when the mic pauses). The noise estimate is kept. */
   reset(): void {
+    if (this.speaking) this.onActivity?.(false);
     for (const f of this.frames) f.fill(0);
     this.remainder = new Int16Array(0);
     this.preRoll = [];
@@ -98,6 +99,7 @@ export class Endpointer {
   /** Talk button: start an utterance now. It ends on silence after speech, `flush`, the 15 s cap, or no speech in time. */
   forceStart(): void {
     if (this.speaking && !this.forced) return;
+    if (!this.speaking) this.onActivity?.(true);
     this.speaking = true;
     this.forced = true;
     this.frames = [...this.preRoll];
@@ -138,6 +140,7 @@ export class Endpointer {
       this.voicedRun = voiced ? this.voicedRun + 1 : 0;
       if (this.voicedRun >= o.startFrames) {
         this.speaking = true;
+        this.onActivity?.(true);
         this.frames = [...this.preRoll];
         this.preRoll = [];
         this.speechFrames = this.voicedRun;
@@ -199,11 +202,14 @@ function clipFromSegment(segment: Segment, sampleRate: number): Clip {
  * hears itself. Talk forces a clip to start now and unpauses.
  */
 export class VadListener implements Listener {
+  readonly handsFree = true;
   private readonly endpointer: Endpointer;
   private readonly clock: Clock;
   private readonly log: Logger;
   private readonly sampleRate: number;
   private onClip: ((clip: Clip) => void) | null = null;
+  private onActivity: ((active: boolean) => void) | null = null;
+  private onAvailability: ((available: boolean) => void) | null = null;
   private stream: PcmStream | null = null;
   private restart: Cancel | null = null;
   private paused = false;
@@ -213,15 +219,17 @@ export class VadListener implements Listener {
     private readonly mic: StreamingMicrophone,
     private readonly options: ListenerOptions = {},
   ) {
-    this.endpointer = new Endpointer(options);
+    this.endpointer = new Endpointer(options, (active) => this.onActivity?.(active));
     this.clock = options.clock ?? systemClock;
     this.log = options.log ?? silentLogger;
     this.sampleRate = options.sampleRate ?? CLIP_SAMPLE_RATE;
   }
 
-  start(onClip: (clip: Clip) => void): void {
+  start(onClip: (clip: Clip) => void, onActivity?: (active: boolean) => void, onAvailability?: (available: boolean) => void): void {
     if (this.onClip) return;
     this.onClip = onClip;
+    this.onActivity = onActivity ?? null;
+    this.onAvailability = onAvailability ?? null;
     this.paused = false;
     this.open();
   }
@@ -243,6 +251,8 @@ export class VadListener implements Listener {
     this.stream?.stop();
     this.stream = null;
     this.pause();
+    this.onActivity = null;
+    this.onAvailability = null;
   }
 
   pressTalk(): void {
@@ -262,6 +272,7 @@ export class VadListener implements Listener {
       (error) => {
         this.stream = null;
         this.endpointer.reset();
+        this.onAvailability?.(false);
         if (!this.onClip) return;
         this.log.warn("mic stream ended; opening it again", { mic: this.mic.label, error: error.message });
         this.restart = this.clock.setTimeout(() => {
@@ -270,6 +281,7 @@ export class VadListener implements Listener {
         }, this.options.restartMs ?? MIC_RESTART_MS);
       },
     );
+    this.onAvailability?.(true);
   }
 
   private feed(data: Buffer): void {
@@ -297,6 +309,7 @@ export class VadListener implements Listener {
  * `endPress` (or the 15 s cap) sends it. Clips under 0.3 s are dropped.
  */
 export class PressListener implements Listener {
+  readonly handsFree = false;
   private readonly clock: Clock;
   private readonly log: Logger;
   private onClip: ((clip: Clip) => void) | null = null;

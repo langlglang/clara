@@ -21,8 +21,12 @@ const state: TurnState = {
 class FakeListener implements Listener {
   calls: string[] = [];
   onClip: ((clip: Clip) => void) | null = null;
-  start(onClip: (clip: Clip) => void) {
+  onActivity: ((active: boolean) => void) | null = null;
+  onAvailability: ((available: boolean) => void) | null = null;
+  start(onClip: (clip: Clip) => void, onActivity?: (active: boolean) => void, onAvailability?: (available: boolean) => void) {
     this.onClip = onClip;
+    this.onActivity = onActivity ?? null;
+    this.onAvailability = onAvailability ?? null;
     this.calls.push("start");
   }
   pause() {
@@ -48,6 +52,8 @@ class FakeListener implements Listener {
     this.onClip?.(clip);
     return clip;
   }
+  activity(active: boolean) { this.onActivity?.(active); }
+  availability(available: boolean) { this.onAvailability?.(available); }
 }
 
 const answer = (action: Action | null, reply = "", speech = false): TurnResponse => ({
@@ -61,7 +67,11 @@ const answer = (action: Action | null, reply = "", speech = false): TurnResponse
   speech: speech ? { mime: "audio/wav", sample_rate: 16_000, data_base64: Buffer.from("server-voice").toString("base64") } : null,
 });
 
-function setup(voiceTurn: (request: TurnRequest, signal: AbortSignal) => Promise<TurnResponse>, context = true) {
+function setup(
+  voiceTurn: (request: TurnRequest, signal: AbortSignal) => Promise<TurnResponse>,
+  context = true,
+  onAction?: (action: Action, response: TurnResponse, queue: ReturnType<typeof createSpeechQueue>) => void,
+) {
   const clock = new FakeClock();
   const speaker = new FakeSpeaker();
   speaker.auto = true;
@@ -77,7 +87,10 @@ function setup(voiceTurn: (request: TurnRequest, signal: AbortSignal) => Promise
     newId: () => TURN,
     getContext: () => (context ? { sessionId: SESSION, language: "en", state } : null),
     voiceTurn: (request, signal) => (requests.push(request), voiceTurn(request, signal)),
-    onAction: (action) => void actions.push(action),
+    onAction: (action, response) => {
+      actions.push(action);
+      onAction?.(action, response, queue);
+    },
     playCue: (name) => speaker.playCue(name),
     onEvent: (event) => events.push(event),
   });
@@ -85,6 +98,28 @@ function setup(voiceTurn: (request: TurnRequest, signal: AbortSignal) => Promise
 }
 
 describe("voice loop", () => {
+  it("reacts to live speech, processing, playback, and mic reconnection", async () => {
+    const t = setup(() => new Promise<TurnResponse>(() => {}));
+    t.loop.start();
+    await flush();
+    t.listener.activity(true);
+    expect(t.loop.status).toBe("hearing");
+    t.listener.clip();
+    expect(t.loop.status).toBe("thinking");
+    void t.queue.say({ text: "An approved panel" });
+    expect(t.loop.status).toBe("speaking");
+    t.loop.stop();
+    expect(t.loop.status).toBe("off");
+
+    const available = setup(async () => answer(null, "Okay."));
+    available.loop.start();
+    await flush();
+    available.listener.availability(false);
+    expect(available.loop.status).toBe("unavailable");
+    available.listener.availability(true);
+    expect(available.loop.status).toBe("listening");
+  });
+
   it("starts paused, plays the listening cue, then opens the mic", async () => {
     const t = setup(async () => answer(null, "Okay."));
     t.loop.start();
@@ -108,6 +143,25 @@ describe("voice loop", () => {
     expect(t.speaker.lines).toHaveLength(0);
     expect(t.speaker.cues).toEqual(["listening", "done", "listening"]);
     expect(t.listener.last).toBe("resume");
+  });
+
+  it("shows speaking while selected guidance plays during an active turn", async () => {
+    const t = setup(
+      async () => answer({ name: "select_step", step_id: "pressure" }, "Press now.", true),
+      true,
+      (_action, response, queue) => { void queue.say({ text: response.reply, wav: Buffer.from(response.speech!.data_base64, "base64") }); },
+    );
+    t.speaker.auto = false;
+    t.loop.start();
+    await flush();
+    t.listener.clip();
+    await flush();
+    expect(t.loop.status).toBe("speaking");
+    expect(t.speaker.lines.map((line) => `${line.kind}:${line.value}`)).toEqual(["wav:server-voice"]);
+    expect(t.listener.last).toBe("pause");
+    t.speaker.lines[0]!.finish();
+    await flush();
+    expect(t.loop.status).toBe("listening");
   });
 
   it("plays the server's WAV for a clarifying reply and keeps the mic paused until it ends", async () => {

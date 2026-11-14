@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { Alert } from "@clara/contracts";
+import { VOICE_TURN_VERSION, type Alert, type TurnResponse } from "@clara/contracts";
 import { FakeCloudLink } from "../src/cloud/fake.js";
 import { loadKit, loadScenario } from "../src/engine/index.js";
 import type { Board, BoardEvent, SpeechQueue } from "../src/ports.js";
@@ -49,10 +49,12 @@ class FakeBoard implements Board {
 
 class FakeSpeech implements SpeechQueue {
   said: string[] = [];
+  played: { text: string; wav?: Buffer }[] = [];
   stops = 0;
   busy = false;
-  async say(item: { text: string }) {
+  async say(item: { text: string; wav?: Buffer }) {
     this.said.push(item.text);
+    this.played.push(item);
   }
   stopAll() {
     this.stops += 1;
@@ -95,22 +97,26 @@ const alert = (state: Alert["state"], name = "Amina", eta: number | null = 6): A
 });
 
 describe("BoxSession lid", () => {
-  it("lid open starts a session, chimes, shows the first step and lights its compartment", async () => {
+  it("lid open enables conversation without requesting or showing guidance", async () => {
     const { session, cloud, board, speech } = setup();
     expect(session.view().phase).toBe("idle");
     board.lid(true);
     await Promise.resolve();
     expect(session.active).toBe(true);
-    expect(cloud.types()).toEqual(["box.opened", "scenario.started", "step.shown"]);
+    expect(cloud.types()).toEqual(["box.opened"]);
     expect(cloud.events.every((e) => e.session_id === session.sessionId)).toBe(true);
     expect(board.calls).toContain("buzz chime");
-    expect(board.calls).toContain("light 0");
-    expect(speech.said[0]).toContain("TEST PLACEHOLDER 1");
+    expect(board.calls).not.toContain("light 0");
+    expect(speech.said).toEqual([]);
     const view = session.view();
     expect(view.phase).toBe("guiding");
-    expect(view.step?.item).toMatchObject({ slot: "A1", lit: true });
-    expect(view.step?.options.map((o) => o.step_id)).toEqual(["s2", "s3"]);
-    expect(view.step?.image_url).toBe("/content/images/test-one.png");
+    expect(view.step).toBeNull();
+    expect(session.turnState()?.allowed_steps.map((s) => s.step_id)).toEqual(["s1"]);
+    expect(session.applyAction({ name: "select_step", step_id: "s1" })).toBe(true);
+    expect(session.view().step?.item).toMatchObject({ slot: "A1", lit: true });
+    expect(session.view().step?.image_url).toBe("/content/images/test-one.png");
+    expect(session.view().presentation).toMatchObject({ kind: "guidance", body: session.view().step?.text, image_url: session.view().step?.image_url });
+    expect(speech.said[0]).toContain("TEST PLACEHOLDER 1");
   });
 
   it("ignores a repeated lid-open and ends the session on lid close", () => {
@@ -125,6 +131,45 @@ describe("BoxSession lid", () => {
     expect(cloud.events.at(-1)?.session_id).toBe(id);
     expect(session.view().phase).toBe("idle");
     expect(session.view().step).toBeNull();
+  });
+
+  it("keeps the mic off for closed-lid SOS, then starts it when the lid opens", () => {
+    const { session } = setup();
+    let starts = 0;
+    let stops = 0;
+    session.attachVoice({ handsFree: true, start: () => starts++, stop: () => stops++, pressTalk: () => {} });
+    session.press({ action: "sos" });
+    const id = session.sessionId;
+    expect(session.view()).toMatchObject({ lid_open: false, voice_available: false });
+    expect(session.turnState()).toBeNull();
+    session.press({ action: "talk" });
+    expect(starts).toBe(0);
+    session.lidOpened();
+    expect(session.sessionId).toBe(id);
+    expect(session.view()).toMatchObject({ lid_open: true, voice_available: true });
+    expect(starts).toBe(1);
+    session.lidClosed();
+    expect(stops).toBe(1);
+  });
+
+  it("does not label a press-only microphone as hands-free", () => {
+    const { session } = setup();
+    session.attachVoice({ handsFree: false, start: () => {}, stop: () => {}, pressTalk: () => {} });
+    session.lidOpened();
+    expect(session.view().voice_available).toBe(false);
+  });
+
+  it("shows ready, listening, processing, speaking, and unavailable from voice events", () => {
+    const { session } = setup();
+    session.attachVoice({ handsFree: true, start: () => {}, stop: () => {}, pressTalk: () => {} });
+    session.lidOpened();
+    expect(session.view().voice_state).toBe("starting");
+    for (const [event, expected] of [["listening", "ready"], ["hearing", "listening"], ["thinking", "processing"], ["speaking", "speaking"], ["unavailable", "unavailable"]] as const) {
+      session.setVoiceStatus(event);
+      expect(session.view().voice_state).toBe(expected);
+    }
+    session.lidClosed();
+    expect(session.view().voice_state).toBe("off");
   });
 });
 
@@ -178,6 +223,7 @@ describe("BoxSession SOS", () => {
   it("a step marked sos opens the countdown", () => {
     const { session } = setup();
     session.lidOpened();
+    session.applyAction({ name: "select_step", step_id: "s1" });
     session.press({ action: "goto", step_id: "s3" });
     expect(session.view().phase).toBe("countdown");
   });
@@ -247,13 +293,54 @@ describe("BoxSession pushes", () => {
 });
 
 describe("BoxSession actions", () => {
+  it("plays Cartesia guidance once when the returned text matches local content", () => {
+    const { session, speech } = setup();
+    session.lidOpened();
+    const text = session.engine.step("s1").text;
+    const wav = Buffer.from("cartesia-wav");
+    const response: TurnResponse = {
+      schema_version: VOICE_TURN_VERSION, client_turn_id: uuid(), heard: "help", reply: text,
+      action: { name: "select_step", step_id: "s1" }, answered_by: "model", reason: null,
+      speech: { mime: "audio/wav", sample_rate: 16_000, data_base64: wav.toString("base64") },
+    };
+    expect(session.applyAction(response.action!, "voice", response)).toBe(true);
+    expect(speech.played).toHaveLength(1);
+    expect(speech.played[0]).toMatchObject({ text, wav });
+    expect(session.view().presentation).toMatchObject({ kind: "guidance", body: text });
+  });
+
+  it("refuses guidance text that differs from the local content", () => {
+    const { session, speech } = setup();
+    session.lidOpened();
+    const response: TurnResponse = {
+      schema_version: VOICE_TURN_VERSION, client_turn_id: uuid(), heard: "help", reply: "Unapproved text",
+      action: { name: "select_step", step_id: "s1" }, answered_by: "model", reason: null, speech: null,
+    };
+    expect(session.applyAction(response.action!, "voice", response)).toBe(false);
+    expect(session.view().step).toBeNull();
+    expect(speech.said).toEqual(["I couldn't verify that guidance. Please tell me again."]);
+  });
+
+  it("shows an item request without starting a scenario step, then shows an answer", () => {
+    const { session, board } = setup();
+    session.lidOpened();
+    expect(session.applyAction({ name: "locate_item", sku: "sku_a" })).toBe(true);
+    expect(session.view().step).toBeNull();
+    expect(session.view().presentation).toMatchObject({ kind: "item", title: "Test item A", body: "Listed in compartment A1.", source_label: "Demo kit manifest", item: { slot: "A1", lit: true } });
+    expect(board.calls).toContain("light 0");
+    session.showCaption("Here is the item.", false);
+    expect(session.view().presentation?.kind).toBe("item");
+    session.showCaption("Tell me more.");
+    expect(session.view().presentation).toMatchObject({ kind: "answer", body: "Tell me more." });
+  });
+
   it("refuses an action not allowed now", () => {
     const { session } = setup();
     session.lidOpened();
     expect(session.applyAction({ name: "select_step", step_id: "s5" })).toBe(false);
     expect(session.applyAction({ name: "start_triage" })).toBe(false);
     expect(session.applyAction({ name: "record_usage", items: [{ sku: "sku_a", qty: 9 }] })).toBe(false);
-    expect(session.view().step?.step_id).toBe("s1");
+    expect(session.view().step).toBeNull();
   });
 
   it("changes supply counts only after a confirm tap", () => {
@@ -270,8 +357,9 @@ describe("BoxSession actions", () => {
   it("a typed turn moves to an allowed step and records what was heard", async () => {
     const { session, cloud } = setup();
     session.lidOpened();
+    session.applyAction({ name: "select_step", step_id: "s1" });
     cloud.responder = (req) => ({
-      schema_version: "voice-turn/0.1",
+      schema_version: VOICE_TURN_VERSION,
       client_turn_id: req.client_turn_id,
       heard: "step two",
       reply: "ok",

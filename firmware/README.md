@@ -1,74 +1,51 @@
 # Clara ESP32 firmware
 
-Adapted from Sophi (github.com/mzhao1599/sophi), firmware/README.md and the firmware layout (pure logic in `lib/`, pins in `src/`, native tests in `test/`).
+Adapted from [Sophi](https://github.com/mzhao1599/sophi) firmware layout and serial pattern. Pure logic lives in `lib/clara/`, hardware code in `src/main.cpp`, and native tests in `test/test_logic/`.
 
-**Status:** written, not built or flashed. PlatformIO was not installed when this was written, and every pin below is a **placeholder** to confirm when the board and parts arrive.
+**Status:** `clara-0.2.0` builds and is flashed on the connected ESP32. The Pi adapter has received its hello and lid state, ACKs for all three LED channels and clear, and a fresh raw MAX30102 result. With no finger present, the pulse stream correctly reports null BPM. The native signal tests pass; a sustained on-finger pulse estimate and the installed lid mechanism remain unverified. Clara is a fictional-scenario demo, never used on a patient.
 
-The ESP32-WROOM-32 dev board sits on the Pi's USB. It reports the lid and wall-mount switches, lights one LED per kit compartment, flashes all LEDs in a CPR rhythm, drives a buzzer, and reads a MAX30102 pulse sensor. It never decides anything: the Pi does.
+## Current board profile
 
-```text
-firmware/
-  platformio.ini     esp32 (the board) and native (host tests) environments, pinned versions
-  src/main.cpp       pins, serial JSON (ArduinoJson), LEDC PWM, switches, MAX30102 (SparkFun library)
-  lib/clara/         Arduino-free logic: debounce, lights (lease, modes, rhythm), buzzer patterns,
-                     pulse estimator, serial line framing
-  test/test_logic/   native Unity tests for lib/clara
-```
+The Pi stays powered and uses one USB data cable to the ESP32 board's USB-to-UART bridge. The Pi owns the screen, audio, cloud, kit manifest and decisions. The ESP32 debounces the switch, drives the three installed lights and reads the connected MAX30102. No Wi-Fi, camera, GPS or medical decision runs on the ESP32.
+
+| ESP32 pin | Current connection | Status |
+| --- | --- | --- |
+| GPIO33 | Lid limit switch `NC`; `COM` to ground, internal pull-up. Released switch reads LOW = open. | Bench GPIO logic observed; installed lid mechanism still needs a close/open check. |
+| GPIO21 / GPIO22 | MAX30102 SDA / SCL at 3.3 V logic, 100 kHz I²C | Bench raw samples verified. |
+| GPIO18 / GPIO19 / GPIO23 | LED channels 0 / 1 / 2, each through its own resistor to ground | User observed all three blink in expected bench positions. |
+
+`CLARA_LED_COUNT=3`, `CLARA_MOUNT_SWITCH=0`, and `CLARA_BUZZER_ENABLED=0` are set in `platformio.ini`. Other proposed LEDs, wall-mount switch and buzzer are **not wired or claimed working**. The proposed six-slot kit map must be verified separately before a supply can trigger a light. This firmware refuses light and pulse-start commands while the lid reads closed. A clear/off command always works. The switch orientation follows the tested bench wiring; confirm the actual lid's pressed/released states before using that gate.
+
+## Build and flash
 
 ```sh
-pio run -e esp32 -t upload        # build and flash
-pio device monitor -b 115200      # watch the JSON lines
-pio test -e native                # logic tests on your computer
+cd firmware
+../.venv/bin/pio test -e native
+../.venv/bin/pio run -e esp32
+../.venv/bin/pio run -e esp32 -t upload --upload-port /dev/cu.SLAB_USBtoUART
 ```
 
-## Wire protocol
+Install PlatformIO in a local Python environment if needed (`python3 -m venv .venv && .venv/bin/pip install platformio` from the repo root). Close the old bench dashboard and any serial monitor before uploading; only one program can hold the port. On the Pi, use the board's `/dev/serial/by-id/` path or set `CLARA_SERIAL_PORT`. Run `npx tsx box/src/check/index.ts --port PATH --leds --lid` to check the physical link. The `--beep` option will fail in this profile because no buzzer is installed.
 
-Newline-delimited JSON, at most 1,024 bytes a line, 115200 baud, exactly as in [`packages/contracts/src/serial.ts`](../packages/contracts/src/serial.ts).
+## USB serial contract `1.1`
 
-- **Boot:** `{"t":"hello","fw":"clara-0.1.0","boot":"<8 hex>","leds":6}`, then the lid (and mount) state once the switches have settled.
-- **Every command gets an ack** by its `id`: `{"t":"ack","id":7,"ok":true}` or `{"t":"ack","id":7,"ok":false,"err":"lid_closed"}`. A line that isn't JSON or has no integer `id` is dropped (there is no id to ack).
-- **`ping`** is acked, then answered with `hello`, `lid` and `mount`, so a Pi that restarted while the board kept running learns the state. The Pi pings every 3 s.
-- **`seq`** counts every `lid`/`mount`/`pulse` line and starts again at 0 on reset; `boot` changes on every reset.
-- Errors in `err`: `bad_args`, `no_such_channel`, `lid_closed`, `pulse_sensor_missing`, `unknown_command`.
+The [shared schema](../packages/contracts/src/serial.ts) is the Pi's parser and command validator. Each message is one JSON line, at most 1,024 bytes, at 115200 baud. `hello` includes `proto:"1.1"`; the Pi rejects an older hello. Commands have an integer `id`; the ESP32 replies with `ack` for accepted or rejected commands. A Pi ping every three seconds asks for `hello` and current lid state. `seq` counts board state and sensor events from each boot; `boot` changes on reset.
 
-## Behaviour
-
-| Feature | Rule |
+| Pi command | ESP32 response and behavior |
 | --- | --- |
-| LEDs | All off at boot. `led` lights exactly one channel (others off) for `ms` (capped at 30 s, the proposed maximum in docs/contracts.md); `solid`, `blink` (1 Hz) or `pulse` (1.6 s breath). `ch: -1` clears. Refused (`lid_closed`) while the lid is closed (build flag `CLARA_LED_REQUIRE_LID_OPEN`). |
-| Rhythm | `rhythm` flashes **all** LEDs 120 ms on each beat at `bpm` (CPR coach); `0` stops it. It wins over a lit compartment while it runs. An SOS flash (· · · — — — · · ·) is implemented and selected by an optional `"pattern":"sos"` field the current contract does not yet carry. |
-| Buzzer | Off at boot. `chime` (two rising notes, 0.35 s), `alert` (2 kHz beeps, stops by itself after 10 s), `off` (immediately). Active buzzer by default; set `CLARA_BUZZER_PASSIVE=1` for a passive one (LEDC tone). |
-| Lid / mount | Debounced (30 ms placeholder) with the internal pull-up; one line per real change, plus the boot state. `CLARA_MOUNT_SWITCH=0` if no mount switch is wired (then no `mount` lines). |
-| Pulse | Sensor off until `pulse.start`; one `pulse` line a second until `pulse.stop`. `bpm` is a number **only** when `quality` is `valid`: a finger on the sensor (IR ≥ 50,000), ≥ 4 beat intervals in 30–200 bpm, all within 15 % of their mean, last beat < 2.5 s ago. A finger with too few, irregular or stale beats is `suspect` with `bpm: null`; no finger or no sensor is `unavailable` with `bpm: null`. The thresholds come from SparkFun's example and are untested against a reference; Clara is a demo, never used on a patient. |
-| Safety | Lid close, a silent Pi (no byte for 10 s) and reset turn LEDs, rhythm and buzzer off (and stop the sensor on a silent Pi). |
+| `{"t":"ping","id":1}` | ACK, then `hello`, `lid` (and `mount` only if enabled). |
+| `{"t":"led","id":2,"ch":0,"ms":800,"mode":"blink"}` | ACK; channel 0 is GPIO18. One channel at a time; lease capped at 30 seconds. `ch:-1` clears. |
+| `{"t":"sensor.read","id":3}` | ACK, then one `sensor.raw` with the same `id`, a new hardware sample after the command, or null values with `quality:"unavailable"` after one second. Missing sensor and closed lid are NACKs. |
+| `{"t":"pulse.start","id":4}` / `pulse.stop` | ACK; streams one `pulse` event per second while started. BPM is null unless contact, sample continuity and recent beat intervals pass the algorithm's checks. |
 
-## Wiring (placeholders: confirm against the delivered board's pinout)
+Example raw **format only**, not an actual reading: `{"t":"sensor.raw","id":3,"seq":10,"sample_seq":81,"sampled_uptime_ms":30012,"red":40217,"ir":48701,"quality":"valid"}`. `valid` means a fresh, well-formed raw sample, **not a medically accurate vital sign**. A failed read is null, never a canned number. The Pi's `SerialBoard.readSensorRaw()` correlates the result to its request and returns null on timeout, disconnect, unavailable quality or malformed data. Do not log raw health readings in ordinary logs.
 
-Avoided: strapping pins GPIO0, 2, 5, 12, 15; flash pins 6–11; UART0 (USB serial) 1 and 3; input-only 34–39 (no internal pull-ups).
+## Pulse estimate
 
-| ESP32 pin | Goes to | Notes |
-| --- | --- | --- |
-| GPIO32 | Lid limit switch (COM/NO), other leg to GND | Internal pull-up. Assumed pressed (LOW) when the lid is **closed**; flip `kLidOpenLevel` if wired the other way. |
-| GPIO33 | Wall-mount switch, other leg to GND | Internal pull-up. Pressed (LOW) = on the wall. |
-| GPIO21 (SDA) | MAX30102 SDA | Default I²C pins. Most breakouts have pull-ups; else 4.7 kΩ to 3.3 V. |
-| GPIO22 (SCL) | MAX30102 SCL | Bus runs at 400 kHz. |
-| 3V3 / GND | MAX30102 VIN / GND | Check the breakout's VIN range (many take 3.3–5 V). |
-| GPIO4 | LED channel 0 | Each LED: GPIO → resistor (start 330 Ω) → anode; cathode → GND. |
-| GPIO13 | LED channel 1 | |
-| GPIO16 | LED channel 2 | Free on WROOM-32 (used for PSRAM only on WROVER). |
-| GPIO17 | LED channel 3 | Same. |
-| GPIO18 | LED channel 4 | |
-| GPIO19 | LED channel 5 | |
-| GPIO23 | LED channel 6 | Only with `CLARA_LED_COUNT` ≥ 7. |
-| GPIO26 | LED channel 7 | Only with `CLARA_LED_COUNT` = 8. |
-| GPIO25 | Buzzer + (through an NPN/MOSFET if it draws over ~12 mA or needs 5 V) | Never put 5 V on an ESP32 pin. |
-| Spare | GPIO14, GPIO27 | GPIO14 outputs a brief PWM at boot: fine for a switch input, not ideal for an LED. |
+The MAX30102 is configured for 100 conversions per second with four-sample FIFO averaging, so it delivers **25 records per second**. Firmware drains the FIFO and reconstructs 40 ms record spacing. An overrun or gap resets the estimate. The estimator uses the full 18-bit IR reading, removes slow baseline drift, smooths three records, finds peaks with a minimum prominence, and takes the median of recent beat intervals. It reports a number only after at least four consistent intervals in the 30–200 bpm range, with recent samples, contact above the configured threshold and no ADC saturation. Flat, missing, clipped, interrupted and irregular signals yield null BPM. The threshold and algorithm are engineering choices for this demo; compare a sustained real waveform against an independent reference before showing BPM as demo verified. **No SpO₂ is calculated.**
 
-The LED count is a build flag (`CLARA_LED_COUNT`, default 6 for the 6-compartment demo tray). The 12 V LED candidate cannot be driven from these pins directly (docs/hardware-power.md).
+This approach uses the MAX30102's documented FIFO and sample averaging and the beat-interval principle described by [Analog Devices](https://support.analog.com/en-US/knowledgebase/article/000101121). [SparkFun's example](https://github.com/sparkfun/SparkFun_MAX3010x_Sensor_Library/blob/master/examples/Example5_HeartRate/Example5_HeartRate.ino) informs the contact threshold but explicitly does not establish medical accuracy. See [MAX30102 datasheet](https://www.analog.com/media/en/technical-documentation/data-sheets/MAX30102.pdf). The firmware's native tests use synthetic waveforms to check rejection and timing; they do not validate accuracy on people.
 
-## Still to check on hardware
+## Failure behavior
 
-- The board's USB bridge (CP2102 or CH340) and that the Pi finds it (`npx tsx box/src/check/index.ts`).
-- Whether opening the port resets the board (DTR/RTS auto-reset): harmless either way, since the Pi pings.
-- Every LED channel against its printed slot (`check --leds`), the lid direction (`check --lid`), the buzzer (`check --beep`).
-- The MAX30102 address/answer and whether the finger threshold and beat detector give stable readings (`check --pulse`).
+LEDs start off, only one compartment channel can be selected, and a lease expires even if the Pi disappears. Lid close clears lights and pulse streaming. Ten seconds without Pi serial traffic clears active lights, rhythm and buzzer state; the Pi reconnects and pings after USB loss. The sensor is probed every two seconds, so a reconnected breakout can recover; a missing sensor never yields a made-up reading. A read interrupted by lid close or sensor loss returns unavailable. An unwired buzzer command is rejected as unsupported. The ESP32 never claims an emergency call happened.

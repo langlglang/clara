@@ -1,6 +1,6 @@
 # Clara software plan — HackPrinceton build (proposed)
 
-**Status:** proposed plan, written 2026-11-12 for HackPrinceton Fall 2026 (Nov 13–15). No code exists yet. Clara is a proof of concept and will never be used on a patient. **Pending team alignment:** this plan adopts the low-resource and conflict-zone story below, which moves Clara from "cloud agent with offline fallback" to "offline first." Other docs still describe the earlier public-AED framing and a warm cloud agent; update them once the team agrees.
+**Historical plan from 2026-11-12.** Code now exists, and this offline-first/touch-navigation build plan was superseded by the [current feature list](feature-list.md), [voice guide](voice.md), and [conversation runtime](conversation-runtime.md). Keep the milestone ideas below as history; do not use them to implement Next/Back/Repeat controls or assume offline speech understanding. Clara is a proof of concept and will never be used on a patient.
 
 ## The story and what it changes
 

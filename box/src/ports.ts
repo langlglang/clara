@@ -27,7 +27,9 @@ export interface Microphone {
 
 /** Hands-free listening: emits one clip per utterance (voice-activity detection ends it). */
 export interface Listener {
-  start(onClip: (clip: Clip) => void): void;
+  /** True only when this listener captures hands-free without a screen button. */
+  readonly handsFree?: boolean;
+  start(onClip: (clip: Clip) => void, onActivity?: (active: boolean) => void, onAvailability?: (available: boolean) => void): void;
   /** Half-duplex: paused while the box speaks. */
   pause(): void;
   resume(): void;
@@ -71,7 +73,7 @@ export interface SpeechQueue {
 export type BoardEvent =
   | { type: "connected"; firmware: string; leds: number }
   | { type: "disconnected"; reason: string }
-  | Extract<FromBoard, { t: "lid" | "mount" | "pulse" }>;
+  | Extract<FromBoard, { t: "lid" | "mount" | "pulse" | "sensor.raw" }>;
 
 export interface Board {
   readonly label: string;

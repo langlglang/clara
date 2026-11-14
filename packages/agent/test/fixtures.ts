@@ -1,4 +1,4 @@
-import type { TurnRequest, TurnState } from "@clara/contracts";
+import { VOICE_TURN_VERSION, type TurnRequest, type TurnState } from "@clara/contracts";
 import type { ModelOutput, ReplyModel } from "../src/model.js";
 
 export const state: TurnState = {
@@ -21,7 +21,7 @@ export const state: TurnState = {
 export const ID = "7f1c2a4e-1b2c-4d3e-8f90-0a1b2c3d4e5f";
 
 export function textRequest(text: string, overrides: Partial<TurnRequest> = {}): TurnRequest {
-  return { schema_version: "voice-turn/0.1", client_turn_id: ID, session_id: ID, language: "en", input: { type: "text", text }, state, ...overrides };
+  return { schema_version: VOICE_TURN_VERSION, client_turn_id: ID, session_id: ID, language: "en", input: { type: "text", text }, state, ...overrides };
 }
 
 export const wav = Buffer.concat([Buffer.from("RIFF0000WAVE", "ascii"), Buffer.alloc(60)]);

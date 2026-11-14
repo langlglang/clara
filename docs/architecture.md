@@ -1,6 +1,6 @@
 # System architecture — proposal v0.1
 
-**Status:** design only. Scope assumption: one US English fictional adult scenario at a time, with consenting volunteers and no patient use. See [contracts](contracts.md) for messages and [demo content boundaries](medical-safety.md).
+**Status:** proposed architecture with some demo components implemented. The lid opens a listening session without calling the model or presenting a scenario step. The screen has no step navigation buttons; it can render answer, question, item, and versioned-guidance cards. Generated diagrams, sensor reading cards, synchronized speech segments, and concurrent background agents are proposed in [conversation runtime](conversation-runtime.md). Existing step-oriented text below is historical planning for the scenario adapter; current implementation status is in [feature list](feature-list.md). Scope assumption: one US English fictional adult scenario at a time, with consenting volunteers and no patient use.
 
 ## Boundaries and ownership
 
@@ -45,16 +45,16 @@ flowchart LR
 
 1. Normally closed lid switch changes state on opening. Debounce in hardware and firmware; controller wakes and records `lid.opened` with monotonic time.
 2. The Pi is already running in idle mode. The controller sends `lid.opened` over USB serial; the Pi reveals the local Clara Demo screen and mock SOS. USB alone cannot start a powered-off Pi. In parallel and without blocking the screen, the Pi starts the open chime (`alarm.set.request`), stores one local open snapshot, and reports `in_use` in its heartbeat. See [anti-theft](subsystems/anti-theft.md).
-3. Screen loads its cached scenario bundle and kit manifest before optional network negotiation. It displays version and stale/unverified inventory status internally; it never promises a supply from an unknown manifest.
-4. If user starts an agent session, screen requests audio consent, opens authenticated transport, and sends capabilities, protocol and manifest hashes. Camera, location, and health readings need separate consent/use events.
-5. Cloud acknowledges session or screen remains in local guide mode. Every generated step references a demo step ID and matching visual asset version.
+3. The Pi loads a cached scenario bundle and kit manifest, but does not show guidance until a relevant request. It must not promise a supply from an unchecked manifest.
+4. In the current demo, opening the lid starts local audio capture; a dedicated per-session consent control is proposed. The first final utterance invokes the cloud turn with session and capability state. Camera, outbound location, and health data need separate consent/use events.
+5. If connected, the cloud answers the user's actual request. If disconnected, the Pi retains the last visual and local mock SOS. The current demo has no offline speech understanding or general offline guide selection.
 
 ## Data flow and trust
 
 - Lid and power events: controller → screen; no health data required.
 - Audio: microphone → local VAD/streaming codec → cloud speech/agent only after consent. Transcript is provisional until finalized.
 - Camera: user aims camera and explicitly captures a frame; screen shows preview and disclosure; cloud returns observations with uncertainty. No continuous passive video in v0.1.
-- Optional GPS: selected GT-U7 receiver → Pi USB serial → fresh, accuracy-marked observation after location consent. A verified site address/floor remains the primary box location, especially indoors; no fix means no inferred coordinates.
+- Local GPS for mock SOS coaching (**demo implemented**, live installed fix unverified): the attached USB u-blox 7 receiver → Pi serial adapter (`CLARA_GPS_PORT`, 9600 baud) → checksummed NMEA RMC parser → fresh valid coordinates with UTC fix time, or no fix. The configured address `1455 California Ave` (`CLARA_BOX_ADDRESS`) is the fallback and is explicitly labeled as configured, never as a measured position; no city or coordinates are inferred from it. This local path does not send location to the cloud or volunteers. Any future upload remains consent-gated under the proposed `location.observation` contract.
 - Sensor: adapter → typed reading with device ID, units, measurement time, quality, provenance → screen/agent. Missing or stale values never become zero or an estimate.
 - Guidance: demo step registry → versioned bundle → screen cache; agent selects step IDs; screen renders matching text/visual and audio script.
 - Inventory: restocker scans sealed kit version and verifies slot contents; runtime reads a snapshot with revision and verification date. Item retrieval points to a slot ID, never model guessed coordinates. The Pi maps a verified slot to a checked physical LED channel and commands the ESP32 over USB; the cloud does not choose a GPIO.
@@ -67,9 +67,9 @@ flowchart LR
 
 | Mode | Available | Missing or changed |
 | --- | --- | --- |
-| Local only | Mock SOS, fictional site and responder preview, factual handoff card, cached demo guide, inventory map, text/visual steps, pre-recorded audio, replay, verified compartment highlighting when LED hardware works, open chime, local open snapshot, mount-removal return prompt | Cloud conversation, speech understanding, image interpretation, remote telemetry, nearby box alerts, nearest-kit lookup, maintainer alerts; show offline state and "nearby boxes not notified" |
-| Slow/intermittent | Same local functions; upload only consented bounded events with idempotency | No waiting for cloud before urgent local actions; expired cloud request is canceled |
-| Connected | Optional streaming agent, consented single-frame interpretation, verified directory sync | Still subject to protocol and safety gates |
+| Local only | Current: base screen, last committed visual, local simulated SOS, connected ESP32 status and existing lights. Proposed: cached general visual cards and source-labeled local handoff. | Cloud conversation, speech understanding, image interpretation, remote telemetry, nearby box alerts, nearest-kit lookup; the UI reports offline state. |
+| Slow/intermittent | Same local functions; bounded, consented events may be retried idempotently. | No waiting for cloud before mock SOS; expired turns are canceled and cannot render late. |
+| Connected | Current constrained voice turn and demo network; proposed general tool loop and background workers. | Still subject to source, consent and provenance checks. |
 
 The demo has no emergency calling hardware or software path. Its mock SOS remains local and clearly shows that no help was contacted. Patient use or public deployment is outside this project.
 
@@ -79,7 +79,7 @@ The demo has no emergency calling hardware or software path. Its mock SOS remain
 | --- | --- |
 | MCU fails or lid event lost | Manual power and visible demo identification; controller watchdog and boot self-test |
 | Pi fails or battery empty | Permanent label identifies a nonfunctional demo box; service alert from last heartbeat |
-| Internet drops mid-turn | Stop cloud speech, cancel in-flight tools, keep current step visible, offer cached guide and mock SOS |
+| Internet drops mid-turn | Stop cloud speech, cancel in-flight tools, keep the last committed visual and mock SOS visible; general offline conversation is unavailable. |
 | Responder matching or push fails (later concept) | Keep emergency contact path visible; report alert unconfirmed, never imply a volunteer was notified or is arriving |
 | Agent handoff draft fails or contains unsupported facts | Show a deterministic card from permitted local events; omit unsupported details, keep mock SOS available |
 | Bundle signature/hash invalid | Quarantine bundle, show no affected guided steps, keep mock SOS |

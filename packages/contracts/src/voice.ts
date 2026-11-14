@@ -2,10 +2,10 @@
 import { z } from "zod";
 
 /**
- * Voice turn API, `voice-turn/0.1` (proposed). The box sends one turn per utterance; the server answers
+ * Voice turn API, `voice-turn/0.2`. The box sends one turn per utterance; the server answers
  * with what it heard, a short reply and at most one action. See docs/contracts.md and docs/voice.md.
  */
-export const VOICE_TURN_VERSION = "voice-turn/0.1";
+export const VOICE_TURN_VERSION = "voice-turn/0.2";
 
 /** A clip is 16 kHz mono 16-bit PCM WAV: 32 bytes per millisecond. */
 export const CLIP_SAMPLE_RATE = 16_000;
@@ -87,6 +87,7 @@ export const TurnResponseSchema = z.strictObject({
   action: ActionSchema.nullable(),
   answered_by: z.enum(["model", "fixed"]),
   reason: FixedReasonSchema.nullable(),
+  /** Present when Cartesia voiced `reply`; null means the Pi uses local speech for that same text. */
   speech: SpeechSchema.nullable(),
 });
 export type TurnResponse = z.infer<typeof TurnResponseSchema>;

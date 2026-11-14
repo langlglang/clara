@@ -2,7 +2,7 @@
 
 **Updated 2026-11-13 at the start of HackPrinceton.** This list supersedes older planning docs in this folder where they disagree (those were written before the event; see "What changed" at the end). Labels: **must** (the core loop), **should**, **stretch**.
 
-**ESP32 build status:** the current three-light board profile has been built and flashed with a Pi-compatible USB serial protocol. Pi hello, a fresh raw sensor result and null BPM with no finger are verified on the connected board. The owner visually verified all three physical LEDs with the integrated firmware after its lease-clock fix: top-left small, top-right medium and bottom large. The 22 stocked supply categories are mapped to those slots in `content/kits/clara-3slot-v1.json`; exact quantities, lots and expiry remain unverified. A steady on-finger BPM remains unverified; see [firmware](../firmware/README.md).
+**ESP32 build status:** the current three-light board profile has been built and flashed with a Pi-compatible USB serial protocol. Pi hello, a fresh raw sensor result and null BPM with no finger are verified on the connected board. The owner visually verified all three physical LEDs with the integrated firmware after its lease-clock fix: top-left small, top-right medium and bottom large. The 22 stocked supply categories are mapped to those slots in `content/kits/clara-3slot-v1.json`; exact quantities, lots and expiry remain unverified. The Pi and ESP32 were updated and reconnected on 2026-11-14. A steady on-finger BPM remains unverified; see [firmware](../firmware/README.md).
 
 ## The story
 
@@ -60,7 +60,7 @@ Someone opens the box → the mic becomes available without automatically contac
 27. **Demo implemented in code:** opted-in volunteers can receive a Twilio phone fallback after an unseen alert; call delivery still needs a deployed end-to-end check. This is separate from the optional team-owned simulated 911 briefing in #7.
 28. **Demo implemented:** deepagents response coordinator with responder-scout, logistics, and time-to-care specialists, subject to its configuration and tool limits. It is distinct from the proposed emergency caller and Core Clara task supervisor.
 29. ~~Driver fuel reimbursement through Nessie (Capital One prize)~~ — dropped, not targeting Capital One.
-30. CoStar kit-placement agent (only with a free person after a one-hour data check).
+30. **Demo implemented in code, live planner check pending:** the Admin app has a CoStar/Matterport/Vexcel kit-placement planner and network health view. Its data and planning APIs require `CLARA_ADMIN_TOKEN`; external source keys and a real building-data check are still needed for a useful live plan.
 31. Anti-theft: open chime, snapshot, wall-mount alert.
 32. Live video feed to EMS.
 

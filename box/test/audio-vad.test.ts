@@ -45,6 +45,19 @@ describe("Endpointer (docs/voice.md: 0.7 s silence, 0.3 s minimum, 15 s maximum)
     expect(endpointer.active).toBe(false);
   });
 
+  it("does not turn a sustained -25 dBFS room into a 15 s false clip", () => {
+    const activity: boolean[] = [];
+    const endpointer = new Endpointer({}, (active) => activity.push(active));
+    expect(feed(endpointer, flat(16_000, 1_843))).toHaveLength(0);
+    expect(endpointer.active).toBe(false);
+    expect(activity).toEqual([]);
+
+    expect(feed(endpointer, flat(600, 9_000))).toHaveLength(0);
+    expect(endpointer.active).toBe(true);
+    expect(feed(endpointer, flat(900, 1_843))).toHaveLength(1);
+    expect(activity).toEqual([true, false]);
+  });
+
   it("still catches speech that begins on the first mic frame", () => {
     expect(feed(new Endpointer(), signal([{ ms: 600, loud: true }, { ms: 900, loud: false }]))).toHaveLength(1);
   });

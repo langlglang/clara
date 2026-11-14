@@ -26,7 +26,7 @@ export interface EngineOptions {
   events: EventFactory;
   emit: (event: BoxEvent) => void;
   now?: () => number;
-  /** How long one light command lasts (the serial contract's maximum is 60 s; the session relights on repeat). */
+  /** How long one light command lasts (the installed firmware caps it at 30 s; repeat relights it). */
   lightMs?: number;
 }
 
@@ -47,7 +47,7 @@ export class ScenarioEngine {
   ) {
     this.byId = new Map(scenario.steps.map((step) => [step.step_id, step]));
     this.now = o.now ?? Date.now;
-    this.lightMs = Math.min(60_000, Math.max(0, o.lightMs ?? 60_000));
+    this.lightMs = Math.min(30_000, Math.max(0, o.lightMs ?? 30_000));
   }
 
   get started(): boolean {

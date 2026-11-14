@@ -156,6 +156,7 @@ describe("BoxSession lid", () => {
     expect(view.presentation).toMatchObject({ kind: "answer", body: "I'm Clara. I'm here to help." });
     expect(session.turnState()?.allowed_steps.map((s) => s.step_id)).toEqual(["s1"]);
     expect(session.applyAction({ name: "select_step", step_id: "s1" })).toBe(true);
+    await Promise.resolve();
     expect(session.view().step?.item).toMatchObject({ slot: "A1", lit: true });
     expect(session.view().step?.image_url).toBe("/content/images/test-one.png");
     expect(session.view().presentation).toMatchObject({ kind: "guidance", body: session.view().step?.text, image_url: session.view().step?.image_url });
@@ -337,7 +338,7 @@ describe("BoxSession pushes", () => {
 });
 
 describe("BoxSession actions", () => {
-  it("lights the verified physical slot and shows its matching layout for each requested supply", () => {
+  it("lights the verified physical slot and shows its matching layout for each requested supply", async () => {
     const board = new FakeBoard();
     const session = new BoxSession({
       boxId: "box-test", board, cloud: new FakeCloudLink(),
@@ -350,11 +351,46 @@ describe("BoxSession actions", () => {
     ] as const) {
       expect(session.applyAction({ name: "locate_item", sku })).toBe(true);
       expect(board.calls.at(-1)).toBe(`light ${channel}`);
+      await Promise.resolve();
       expect(session.view().presentation).toMatchObject({
         kind: "item", item: { sku, slot, lit: true },
         image_url: `/content/kits/layout-3slot-v1-${slot}.svg`,
       });
     }
+  });
+
+  it("shows an LED cue only after ACK and clears it when the firmware lease ends", async () => {
+    const { session, board, clock } = setup();
+    session.lidOpened();
+    expect(session.applyAction({ name: "locate_item", sku: "sku_a" })).toBe(true);
+    expect(session.view().presentation?.item?.lit).toBe(false);
+    await Promise.resolve();
+    expect(board.calls).toContain("light 0");
+    expect(session.view().presentation?.item?.lit).toBe(true);
+    clock.advance(30_000);
+    expect(session.view().presentation?.item?.lit).toBe(false);
+  });
+
+  it("does not claim a refused LED command lit the item", async () => {
+    const { session, board } = setup();
+    board.lightCompartment = async () => false;
+    session.lidOpened();
+    expect(session.applyAction({ name: "locate_item", sku: "sku_a" })).toBe(true);
+    await Promise.resolve();
+    expect(session.view().presentation?.item?.lit).toBe(false);
+  });
+
+  it("ignores an LED ACK that arrives after the lid closes", async () => {
+    const { session, board } = setup();
+    let acknowledge: (ok: boolean) => void = () => {};
+    board.lightCompartment = () => new Promise<boolean>((resolve) => { acknowledge = resolve; });
+    session.lidOpened();
+    expect(session.applyAction({ name: "locate_item", sku: "sku_a" })).toBe(true);
+    session.lidClosed();
+    acknowledge(true);
+    await Promise.resolve();
+    expect(session.view().lid_open).toBe(false);
+    expect(session.view().presentation).toBeNull();
   });
 
   it("plays Cartesia guidance once when the returned text matches local content", () => {
@@ -385,10 +421,11 @@ describe("BoxSession actions", () => {
     expect(speech.said).toEqual(["I couldn't verify that guidance. Please tell me again."]);
   });
 
-  it("shows an item request without starting a scenario step, then shows an answer", () => {
+  it("shows an item request without starting a scenario step, then shows an answer", async () => {
     const { session, board } = setup();
     session.lidOpened();
     expect(session.applyAction({ name: "locate_item", sku: "sku_a" })).toBe(true);
+    await Promise.resolve();
     expect(session.view().step).toBeNull();
     expect(session.view().presentation).toMatchObject({ kind: "item", title: "Test item A", body: "In the A1 compartment.", source_label: "Kit inventory", item: { slot: "A1", lit: true } });
     expect(board.calls).toContain("light 0");

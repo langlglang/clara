@@ -78,7 +78,7 @@ describe("ScenarioEngine", () => {
     const intents = engine.start("device");
     expect(engine.current?.step_id).toBe("s1");
     expect(types()).toEqual(["scenario.started", "step.shown"]);
-    expect(intents).toContainEqual({ kind: "light", sku: "sku_a", slot: "A1", channel: 0, ms: 60_000 });
+    expect(intents).toContainEqual({ kind: "light", sku: "sku_a", slot: "A1", channel: 0, ms: 30_000 });
     expect(events.every((e) => e.box_id === "box-test" && e.session_id !== null)).toBe(true);
   });
 

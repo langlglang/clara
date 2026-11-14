@@ -132,10 +132,11 @@ export class Endpointer {
   private frame(frame: Int16Array): Segment | null {
     const o = this.o;
     const level = dbfs(frame);
-    // The USB mic's room floor can be far above -60 dBFS. Seed from its first frame so room noise
-    // does not look like continuous speech; cap the seed so speech beginning immediately still starts.
+    // The USB mic's room floor can be far above -60 dBFS. Seed from its first frame so even a
+    // -25 dBFS steady room does not look like speech. The -32 dBFS cap still lets a loud first
+    // speech frame start immediately (after the usual consecutive-frame check).
     if (!this.noiseSampled) {
-      this.noiseDb = Math.min(level, -40);
+      this.noiseDb = Math.min(level, -32);
       this.noiseSampled = true;
     }
     const voiced = level > Math.max(this.noiseDb + o.marginDb, o.minLevelDb);

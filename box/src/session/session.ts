@@ -116,6 +116,8 @@ export class BoxSession {
   private pendingUsage: { sku: string; name: string; qty: number }[] | null = null;
   private recent: RecentTurn[] = [];
   private lit: { sku: string; slot: string } | null = null;
+  private lightEpoch = 0;
+  private lightExpiryCancel: Cancel | null = null;
   private missing: { sku: string; name: string | null } | null = null;
   private online: boolean;
   private revision = 0;
@@ -200,6 +202,7 @@ export class BoxSession {
   lidClosed(): void {
     if (!this.lidOpen) return;
     this.lidOpen = false;
+    this.clearLightCue();
     this.voiceStatus = "off";
     if (!this.active) {
       this.publish();
@@ -226,7 +229,6 @@ export class BoxSession {
     this.messages = [];
     this.pendingUsage = null;
     this.recent = [];
-    this.lit = null;
     this.missing = null;
     this.reportUrl = null;
     this.publish();
@@ -530,6 +532,7 @@ export class BoxSession {
     this.countdown = null;
     this.voice?.stop();
     this.o.speech?.stopAll();
+    this.clearLightCue();
   }
 
   // ---------- Pushes ----------
@@ -655,7 +658,8 @@ export class BoxSession {
     for (const intent of intents) {
       switch (intent.kind) {
         case "show":
-          this.lit = null;
+          this.clearLightCue();
+          if (!intent.step.item) this.board((b) => b.clearLights());
           this.missing = null;
           if (!intent.replay) this.notice = null;
           this.presentation = {
@@ -672,9 +676,9 @@ export class BoxSession {
           if (speakStep) this.speakStep(intent.step, wav);
           break;
         case "light":
-          this.lit = { sku: intent.sku, slot: intent.slot };
+          this.clearLightCue();
           this.missing = null;
-          this.board((b) => b.lightCompartment(intent.channel, intent.ms, "solid"));
+          this.requestLight(intent);
           break;
         case "item_missing":
           this.missing = { sku: intent.sku, name: intent.name };
@@ -682,7 +686,7 @@ export class BoxSession {
           this.o.speech?.say({ text: this.notice }).catch(() => {});
           break;
         case "clear_lights":
-          this.lit = null;
+          this.clearLightCue();
           this.board((b) => b.clearLights());
           break;
         case "start_timer":
@@ -693,6 +697,44 @@ export class BoxSession {
       }
     }
     this.publish();
+  }
+
+  private clearLightCue(): void {
+    this.lightEpoch += 1;
+    this.lightExpiryCancel?.();
+    this.lightExpiryCancel = null;
+    this.lit = null;
+  }
+
+  private requestLight(intent: Extract<StepIntent, { kind: "light" }>): void {
+    const board = this.o.board;
+    if (!board || !this.lidOpen) return;
+    const epoch = this.lightEpoch;
+    const leaseMs = Math.min(intent.ms, 30_000);
+    const expiresAt = this.clock.monotonic() + leaseMs;
+    let command: Promise<boolean>;
+    try {
+      command = board.lightCompartment(intent.channel, leaseMs, "solid");
+    } catch (error) {
+      this.log(`board: ${(error as Error)?.message ?? "failed"}`);
+      return;
+    }
+    void command.then((ack) => {
+      if (epoch !== this.lightEpoch || !this.lidOpen) return;
+      const remaining = expiresAt - this.clock.monotonic();
+      if (!ack || remaining <= 0) {
+        if (!ack) this.log(`board: LED ${intent.channel} refused`);
+        return;
+      }
+      this.lit = { sku: intent.sku, slot: intent.slot };
+      this.lightExpiryCancel = this.clock.setTimeout(() => {
+        if (epoch !== this.lightEpoch) return;
+        this.lit = null;
+        this.lightExpiryCancel = null;
+        this.publish();
+      }, remaining);
+      this.publish();
+    }).catch((error: unknown) => this.log(`board: ${(error as Error)?.message ?? "failed"}`));
   }
 
   private speakStep(step: { text: string; audio?: Record<string, string> | undefined }, wav?: Buffer): void {

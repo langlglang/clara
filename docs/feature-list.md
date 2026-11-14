@@ -10,7 +10,7 @@ Clara is a network of AI-assisted first-aid boxes for places where professional 
 
 ## Current interaction direction (2026-11-13)
 
-**Demo implemented:** the Pi receives the ESP32 lid event; the lid opens a voice session, and a final utterance requests a cloud turn. Closing the lid stops voice. The local screen can render answer, question, item-location, and versioned-guidance cards; item light and mock SOS are implemented. The screen exposes visuals, status, and simulated SOS, with no step navigation or Talk button. The linked Pi deployment needs verification after this change.
+**Demo implemented:** the Pi receives the ESP32 lid event; the lid opens a voice session, and a final utterance requests a cloud turn. Closing the lid stops voice. The local screen can render answer, question, item-location, and versioned-guidance cards; item light and mock SOS are implemented. The screen exposes visuals, status, and simulated SOS, with no step navigation or Talk button. **Demo verified on Pi:** commit `f83cc43` runs with active box/kiosk services, ESP32 hello, GPS serial connection, and an 800 × 480 idle screen showing MIC OFF and SOS. A live lid-open conversation and generated card on the physical screen remain unverified.
 
 **Proposed:** Core Clara is one continuous user-facing conversation while the lid is open. It invokes tools and launches background emergency, responder, handoff, and evidence jobs only after real triggers. The screen shows whichever approved visual helps the current request, not a required sequence of steps. Generated diagrams, reading and handoff cards, synchronized speech segments, and background agents are not yet implemented; see [conversation runtime](conversation-runtime.md).
 
@@ -64,7 +64,7 @@ Someone opens the box → the mic becomes available without automatically contac
 
 **Brainstormed favorites, not yet committed:** hackathon mini study (tourniquet with vs without Clara), CPR coach with LED rhythm, tourniquet timer, QR triage tags, training mode, continue-on-your-phone QR, "is anyone here a doctor or nurse?" announcement, walking blood bank, emergency childbirth guide, simulated village on the dashboard.
 
-**Deferred:** local offline AI and LoRa. Privacy controls remain required for any consented media or health-data handling. **Demo implemented:** a USB u-blox 7 GNSS receiver is attached to the Pi and a local parser accepts fresh, valid NMEA RMC fixes for mock SOS coaching. If no valid fix is available, it shows `Configured box address: 1455 California Ave`. No location is sent to cloud or volunteers by that path. A live GPS fix on this exact installed receiver still needs an outdoor verification run.
+**Deferred:** local offline AI and LoRa. Privacy controls remain required for any consented media or health-data handling. **Demo implemented:** a USB u-blox 7 GNSS receiver is attached to the Pi and a local parser accepts fresh, valid NMEA RMC fixes for mock SOS coaching. If no valid fix is available, it shows `Configured box address: 1455 California Ave`. No location is sent to cloud or volunteers by that path. **Demo verified on Pi:** the receiver emitted a valid RMC/GGA fix and the deployed service connected to its USB port. End-to-end mock SOS location presentation remains unverified.
 
 ## Tech stack
 - **TypeScript everywhere** (Node 24), npm workspaces.

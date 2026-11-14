@@ -82,6 +82,7 @@ export function createKeywordStubModel(): ReplyModel {
         guided_scenarios?: { scenario_id: string; label: string }[];
         guided_active?: boolean;
         pulse_available?: boolean;
+        location_available?: boolean;
         camera_available?: boolean;
         pending_camera_consent?: string | null;
       };
@@ -99,6 +100,7 @@ export function createKeywordStubModel(): ReplyModel {
         ? turn.available_visuals?.find((v) => (v.visual_id !== "minor_cut_rinse_cover" || minorCutVisualAllowed(said)) && [...tokens(v.label)].some((w) => heard.has(w)))
         : undefined;
       const pulse = turn.pulse_available && /\b(pulse|heart rate|bpm)\b/i.test(said) && /\b(read|measure|check|what|show|get)\b/i.test(said);
+      const location = turn.location_available && /\b(?:where (?:are we|am i|is (?:this|the) box)|(?:what(?:'s| is) (?:our|the box(?:'s)?) (?:location|address)))\b/i.test(said);
       const camera = turn.camera_available && /\b(camera|photo|picture|look at|see this)\b/i.test(said) && /\b(show|look|see|inspect|check|take|use|photo|picture)\b/i.test(said);
       const guide = turn.guided_scenarios?.find((g) => g.scenario_id === "minor_cut" && /\b(small|minor|superficial|shallow)\b/i.test(said) && /\b(cut|scrape)\b/i.test(said))
         ?? turn.guided_scenarios?.find((g) => g.scenario_id === "arm_gash" && /\b(arm|forearm)\b/i.test(said) && /\b(gash|cut|wound|bleeding)\b/i.test(said));
@@ -121,6 +123,8 @@ export function createKeywordStubModel(): ReplyModel {
         ? { name: "suggest_sos" }
         : pulse
           ? { name: "read_pulse" }
+        : location
+          ? { name: "read_location" }
         : camera
           ? { name: "request_camera" }
         : item

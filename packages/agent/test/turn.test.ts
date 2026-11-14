@@ -178,6 +178,7 @@ describe("handleTurn", () => {
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.6" }).success).toBe(false);
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.7" }).success).toBe(false);
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.8" }).success).toBe(false);
+    expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.9" }).success).toBe(false);
   });
 
   it("refuses selected guidance missing from the server bundle", async () => {
@@ -324,6 +325,7 @@ describe("createClaraAgent", () => {
     const stub = createClaraAgent({ CLARA_MODEL: "stub" }, { guidance: (_scenarioId, stepId) => stepId === "pressure" ? "Checked demo guidance text." : null });
     expect(await stub.handleTurn(textRequest("press on the bleeding"))).toMatchObject({ action: { name: "select_step", step_id: "pressure" } });
     expect(stub.describe).not.toMatch(/sk-/);
+    expect(await stub.handleTurn(textRequest("Where are we?", { state: { ...state, location_available: true } }))).toMatchObject({ action: { name: "read_location" }, reply: "" });
   });
 
   it("uses Haiku with an Opus backup by default", () => {

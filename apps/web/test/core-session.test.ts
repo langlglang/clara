@@ -73,4 +73,18 @@ describe("Core Clara session context", () => {
     expect(book.prepare(box_id, request()).state.core_context?.actions.map((action) => action.name)).toEqual(["suggest_sos", "read_pulse", "locate_item"]);
     emergency.stop();
   });
+
+  it("records a requested location lookup without storing coordinates or an address", () => {
+    const network = createNetwork();
+    const emergency = createEmergencyWorker({ network, emit: () => {} });
+    const book = createCoreSessionBook(network, emergency, () => Date.parse(at));
+    const turn = { ...request(), state: { ...state, location_available: true } };
+    const prepared = book.prepare(box_id, turn);
+    book.finish(box_id, prepared, { schema_version: VOICE_TURN_VERSION, client_turn_id: turn.client_turn_id,
+      heard: "Where is this box?", reply: "", action: { name: "read_location" }, answered_by: "model", reason: null, speech: null });
+    expect(book.prepare(box_id, request()).state.core_context?.actions).toEqual([
+      { name: "read_location", id: null, status: "requested", at },
+    ]);
+    emergency.stop();
+  });
 });

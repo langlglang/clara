@@ -50,7 +50,7 @@ export function parseReply(text: string, state: TurnState): ModelReply {
   if (reply.action?.name === "launch_tasks") return { ...reply, reply: "" };
   if (reply.action?.name === "show_visual") return { ...reply, reply: "" };
   if (reply.action?.name === "assess_patient") return { ...reply, reply: "" };
-  if (reply.action?.name === "read_pulse" || reply.action?.name === "request_camera" || reply.action?.name === "capture_camera") return { ...reply, reply: "" };
+  if (reply.action?.name === "read_pulse" || reply.action?.name === "read_location" || reply.action?.name === "request_camera" || reply.action?.name === "capture_camera") return { ...reply, reply: "" };
   if (!reply.reply && reply.action?.name !== "ask_clarifying" && reply.action?.name !== "answer_emergency_question") {
     throw new RejectedReply("invalid_reply", "Server note: write a short reply, or choose an action that uses fixed wording.");
   }

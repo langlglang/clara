@@ -466,6 +466,34 @@ describe("BoxSession lid", () => {
 });
 
 describe("BoxSession SOS", () => {
+  it("offers box location on demand and speaks the configured address without a GPS claim", () => {
+    const address = "Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544";
+    const { session, speech } = setup(undefined, { configuredAddress: address });
+    session.lidOpened();
+    expect(session.turnState()?.location_available).toBe(true);
+    expect(session.applyAction({ name: "read_location" })).toBe(true);
+    expect(speech.said.at(-1)).toBe(`Box location: ${address}.`);
+    expect(session.turnState()?.recent_turns.at(-1)).toMatchObject({ from: "clara", words: `Box location: ${address}.` });
+    expect(session.view().presentation?.body).toBe(`Box location: ${address}.`);
+    expect(session.view().presentation?.body).not.toMatch(/fallback|GPS/i);
+  });
+
+  it("does not offer an unusable address or invent a location after a GPS fix disappears", () => {
+    const invalid = setup(undefined, { configuredAddress: "x".repeat(201) }).session;
+    invalid.lidOpened();
+    expect(invalid.turnState()?.location_available).toBe(false);
+    expect(invalid.applyAction({ name: "read_location" })).toBe(false);
+
+    let fix: ReturnType<NonNullable<BoxSessionOptions["location"]>["current"]> =
+      { latitude: 40.35, longitude: -74.65, observedAt: Date.now(), accuracyM: null };
+    const { session, speech } = setup(undefined, { location: { current: () => fix } });
+    session.lidOpened();
+    expect(session.turnState()?.location_available).toBe(true);
+    fix = null;
+    expect(session.applyAction({ name: "read_location" })).toBe(false);
+    expect(speech.said).not.toContainEqual(expect.stringContaining("Box location:"));
+  });
+
   it("sends a recent GPS fix and the address with the SOS, so the call can say where it is right away", () => {
     let fixAt = 0;
     const { session, cloud, clock } = setup(undefined, {

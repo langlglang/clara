@@ -25,13 +25,14 @@ export function allowedOptions(state: TurnState) {
     triage: state.triage_available,
     pendingEmergencyQuestion: state.pending_emergency_question,
     pulseAvailable: state.pulse_available === true,
+    locationAvailable: state.location_available === true,
     cameraAvailable: state.camera_available === true,
     nearbyKits: state.nearby_kits_available === true,
   };
 }
 
 export function replyJsonSchema(state: TurnState): Record<string, unknown> {
-  const { stepIds, questionIds, skus, visualIds, guideIds, triage, pendingEmergencyQuestion, pulseAvailable, cameraAvailable, nearbyKits } = allowedOptions(state);
+  const { stepIds, questionIds, skus, visualIds, guideIds, triage, pendingEmergencyQuestion, pulseAvailable, locationAvailable, cameraAvailable, nearbyKits } = allowedOptions(state);
   const variants: Record<string, unknown>[] = [{ type: "null" }];
   const obj = (name: string, props: Record<string, unknown> = {}) => ({
     type: "object",
@@ -47,6 +48,7 @@ export function replyJsonSchema(state: TurnState): Record<string, unknown> {
   }
   if (visualIds.length > 0) variants.push(obj("show_visual", { visual_id: { type: "string", enum: visualIds } }));
   if (pulseAvailable) variants.push(obj("read_pulse"));
+  if (locationAvailable) variants.push(obj("read_location"));
   if (cameraAvailable) variants.push(obj("request_camera"));
   if (triage) variants.push(obj("start_triage"), obj("assess_patient", { observations: { type: "object", additionalProperties: false, required: ["patient", "walks", "breathing", "breathes_after_airway", "breathing_over_30", "circulation_ok", "follows_commands"], properties: { patient: { type: "integer" }, walks: { type: ["boolean", "null"] }, breathing: { type: ["boolean", "null"] }, breathes_after_airway: { type: ["boolean", "null"] }, breathing_over_30: { type: ["boolean", "null"] }, circulation_ok: { type: ["boolean", "null"] }, follows_commands: { type: ["boolean", "null"] } } } }));
   if (pendingEmergencyQuestion) variants.push(obj("answer_emergency_question", { task_id: { type: "string", enum: [pendingEmergencyQuestion.task_id] }, question_id: { type: "string", enum: [pendingEmergencyQuestion.question_id] } }));
@@ -83,7 +85,7 @@ export function replyZodSchema(state: TurnState) {
     reply: z.string().transform(tidy).pipe(z.string().max(MAX_REPLY)),
     action: z.null(),
   });
-  const { stepIds, questionIds, skus, visualIds, guideIds, triage, pendingEmergencyQuestion, pulseAvailable, cameraAvailable, nearbyKits } = allowedOptions(state);
+  const { stepIds, questionIds, skus, visualIds, guideIds, triage, pendingEmergencyQuestion, pulseAvailable, locationAvailable, cameraAvailable, nearbyKits } = allowedOptions(state);
   const variants: z.ZodType[] = [];
   if (stepIds.length > 0) variants.push(z.strictObject({ name: z.literal("select_step"), step_id: oneOf(stepIds) }));
   if (guideIds.length > 0) variants.push(z.strictObject({ name: z.literal("start_guidance"), scenario_id: oneOf(guideIds) }));
@@ -93,6 +95,7 @@ export function replyZodSchema(state: TurnState) {
   }
   if (visualIds.length > 0) variants.push(z.strictObject({ name: z.literal("show_visual"), visual_id: oneOf(visualIds) }));
   if (pulseAvailable) variants.push(z.strictObject({ name: z.literal("read_pulse") }));
+  if (locationAvailable) variants.push(z.strictObject({ name: z.literal("read_location") }));
   if (cameraAvailable) variants.push(z.strictObject({ name: z.literal("request_camera") }));
   if (triage) variants.push(z.strictObject({ name: z.literal("start_triage") }), z.strictObject({ name: z.literal("assess_patient"), observations: TriageObservationsSchema }));
   if (pendingEmergencyQuestion) variants.push(z.strictObject({ name: z.literal("answer_emergency_question"), task_id: z.literal(pendingEmergencyQuestion.task_id), question_id: z.literal(pendingEmergencyQuestion.question_id) }));

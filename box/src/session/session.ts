@@ -575,6 +575,7 @@ export class BoxSession {
   /** The state a voice turn offers the model, or null outside a session. */
   turnState(): TurnState | null {
     if (!this.active || !this.lidOpen) return null;
+    const address = this.o.configuredAddress?.trim();
     const guides = this.scenarios.flatMap((scenario) => {
       if (!scenario.guided || scenario.scenario_id === this.engine.scenario.scenario_id) return [];
       const first = scenario.steps.find((step) => step.step_id === scenario.start);
@@ -585,6 +586,7 @@ export class BoxSession {
       guided_active: this.engine.scenario.guided === true && this.engine.started,
       guided_scenarios: this.lang === "en" && !this.sos ? guides.slice(0, 12) : [],
       pulse_available: Boolean(this.o.pulseReader),
+      location_available: Boolean(this.o.location?.current() || (address && address.length <= 200)),
       ...(this.sos && !this.sos.nearbyAsked ? { nearby_kits_available: true as const } : {}),
       camera_available: Boolean(this.o.camera && this.o.cloud.inspectCamera && this.o.cameraCloudEnabled),
       // Visual captions are English and checked word for word, so other languages don't offer them yet.
@@ -700,6 +702,20 @@ export class BoxSession {
         if (!this.o.pulseReader || !this.sessionId) return false;
         this.startPulseTask(this.sessionId);
         return true;
+      case "read_location": {
+        const fix = this.o.location?.current() ?? null;
+        const address = this.o.configuredAddress?.trim();
+        const known = address && address.length <= 200 ? address : null;
+        const location = fix
+          ? `${fix.latitude.toFixed(5)}, ${fix.longitude.toFixed(5)}`
+          : known;
+        if (!location) return false;
+        this.log(`location requested: ${fix ? "gps_fix" : "configured_address"}`);
+        const text = `Box location: ${location}.`;
+        this.remember("clara", text);
+        this.say(text);
+        return true;
+      }
       case "request_camera": {
         const report = response ? this.heardByTurn.get(response.client_turn_id) : null;
         if (!this.o.camera || !this.sessionId || !report || report.sessionId !== this.sessionId || !response ||

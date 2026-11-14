@@ -24,6 +24,12 @@ describe("replyJsonSchema", () => {
     expect(replyZodSchema(offered).safeParse({ transcript: "show me", reply: "", action: { name: "show_visual", visual_id: "https://example.com/evil.svg" } }).success).toBe(false);
     expect(named("show_visual")).toBeUndefined();
   });
+  it("offers a location lookup only when the box has a location source", () => {
+    expect(named("read_location")).toBeUndefined();
+    const offered = { ...state, location_available: true };
+    expect(named("read_location", offered)).toBeDefined();
+    expect(replyZodSchema(offered).safeParse({ transcript: "Where are we?", reply: "", action: { name: "read_location" } }).success).toBe(true);
+  });
 
   it("offers a single camera action without a second confirmation turn", () => {
     const camera = { ...state, camera_available: true, pending_camera_consent: "cloud_interpretation" as const };

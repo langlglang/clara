@@ -224,6 +224,7 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   if (action?.name === "request_nearby_kits") reply = lines.nearbyKits;
   if (action?.name === "assess_patient") reply = triageLine(action.observations);
   if (action?.name === "read_pulse") reply = lines.readPulse;
+  if (action?.name === "read_location") reply = "";
   if (action?.name === "request_camera") reply = lines.requestCamera;
   if (action?.name === "capture_camera") reply = lines.captureCamera;
   const response: TurnResponse = {

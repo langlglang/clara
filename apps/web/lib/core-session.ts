@@ -63,7 +63,7 @@ export function createCoreSessionBook(network: Network, emergency: EmergencyWork
       if (action && actionAllowed(action, request.state)) {
         const launched = action.name === "launch_tasks" ? [...action.background, ...(action.presentation ? [action.presentation] : [])] : [action];
         for (const task of launched) {
-          if (!["locate_item", "show_visual", "suggest_sos", "read_pulse", "request_camera", "capture_camera"].includes(task.name)) continue;
+          if (!["locate_item", "show_visual", "suggest_sos", "read_pulse", "read_location", "request_camera", "capture_camera"].includes(task.name)) continue;
           const id = task.name === "locate_item" ? task.sku : task.name === "show_visual" ? task.visual_id : null;
           session.actions.push({ name: task.name as ActionRecord["name"], id, status: "requested", at: new Date(now()).toISOString() });
         }

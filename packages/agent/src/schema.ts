@@ -60,7 +60,7 @@ export function replyJsonSchema(state: TurnState): Record<string, unknown> {
       transcript: { type: "string", description: "A copy of person_words." },
       reply: {
         type: "string",
-        description: `What Clara says aloud: at most two short sentences, under ${MAX_REPLY - 50} characters. Empty with select_step.`,
+        description: `What Clara says aloud: usually one sentence of about twenty words or less, under ${MAX_REPLY - 50} characters. Empty with select_step.`,
       },
       action: state.camera_answer_pending ? { type: "null" } : { anyOf: variants, description: "At most one action, chosen only from the options offered." },
     },

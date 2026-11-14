@@ -53,6 +53,19 @@ describe("handleTurn", () => {
     expect(await handleTurn(textRequest("Where is the water?", { state: active }), nextDeps)).toMatchObject({ action: null, reason: "invalid_reply" });
     expect(await handleTurn(textRequest("Got it", { state: active }), nextDeps)).toMatchObject({ action: { name: "select_step", step_id: "rinse" }, reply: "Rinse with water." });
   });
+  it("advances an unambiguous guide acknowledgement without waiting for the model", async () => {
+    const active = { ...state, scenario_id: "arm_gash", step_id: "arm_gauze", guided_active: true,
+      allowed_steps: [{ step_id: "arm_gauze", label: "Find gauze" }, { step_id: "arm_pressure", label: "Apply pressure" }] };
+    const assistant: Assistant = { reply: async () => { throw new Error("model should not run"); } };
+    const deps = { assistant, ears: null, voice: null,
+      guidance: (_scenarioId: string, stepId: string) => stepId === "arm_pressure" ? "Put the gauze on the wound." : null };
+    expect(await handleTurn(textRequest("Got it", { state: active }), deps)).toMatchObject({
+      action: { name: "select_step", step_id: "arm_pressure" }, reply: "Put the gauze on the wound.", heard: "Got it",
+    });
+    expect(await handleTurn(textRequest("Got it, but it is still bleeding", { state: active }), deps)).toMatchObject({
+      answered_by: "fixed", reason: "model_error", action: null,
+    });
+  });
   it("voices a catalog caption instead of model-authored visual instructions", async () => {
     const v = voice();
     const offered = { ...state, available_visuals: [{ visual_id: "kit_overview", label: "Clara kit layout" }] };

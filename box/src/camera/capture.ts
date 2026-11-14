@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync } from "node:fs";
+import sharp from "sharp";
 
 export type CameraPurpose = "inspect_scene" | "cloud_interpretation";
 export interface CameraFrame {
@@ -14,6 +15,10 @@ export interface CameraFrame {
 type Capture = (signal: AbortSignal) => Promise<Buffer | null>;
 const CONSENT_MS = 60_000;
 const MAX_JPEG_BYTES = 1_500_000;
+/** The installed USB camera is mounted upside down. Rotate pixels before preview or upload. */
+export async function orientCameraJpeg(jpeg: Buffer): Promise<Buffer> {
+  return sharp(jpeg, { limitInputPixels: 640 * 480 }).rotate(180).jpeg({ quality: 85 }).toBuffer();
+}
 const CAMERA_PROMPTS: Record<CameraPurpose, string> = {
   inspect_scene: "May I take one photo with the camera and show it on this screen? The photo stays on this box. Say 'Yes, use the camera' if you agree.",
   cloud_interpretation: "May I take one photo and send it to Clara's cloud to help describe what it shows? Say 'Yes, send the photo' if you agree.",
@@ -55,14 +60,27 @@ export function captureUsbJpeg(device: string, signal: AbortSignal): Promise<Buf
       chunks.push(part);
     });
     child.on("error", () => finish(null));
-    child.on("close", (code) => {
+    child.on("close", async (code) => {
       const jpeg = code === 0 ? Buffer.concat(chunks) : null;
       const end = jpeg?.lastIndexOf(Buffer.from([0xff, 0xd9])) ?? -1;
       // This camera appends one zero pad byte after JPEG EOI.
       const valid = jpeg && jpeg.length >= 4 && jpeg[0] === 0xff && jpeg[1] === 0xd8 &&
         end >= 2 && jpeg.length - end - 2 <= 16 && jpeg.subarray(end + 2).every((byte) => byte === 0);
-      if (!valid) jpeg?.fill(0);
-      finish(valid ? jpeg.subarray(0, end + 2) : null);
+      if (!valid || signal.aborted) {
+        jpeg?.fill(0);
+        return finish(null);
+      }
+      try {
+        const oriented = await orientCameraJpeg(jpeg.subarray(0, end + 2));
+        if (signal.aborted || oriented.length > MAX_JPEG_BYTES) {
+          oriented.fill(0);
+          finish(null);
+        } else finish(oriented);
+      } catch {
+        finish(null);
+      } finally {
+        jpeg.fill(0);
+      }
     });
   });
 }

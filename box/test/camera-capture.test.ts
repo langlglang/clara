@@ -1,9 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { CameraCapture } from "../src/camera/capture.js";
+import sharp from "sharp";
+import { CameraCapture, orientCameraJpeg } from "../src/camera/capture.js";
 
 const frame = () => Buffer.from([0xff, 0xd8, 1, 2, 0xff, 0xd9]);
 
 describe("CameraCapture", () => {
+  it("rotates the camera pixels 180 degrees before processing", async () => {
+    const width = 40;
+    const pixels = Buffer.alloc(width * width * 3);
+    for (let y = 0; y < width; y++) for (let x = 0; x < width; x++) {
+      const at = (y * width + x) * 3;
+      pixels[at] = x < 20 && y < 20 ? 255 : 0;
+      pixels[at + 1] = x >= 20 && y >= 20 ? 255 : 0;
+    }
+    const input = await sharp(pixels, { raw: { width, height: width, channels: 3 } }).jpeg({ quality: 100 }).toBuffer();
+    const output = await orientCameraJpeg(input);
+    const raw = await sharp(output).raw().toBuffer();
+    const topLeft = raw.subarray((5 * width + 5) * 3, (5 * width + 5) * 3 + 3);
+    const bottomRight = raw.subarray((35 * width + 35) * 3, (35 * width + 35) * 3 + 3);
+    expect(topLeft[1]).toBeGreaterThan(200);
+    expect(bottomRight[0]).toBeGreaterThan(200);
+  });
   it("requires an explicit reply to a pending per-session question and consumes consent once", async () => {
     let session: string | null = "s1";
     let captures = 0;

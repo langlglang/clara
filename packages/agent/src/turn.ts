@@ -142,6 +142,21 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
       : "I couldn't inspect that photo. Please tell me what you see.");
   }
 
+  // A short acknowledgement in a guide with exactly one offered next panel needs no model decision.
+  // This avoids spending the model deadline on "Got it" while preserving model judgement for questions,
+  // interruptions, and branching guides. Both the server and Pi still validate the action and text.
+  const nextSteps = request.state.allowed_steps.filter((step) => step.step_id !== request.state.step_id);
+  if (request.state.guided_active && request.state.scenario_id && nextSteps.length === 1 &&
+    /^(?:got it|done|finished|ready|found it|have it|i have it)[.! ]*$/i.test(words)) {
+    const action = { name: "select_step", step_id: nextSteps[0]!.step_id } as const;
+    const reply = deps.guidance?.(request.state.scenario_id, action.step_id, request.language);
+    if (reply && actionAllowed(action, request.state) && guidedAdvanceAllowed(words)) {
+      const response: TurnResponse = { ...base, heard: words, reply, action, answered_by: "fixed", reason: null, speech: await say(reply) };
+      log(response);
+      return response;
+    }
+  }
+
   // 2. The reply.
   if (!deps.assistant) return fixed("no_model", words);
   const modelLimit = left() - (deps.voiceReserveMs ?? VOICE_RESERVE_MS);

@@ -2,6 +2,7 @@ import type { Incident } from "@clara/contracts";
 import type { Network, NetworkChange } from "@clara/network";
 import { createToolLayer, type IncidentState, type ToolLayer } from "./tools.js";
 import { rulesRunner } from "./rules.js";
+import type { CareThreshold, Need } from "./care.js";
 import type { Runner } from "./runner.js";
 import type { AgentName, CoordinatorChange, CoordinatorEnv, CoordinatorLog, CoordinatorMode, Logger, RidesAdapter } from "./types.js";
 
@@ -17,6 +18,10 @@ export const CHECK_MS = 1_000;
 export interface CoordinatorOptions {
   network: Network;
   rides?: RidesAdapter;
+  /** Demo time-to-care threshold per need (the scenario's care block); DEFAULT_CARE otherwise. */
+  careFor?: (need: Need) => CareThreshold | undefined;
+  /** CLARA_AMBULANCE_ETA_MIN (simulated 911 call): minutes from SOS to the scene; null when not set. */
+  ambulanceEtaMin?: number | null;
   /** A chat model instance or model name for the deep agent (default CLARA_COORDINATOR_MODEL or claude-opus-5-5). */
   model?: unknown;
   clock?: () => Date;
@@ -118,7 +123,7 @@ export function createCoordinator(options: CoordinatorOptions): Coordinator {
       const at = clock().toISOString();
       slot = {
         state: {
-          log: { incident_id: incident.incident_id, mode, label: LABEL[mode], model: modelName, status: "idle", stopped_reason: null, plan: [], actions: [], notes: [], flags: [], subagents: [], memory: [], runs: [], extra_alerts: 0, updated_at: at },
+          log: { incident_id: incident.incident_id, mode, label: LABEL[mode], model: modelName, status: "idle", stopped_reason: null, plan: [], actions: [], notes: [], flags: [], subagents: [], memory: [], runs: [], extra_alerts: 0, time_to_care: null, ride_request: null, updated_at: at },
           kitRequests: new Set(),
           rideProposals: [],
         },
@@ -181,16 +186,18 @@ export function createCoordinator(options: CoordinatorOptions): Coordinator {
 
     const controller = new AbortController();
     const changed = () => emit(incidentId, slot);
-    const layer = createToolLayer({ network, rides: options.rides, incidentId, state: slot.state, run, signal: controller.signal, clock, changed });
+    const layer = createToolLayer({ network, rides: options.rides, careFor: options.careFor, ambulanceEtaMin: options.ambulanceEtaMin ?? null, incidentId, state: slot.state, run, signal: controller.signal, clock, changed });
     const toolsFor = (agent: AgentName): ToolLayer => ({
       get_incident: () => layer.get_incident(agent),
       list_candidates: () => layer.list_candidates(agent),
       get_nearby_kits: () => layer.get_nearby_kits(agent),
       get_rides: () => layer.get_rides(agent),
       get_site_overview: () => layer.get_site_overview(agent),
+      estimate_time_to_care: () => layer.estimate_time_to_care(agent),
       alert_volunteers: (a) => layer.alert_volunteers(a, agent),
       request_kit: (a) => layer.request_kit(a, agent),
       propose_ride: (a) => layer.propose_ride(a, agent),
+      request_ride: (a) => layer.request_ride(a, agent),
       post_dispatch_note: (a) => layer.post_dispatch_note(a, agent),
       flag_for_dispatcher: (a) => layer.flag_for_dispatcher(a, agent),
     });
@@ -290,9 +297,21 @@ export function createCoordinator(options: CoordinatorOptions): Coordinator {
     }
   }
 
+  /** An SOS (re)opened or a tourniquet went on: time to care changes, so plan again. */
+  function onEvent(event: Extract<NetworkChange, { kind: "event" }>["event"]) {
+    const reason = event.type === "sos.opened" ? "SOS opened" : event.type === "timer.started" && event.timer === "tourniquet" ? "tourniquet on" : null;
+    if (!reason) return;
+    const entry = network.store.openIncidentForBox(event.box_id);
+    if (!entry || entry.incident.closed !== null) return;
+    const known = slots.has(entry.incident.incident_id);
+    const slot = slotFor(entry.incident);
+    schedule(entry.incident.incident_id, slot, known ? reason : "incident opened");
+  }
+
   const off = mode === "off" ? () => undefined : network.subscribe((change: NetworkChange) => {
-    if (change.kind !== "incident") return;
     try {
+      if (change.kind === "event") return onEvent(change.event);
+      if (change.kind !== "incident") return;
       onIncident(change.incident);
     } catch (error) {
       log(`[coordinator] change handling failed: ${error instanceof Error ? error.message : String(error)}`);

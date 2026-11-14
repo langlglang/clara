@@ -13,6 +13,11 @@ export type Skill = z.infer<typeof SkillSchema>;
 export const LatLngSchema = z.strictObject({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) });
 export type LatLng = z.infer<typeof LatLngSchema>;
 
+const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM");
+/** Quiet hours, e.g. 22:00 to 07:00 in the volunteer's own time zone (IANA name). */
+export const QuietHoursSchema = z.strictObject({ start: HHMM, end: HHMM, tz: z.string().min(1).max(64) });
+export type QuietHours = z.infer<typeof QuietHoursSchema>;
+
 export const VolunteerSchema = z.strictObject({
   volunteer_id: Id,
   name: z.string().trim().min(1).max(60),
@@ -25,6 +30,18 @@ export const VolunteerSchema = z.strictObject({
   /** How to reach them besides the app. */
   channel: z.enum(["app", "whatsapp", "imessage", "sms"]),
   phone: z.string().max(20).optional(),
+  /** Alert me only for emergencies within this distance (km). Absent: the network's default radius. */
+  alert_radius_km: z.number().min(0.5).max(10).optional(),
+  /** They agreed to a phone call when an app alert goes unseen. Absent means no. */
+  call_consent: z.boolean().optional(),
+  /** Hours when Clara doesn't buzz or call them (alerts still show in the app). Times are HH:MM in `tz`. */
+  quiet_hours: QuietHoursSchema.optional(),
+  /** Drivers: the vehicle can take someone lying down (seats folded, van floor). Self-reported. */
+  carries_lying_down: z.boolean().optional(),
+  /** Drivers: the vehicle can take a wheelchair. Self-reported. */
+  carries_wheelchair: z.boolean().optional(),
+  /** Free text such as "usually home evenings"; shown to dispatch, never used to promise anything. */
+  usual_availability: z.string().trim().max(80).optional(),
 });
 export type Volunteer = z.infer<typeof VolunteerSchema>;
 

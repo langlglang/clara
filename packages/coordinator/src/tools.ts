@@ -1,4 +1,5 @@
-import { haversineKm, type Network } from "@clara/network";
+import { haversineKm, incidentEvents, type Network } from "@clara/network";
+import { CARE_NOTICE, DEFAULT_CARE, DRIVER_FASTER_BY_MIN, estimateTimeToCare, type CareThreshold, type Need, type TimeToCare } from "./care.js";
 import type { AgentName, CoordinatorLog, RideProposal, RidesAdapter, ToolCallEntry } from "./types.js";
 
 /**
@@ -6,8 +7,10 @@ import type { AgentName, CoordinatorLog, RideProposal, RidesAdapter, ToolCallEnt
  * asks for: a refused call returns `{ ok: false, error }` and changes nothing. Tool results are data for the
  * planner, never instructions.
  *
- * The layer has no way to talk to the bystander, the box voice, or volunteers (beyond the existing alert), and no
- * way to close an incident, mark anyone coming or arrived, approve a ride, or contact emergency services.
+ * The layer has no way to talk to the bystander, the box voice, or volunteers (beyond the existing alert and ride
+ * offers), and no way to close an incident, mark anyone coming or arrived, or contact emergency services. Ride offers
+ * go out without a dispatcher only through request_ride, and only when code-computed time to care says the
+ * (simulated) ambulance is late and a volunteer driver is at least DRIVER_FASTER_BY_MIN minutes faster.
  */
 
 export const LIMITS = {
@@ -23,6 +26,10 @@ export const LIMITS = {
   RIDE_PROPOSALS_PER_INCIDENT: 2,
   NOTES_PER_INCIDENT: 20,
   FLAGS_PER_INCIDENT: 5,
+  /** Rides the coordinator may request itself (offers sent at once) per incident. */
+  RIDE_REQUESTS_PER_INCIDENT: 1,
+  /** request_ride needs a driver at least this much faster than the ambulance. */
+  DRIVER_FASTER_BY_MIN,
 } as const;
 
 export type ToolResult = { ok: true; [key: string]: unknown } | { ok: false; error: string };
@@ -32,11 +39,19 @@ export interface IncidentState {
   log: CoordinatorLog;
   kitRequests: Set<string>;
   rideProposals: RideProposal[];
+  /** The latest estimate_time_to_care result and the run it was made in (request_ride acts only on this run's). */
+  lastEstimate?: { run: number; estimate: TimeToCare };
+  /** Rides requested with request_ride. */
+  rideRequests?: number;
 }
 
 export interface ToolContext {
   network: Network;
   rides?: RidesAdapter;
+  /** Demo time-to-care threshold per need (from the scenario's care block); DEFAULT_CARE otherwise. */
+  careFor?: (need: Need) => CareThreshold | undefined;
+  /** CLARA_AMBULANCE_ETA_MIN: the simulated ambulance's minutes from SOS to the scene; null/undefined when not set. */
+  ambulanceEtaMin?: number | null;
   incidentId: string;
   state: IncidentState;
   run: number;
@@ -60,8 +75,8 @@ function summarize(value: unknown, max = 160): string {
   }
 }
 
-export const READ_TOOLS = ["get_incident", "list_candidates", "get_nearby_kits", "get_rides", "get_site_overview"] as const;
-export const ACT_TOOLS = ["alert_volunteers", "request_kit", "propose_ride", "post_dispatch_note", "flag_for_dispatcher"] as const;
+export const READ_TOOLS = ["get_incident", "list_candidates", "get_nearby_kits", "get_rides", "get_site_overview", "estimate_time_to_care"] as const;
+export const ACT_TOOLS = ["alert_volunteers", "request_kit", "propose_ride", "request_ride", "post_dispatch_note", "flag_for_dispatcher"] as const;
 export type ToolName = (typeof READ_TOOLS)[number] | (typeof ACT_TOOLS)[number];
 
 export interface ToolLayer {
@@ -70,9 +85,11 @@ export interface ToolLayer {
   get_nearby_kits(agent?: AgentName): ToolResult;
   get_rides(agent?: AgentName): ToolResult;
   get_site_overview(agent?: AgentName): ToolResult;
+  estimate_time_to_care(agent?: AgentName): ToolResult;
   alert_volunteers(args: { volunteer_ids: string[]; reason: string }, agent?: AgentName): ToolResult;
   request_kit(args: { from_box_id: string; reason: string }, agent?: AgentName): ToolResult;
   propose_ride(args: { driver_id: string; reason: string }, agent?: AgentName): ToolResult;
+  request_ride(args: { reason: string }, agent?: AgentName): ToolResult;
   post_dispatch_note(args: { text: string }, agent?: AgentName): ToolResult;
   flag_for_dispatcher(args: { reason: string }, agent?: AgentName): ToolResult;
 }
@@ -229,7 +246,7 @@ export function createToolLayer(ctx: ToolContext): ToolLayer {
         const result: ToolResult = {
           ok: true,
           available: true,
-          note: "Drivers only get an offer when a dispatcher approves one. propose_ride suggests a driver to the dispatcher.",
+          note: "Drivers get an offer when a dispatcher approves one, or when request_ride acts on a qualifying time-to-care estimate. propose_ride suggests a driver to the dispatcher.",
           ride: ride
             ? {
                 ride_id: ride.ride_id,
@@ -265,6 +282,50 @@ export function createToolLayer(ctx: ToolContext): ToolLayer {
         };
         const open = incidents.filter((v) => !v.incident.closed).length;
         return { result, summary: `${open} open incident(s), ${volunteers.filter((v) => v.available).length} available volunteers` };
+      });
+    },
+
+    estimate_time_to_care(agent = "coordinator") {
+      return exec(agent, "estimate_time_to_care", "read", "", null, () => {
+        const v = network.incident(incidentId);
+        const entry = network.store.getIncident(incidentId);
+        if (!v || !entry) return fail("No such incident.");
+        const events = incidentEvents(network.store, entry);
+        const tourniquet = events.find((e) => e.type === "timer.started" && e.timer === "tourniquet");
+        const need = v.incident.need as Need;
+        const care = ctx.careFor?.(need) ?? DEFAULT_CARE[need] ?? DEFAULT_CARE.general;
+        const preview = ctx.rides?.preview?.(incidentId);
+        const hospital = preview?.hospital ?? null;
+        const estimate = estimateTimeToCare({
+          now: now(),
+          sos_at: v.incident.opened_at,
+          tourniquet_at: tourniquet?.occurred_at ?? null,
+          ambulance_eta_min: ctx.ambulanceEtaMin ?? null,
+          hospital,
+          drivers: (preview?.drivers ?? []).map((d) => ({
+            driver_id: d.driver_id,
+            name: d.name,
+            seats: d.seats,
+            pickup_minutes: d.pickup_minutes,
+            hospital_minutes: d.hospital_minutes ?? hospital?.drive_minutes ?? 0,
+            suitable: d.suitable,
+            carries_lying_down: d.carries_lying_down,
+            carries_wheelchair: d.carries_wheelchair,
+          })),
+          seats_needed: preview?.seats_needed ?? 1,
+          care,
+        });
+        state.lastEstimate = { run: ctx.run, estimate };
+        state.log.time_to_care = estimate;
+        const ride = ctx.rides?.forIncident(incidentId);
+        const result: ToolResult = {
+          ok: true,
+          ...estimate,
+          incident_open: v.incident.closed === null,
+          ride_active: ride ? ride.state === "offered" || ride.state === "accepted" : false,
+          request_ride_rule: `request_ride works only when verdict is ambulance_late_driver_faster or both_late and the driver is at least ${DRIVER_FASTER_BY_MIN} min faster (qualifies_for_request), with no active ride.`,
+        };
+        return { result, summary: estimate.summary };
       });
     },
 
@@ -341,6 +402,43 @@ export function createToolLayer(ctx: ToolContext): ToolLayer {
         return {
           result: { ok: true, ride_id: ride.ride_id, proposed: { driver_id: driver.driver_id, name: driver.name, pickup_minutes: driver.pickup_minutes }, status: "waiting_for_dispatcher", note: "Nothing was offered to the driver. A dispatcher must approve it on the console." },
           summary: `Proposed ${driver.name} (pickup ${driver.pickup_minutes} min) for the ride; waiting for a dispatcher`,
+        };
+      });
+    },
+
+    request_ride(args, agent = "coordinator") {
+      const reason = cleanReason(args?.reason);
+      return exec(agent, "request_ride", "act", "", reason || null, () => {
+        const o = openView();
+        if ("error" in o) return fail(o.error as string);
+        if (!ctx.rides?.requestNow) return fail("Ride requests aren't connected here.");
+        if (!reason) return fail("Give a reason with the time-to-care numbers (it is shown to the dispatcher).");
+        if ((state.rideRequests ?? 0) >= LIMITS.RIDE_REQUESTS_PER_INCIDENT) return fail("A ride was already requested for this incident; the dispatcher handles any change.");
+        const existing = ctx.rides.forIncident(incidentId);
+        if (existing && (existing.state === "offered" || existing.state === "accepted")) return fail(`A ride is already active (${existing.state}${existing.winner ? `, ${existing.winner.driver_name}` : ""}).`);
+        const last = state.lastEstimate;
+        if (!last || last.run !== ctx.run) return fail("Call estimate_time_to_care first in this run; request_ride acts only on a fresh estimate.");
+        const e = last.estimate;
+        if (!e.qualifies_for_request)
+          return fail(
+            e.verdict === "ambulance_late_driver_faster" || e.verdict === "both_late"
+              ? `Refused: the driver is only ${e.driver_faster_by_min ?? 0} min faster than the ambulance (needs ${DRIVER_FASTER_BY_MIN}). Use propose_ride so the dispatcher decides.`
+              : `Refused: verdict is ${e.verdict} (${e.summary}). Use propose_ride if a ride still helps; the dispatcher decides.`,
+          );
+        const r = ctx.rides.requestNow(incidentId, null);
+        if (!r.ok) return fail(`Couldn't request the ride: ${r.error}.`);
+        state.rideRequests = (state.rideRequests ?? 0) + 1;
+        state.log.ride_request = { at: now().toISOString(), run: ctx.run, ride_id: r.ride.ride_id, reason, offered_to: r.offered_to, verdict: e.verdict };
+        return {
+          result: {
+            ok: true,
+            ride_id: r.ride.ride_id,
+            offered_to: r.offered_to,
+            status: "offered_to_drivers",
+            note: "Offers went to the drivers' phones (push, then a call if unseen); the first to accept gets the ride and only then is a name said at the box. The dispatcher can cancel or reassign on the console. The simulated 911 call is unchanged.",
+            notice: CARE_NOTICE,
+          },
+          summary: `Requested a ride: offered to ${r.offered_to.join(", ") || "nobody"}`,
         };
       });
     },

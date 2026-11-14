@@ -47,4 +47,24 @@ describe("coordinator in the web app", () => {
     expect(detail.coordinator.log?.incident_id).toBe(incident.incident_id);
     expect(changes.some((c) => c.kind === "coordinator")).toBe(true);
   });
+
+  it("rules mode with the 35 min demo ambulance requests a ride itself and offers go to drivers", async () => {
+    const rt = createRuntime({
+      clock: () => new Date(T0),
+      ids: sequentialIds(),
+      timers: false,
+      env: { CLARA_MODEL: "stub", CLARA_AMBULANCE_ETA_MIN: "35" },
+      coordinator: ({ network, rides, careFor, ambulanceEtaMin }) => createCoordinator({ network, rides, careFor, ambulanceEtaMin, env: { CLARA_COORDINATOR: "rules" }, timers: false, debounceMs: 0, log: () => undefined }),
+    });
+    setRuntime(rt);
+    const res = await demoSos(new Request("http://test/api/demo/sos?box=box-clinic&need=bleeding", { method: "POST" }));
+    const { incident } = (await res.json()) as { incident: { incident_id: string } };
+    await rt.coordinator.idle();
+    const view = (await (await getCoordinator(new Request("http://test"), params(incident.incident_id))).json()) as CoordinatorView;
+    expect(view.log?.time_to_care).toMatchObject({ verdict: "ambulance_late_driver_faster", deadline: { reach_hospital_within_min: 60 } });
+    expect(view.log?.ride_request?.offered_to.length).toBeGreaterThan(0);
+    const ride = rt.rides.forIncident(incident.incident_id)!;
+    expect(ride.state).toBe("offered");
+    expect(ride.offers.every((f) => f.state === "offered")).toBe(true);
+  });
 });

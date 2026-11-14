@@ -41,6 +41,19 @@ export const KitItemSchema = z.strictObject({
 });
 export type KitItem = z.infer<typeof KitItemSchema>;
 
+/**
+ * Demo time-to-care threshold for a scenario: how soon the patient should reach hospital, counted from the SOS.
+ * Fictional demo values for the response coordinator's time-to-care check, never medical guidance.
+ */
+export const CareSchema = z.strictObject({
+  reach_hospital_within_min: z.number().int().min(1).max(1440),
+  note: z.string().min(1).max(200),
+  /** The patient must travel lying down / in a wheelchair (drivers who can't take that are not suitable). */
+  needs_lying_down: z.boolean().optional(),
+  needs_wheelchair: z.boolean().optional(),
+});
+export type Care = z.infer<typeof CareSchema>;
+
 export const ScenarioSchema = z.strictObject({
   scenario_id: Id,
   version: z.string().min(1).max(40),
@@ -52,6 +65,8 @@ export const ScenarioSchema = z.strictObject({
   steps: z.array(ScenarioStepSchema).min(1),
   questions: z.array(z.strictObject({ question_id: Id, text: z.string().min(1).max(200) })).max(20),
   triage_available: z.boolean(),
+  /** Optional demo time-to-care threshold (see CareSchema). */
+  care: CareSchema.optional(),
 });
 export type Scenario = z.infer<typeof ScenarioSchema>;
 

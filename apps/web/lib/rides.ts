@@ -11,6 +11,8 @@ import { DRIVE_KMH, MATCH_RADIUS_KM, estimateEta, haversineKm, type Ids, type Ne
  */
 
 export const RIDE_OFFER_MS = 60_000;
+/** requestNow (the coordinator's request_ride) offers the ride to this many suitable drivers at once; first accept wins. */
+export const REQUEST_NOW_OFFERS = 2;
 export type VehicleKind = "car" | "van" | "motorbike" | "none";
 export const VEHICLE_KINDS: readonly VehicleKind[] = ["car", "van", "motorbike", "none"];
 
@@ -18,8 +20,17 @@ export interface Hospital {
   name: string;
   location: LatLng;
 }
-/** Fictional, like the rest of the demo site. */
+/** Fictional, like the rest of the demo site. The nearest one to the box is each ride's destination. */
 export const DEMO_HOSPITAL: Hospital = { name: "District Hospital (fictional)", location: { lat: 40.395, lng: -74.62 } };
+export const DEMO_HOSPITALS: readonly Hospital[] = [
+  DEMO_HOSPITAL,
+  { name: "St. Brigid Field Hospital (fictional)", location: { lat: 40.3, lng: -74.74 } },
+  { name: "Northgate Medical Centre (fictional)", location: { lat: 40.46, lng: -74.71 } },
+];
+
+/** After an accept, the driver reports progress in this order (from the companion app). */
+export const TRIP_STEPS = ["to_pickup", "patient_in_car", "at_hospital"] as const;
+export type TripStep = (typeof TRIP_STEPS)[number];
 
 export type OfferState = "offered" | "accepted" | "declined" | "expired" | "withdrawn" | "lost";
 
@@ -30,6 +41,8 @@ export interface RideOffer {
   offered_at: string;
   expires_at: string;
   answered_at: string | null;
+  /** When the driver's app first showed the offer (the call fallback only calls while this is null). */
+  seen_at: string | null;
 }
 
 export interface Ride {
@@ -44,6 +57,12 @@ export interface Ride {
   /** Drivers the dispatcher passed over with "Reassign". */
   skipped: string[];
   winner: { driver_id: string; driver_name: string; pickup_minutes: number } | null;
+  /** Destination: the demo hospital nearest the box. */
+  hospital: Hospital;
+  /** Seats the patient (and any helper) need; 1 unless the dispatcher says more. */
+  seats_needed: number;
+  /** The winner's progress after accepting; null before. */
+  trip: { step: TripStep; at: string } | null;
 }
 
 export interface DriverOption {
@@ -56,16 +75,30 @@ export interface DriverOption {
   hospital_minutes: number;
   suitable: boolean;
   reasons: string[];
+  carries_lying_down: boolean;
+  carries_wheelchair: boolean;
+}
+
+/** What a ride would look like for an incident, without opening one (time-to-care estimates). */
+export interface RidePreview {
+  hospital: { name: string; drive_minutes: number } | null;
+  seats_needed: number;
+  drivers: DriverOption[];
 }
 
 export interface RideView extends Ride {
   suggested: DriverOption | null;
   backups: DriverOption[];
-  hospital: Hospital;
+  /** Every free driver in range, nearest first (dispatch's list). */
+  drivers_by_distance: DriverOption[];
+  /** Straight-line km from the box to the hospital. */
+  hospital_km: number | null;
   hospital_minutes: number | null;
 }
 
 export type RideChange = { kind: "ride"; ride: Ride } | { kind: "push"; box_id: string; push: BoxPush };
+
+export type ProgressOutcome = "updated" | "not_found" | "not_winner" | "closed" | "invalid";
 
 export type AnswerOutcome = "accepted" | "declined" | "taken" | "expired" | "not_offered" | "not_found" | "closed";
 
@@ -74,8 +107,13 @@ export interface RideBookOptions {
   ids: Ids;
   vehicleOf(volunteerId: string): VehicleKind;
   emit(change: RideChange): void;
+  /** Fixed destination (tests); default: the nearest of DEMO_HOSPITALS to the box. */
   hospital?: Hospital;
 }
+
+/** The demo hospital nearest a point. */
+export const nearestHospital = (at: LatLng, list: readonly Hospital[] = DEMO_HOSPITALS): Hospital =>
+  [...list].sort((a, b) => haversineKm(at, a.location) - haversineKm(at, b.location))[0]!;
 
 const LIVE_ALERT = new Set(["coming", "arrived"]);
 const MEDICAL = new Set(["nurse", "doctor", "emt", "midwife"]);
@@ -86,6 +124,11 @@ export const minutesTo = (km: number) => Math.max(1, Math.ceil((km / DRIVE_KMH) 
 export function createRideBook(o: RideBookOptions) {
   const rides = new Map<string, Ride>();
   const hospital = o.hospital ?? DEMO_HOSPITAL;
+  const hospitalFor = (boxId: string): Hospital => {
+    if (o.hospital) return o.hospital;
+    const box = o.network.store.getBox(boxId)?.box;
+    return box ? nearestHospital(box.location) : DEMO_HOSPITAL;
+  };
   const now = () => o.network.clock();
   const copy = <T>(v: T): T => structuredClone(v);
   const changed = (ride: Ride) => o.emit({ kind: "ride", ride: copy(ride) });
@@ -109,7 +152,7 @@ export function createRideBook(o: RideBookOptions) {
     const incident = o.network.incident(ride.incident_id)?.incident;
     const busy = busyDrivers(ride.incident_id);
     const passed = new Set([...ride.skipped, ...ride.offers.filter((f) => f.state !== "offered").map((f) => f.driver_id)]);
-    const hospitalMinutes = minutesTo(haversineKm(box.location, hospital.location));
+    const hospitalMinutes = minutesTo(haversineKm(box.location, ride.hospital.location));
     const list = o.network.store
       .listVolunteers()
       .filter((v: Volunteer) => v.available && v.vehicle_seats > 0 && !busy.has(v.volunteer_id) && !passed.has(v.volunteer_id))
@@ -123,8 +166,13 @@ export function createRideBook(o: RideBookOptions) {
         else reasons.push("1 seat: patient only");
         const med = v.skills.filter((s) => MEDICAL.has(s));
         if (med.length) reasons.push(`also a ${med.map((s) => SKILL_WORDS[s]).join(" / ")}`);
-        const suitable = vehicle !== "motorbike" && vehicle !== "none";
-        if (!suitable) reasons.unshift(vehicle === "motorbike" ? "motorbike: not suitable for a patient" : "no vehicle listed");
+        if (v.carries_lying_down) reasons.push("can take someone lying down");
+        if (v.carries_wheelchair) reasons.push("takes a wheelchair");
+        if (v.usual_availability) reasons.push(`says: ${v.usual_availability}`);
+        const enoughSeats = v.vehicle_seats >= ride.seats_needed;
+        const suitable = vehicle !== "motorbike" && vehicle !== "none" && enoughSeats;
+        if (!enoughSeats) reasons.unshift(`${v.vehicle_seats} seat${v.vehicle_seats === 1 ? "" : "s"}: ride needs ${ride.seats_needed}`);
+        if (vehicle === "motorbike" || vehicle === "none") reasons.unshift(vehicle === "motorbike" ? "motorbike: not suitable for a patient" : "no vehicle listed");
         return {
           driver_id: v.volunteer_id,
           name: v.name,
@@ -135,6 +183,8 @@ export function createRideBook(o: RideBookOptions) {
           hospital_minutes: hospitalMinutes,
           suitable,
           reasons,
+          carries_lying_down: v.carries_lying_down === true,
+          carries_wheelchair: v.carries_wheelchair === true,
         };
       })
       .filter((d) => d.distance_km <= MATCH_RADIUS_KM)
@@ -150,12 +200,14 @@ export function createRideBook(o: RideBookOptions) {
     const free = opts.filter((d) => !offered.has(d.driver_id));
     const suggested = free.find((d) => d.suitable) ?? null;
     const box = o.network.store.getBox(ride.box_id)?.box;
+    const hospitalKm = box ? haversineKm(box.location, ride.hospital.location) : null;
     return {
       ...copy(ride),
       suggested,
       backups: free.filter((d) => d !== suggested).slice(0, 4),
-      hospital,
-      hospital_minutes: box ? minutesTo(haversineKm(box.location, hospital.location)) : null,
+      drivers_by_distance: [...opts].sort((a, b) => a.distance_km - b.distance_km),
+      hospital_km: hospitalKm,
+      hospital_minutes: hospitalKm === null ? null : minutesTo(hospitalKm),
     };
   }
 
@@ -172,16 +224,83 @@ export function createRideBook(o: RideBookOptions) {
       offered_at: at.toISOString(),
       expires_at: new Date(at.getTime() + RIDE_OFFER_MS).toISOString(),
       answered_at: null,
+      seen_at: null,
     };
     ride.offers.push(f);
     ride.state = "offered";
     return f;
   }
 
+  const openRide = (incidentId: string) => [...rides.values()].find((r) => r.incident_id === incidentId && r.state !== "cancelled");
+
+  /** A ride that isn't stored, to look at drivers and the hospital before anything is opened. */
+  function draft(incidentId: string, boxId: string): Ride {
+    return { ride_id: "preview", incident_id: incidentId, box_id: boxId, note: null, created_at: now().toISOString(), state: "planning", offers: [], skipped: [], winner: null, hospital: hospitalFor(boxId), seats_needed: 1, trip: null };
+  }
+
+  /** The driver who accepted, as the one option (time to care then follows the real ride). */
+  function acceptedDriver(ride: Ride): DriverOption[] {
+    const w = ride.winner;
+    const v = w ? o.network.store.getVolunteer(w.driver_id) : undefined;
+    const box = o.network.store.getBox(ride.box_id)?.box;
+    if (!w || !v || !box) return [];
+    return [
+      {
+        driver_id: w.driver_id,
+        name: w.driver_name,
+        vehicle: o.vehicleOf(w.driver_id),
+        seats: v.vehicle_seats,
+        distance_km: haversineKm(v.location, box.location),
+        pickup_minutes: w.pickup_minutes,
+        hospital_minutes: minutesTo(haversineKm(box.location, ride.hospital.location)),
+        suitable: true,
+        reasons: ["accepted this ride"],
+        carries_lying_down: v.carries_lying_down === true,
+        carries_wheelchair: v.carries_wheelchair === true,
+      },
+    ];
+  }
+
   return {
     hospital,
+    /** Hospital, drive time and free drivers for an incident (the open ride's, or a draft's); opens nothing. */
+    preview(incidentId: string): RidePreview | undefined {
+      const incident = o.network.incident(incidentId)?.incident;
+      if (!incident) return undefined;
+      const ride = openRide(incidentId) ?? draft(incidentId, incident.box_id);
+      const box = o.network.store.getBox(ride.box_id)?.box;
+      return {
+        hospital: box ? { name: ride.hospital.name, drive_minutes: minutesTo(haversineKm(box.location, ride.hospital.location)) } : null,
+        seats_needed: ride.seats_needed,
+        drivers: ride.state === "accepted" ? acceptedDriver(ride) : options(ride),
+      };
+    },
+    /**
+     * The coordinator's request_ride (behind its time-to-care checks): opens the ride, or reuses a plan with no open
+     * offers, and offers it to the REQUEST_NOW_OFFERS best suitable drivers at once. The usual flow follows (push,
+     * call fallback, first accept wins); the dispatcher can still cancel or reassign. Refuses an active ride.
+     */
+    requestNow(incidentId: string, note: string | null): { ok: true; ride: RideView; offered_to: string[] } | { ok: false; error: "not_found" | "closed" | "active" | "no_driver" } {
+      const incident = o.network.incident(incidentId)?.incident;
+      if (!incident) return { ok: false, error: "not_found" };
+      if (incident.closed) return { ok: false, error: "closed" };
+      const existing = openRide(incidentId);
+      if (existing && existing.state !== "planning") return { ok: false, error: "active" };
+      const candidate = existing ?? draft(incidentId, incident.box_id);
+      const picks = options(candidate).filter((d) => d.suitable).slice(0, REQUEST_NOW_OFFERS);
+      if (picks.length === 0) return { ok: false, error: "no_driver" };
+      let ride = existing;
+      if (!ride) {
+        ride = { ...draft(incidentId, incident.box_id), ride_id: o.ids.id("ride"), note: note?.trim().slice(0, 120) || null };
+        rides.set(ride.ride_id, ride);
+      }
+      const offered = picks.map((d) => offer(ride!, d.driver_id)).filter((f): f is RideOffer => f !== null);
+      if (offered.length === 0) return { ok: false, error: "no_driver" };
+      changed(ride);
+      return { ok: true, ride: view(ride), offered_to: offered.map((f) => f.driver_name) };
+    },
     /** One ride per open incident: asking again returns the open one. */
-    request(incidentId: string, note: string | null): RideView | undefined {
+    request(incidentId: string, note: string | null, seatsNeeded = 1): RideView | undefined {
       const incident = o.network.incident(incidentId)?.incident;
       if (!incident || incident.closed) return undefined;
       const open = [...rides.values()].find((r) => r.incident_id === incidentId && r.state !== "cancelled");
@@ -196,6 +315,9 @@ export function createRideBook(o: RideBookOptions) {
         offers: [],
         skipped: [],
         winner: null,
+        hospital: hospitalFor(incident.box_id),
+        seats_needed: Math.max(1, Math.min(8, Math.floor(seatsNeeded) || 1)),
+        trip: null,
       };
       rides.set(ride.ride_id, ride);
       changed(ride);
@@ -252,10 +374,12 @@ export function createRideBook(o: RideBookOptions) {
         changed(ride);
         return { outcome: "declined", ride: view(ride) };
       }
-      f.state = "accepted";
+      // Before the offer leaves "offered", or options() no longer lists this driver.
       const pickup = options(ride).find((d) => d.driver_id === driverId)?.pickup_minutes ?? 0;
+      f.state = "accepted";
       ride.winner = { driver_id: driverId, driver_name: f.driver_name, pickup_minutes: pickup };
       ride.state = "accepted";
+      ride.trip = { step: "to_pickup", at: at.toISOString() };
       for (const other of ride.offers) if (other !== f && other.state === "offered") Object.assign(other, { state: "lost", answered_at: at.toISOString() });
       changed(ride);
       // Template words, after a real accept only.
@@ -270,6 +394,39 @@ export function createRideBook(o: RideBookOptions) {
         },
       });
       return { outcome: "accepted", ride: view(ride) };
+    },
+    /** The winning driver's progress: to_pickup → patient_in_car → at_hospital (forward only; repeats are harmless). */
+    progress(rideId: string, driverId: string, step: TripStep): { outcome: ProgressOutcome; ride?: RideView } {
+      const ride = rides.get(rideId);
+      if (!ride) return { outcome: "not_found" };
+      if (ride.winner?.driver_id !== driverId) return { outcome: "not_winner" };
+      if (ride.state === "cancelled") return { outcome: "closed", ride: view(ride) };
+      const current = ride.trip ? TRIP_STEPS.indexOf(ride.trip.step) : -1;
+      const next = TRIP_STEPS.indexOf(step);
+      if (next < current) return { outcome: "invalid", ride: view(ride) };
+      if (next > current) {
+        ride.trip = { step, at: now().toISOString() };
+        changed(ride);
+      }
+      return { outcome: "updated", ride: view(ride) };
+    },
+    /** The driver's app showed their open offers (the call fallback then leaves them alone). */
+    markSeen(driverId: string) {
+      const at = now().toISOString();
+      for (const ride of rides.values()) {
+        let dirty = false;
+        for (const f of ride.offers) {
+          if (f.driver_id !== driverId || f.state !== "offered" || f.seen_at !== null) continue;
+          f.seen_at = at;
+          dirty = true;
+        }
+        if (dirty) changed(ride);
+      }
+    },
+    /** Gives an open offer more time (a phone call is ringing the driver). */
+    extendOffer(rideId: string, driverId: string, ms: number) {
+      const f = rides.get(rideId)?.offers.find((x) => x.driver_id === driverId && x.state === "offered");
+      if (f) f.expires_at = new Date(Math.max(Date.parse(f.expires_at), now().getTime() + ms)).toISOString();
     },
     cancel(rideId: string): RideView | undefined {
       const ride = rides.get(rideId);

@@ -27,7 +27,7 @@ A real box connects by setting `CLARA_SERVER_URL=https://clara.living` in `/etc/
 | `packages/contracts` | Shared types (zod): box events, scenarios, voice turns, the response network, ESP32 serial messages |
 | `packages/agent` | The voice brain: Cartesia speech-to-text → Claude (Haiku 5.5, Opus 5.5 backup) picks one allowed action → Cartesia voice. Honesty guard in code. |
 | `packages/network` | Incidents, volunteer matching, alerts (sent → shown → coming → arrived), escalation, the EMS scene report, box status, supply ledger |
-| `packages/coordinator` | The response coordinator: a LangChain **deepagents** agent that plans the human response per incident (write_todos plan, `responder-scout` and `logistics` subagents, notes in its virtual filesystem) through bounded tools; a no-key rules planner for demos |
+| `packages/coordinator` | The response coordinator: a LangChain **deepagents** agent that plans the human response per incident (write_todos plan, `responder-scout`, `logistics` and `time-to-care` subagents, notes in its virtual filesystem) through bounded tools; a no-key rules planner for demos |
 | `apps/web` | Next.js: box API, companion app (`/app`), dispatch dashboard, EMS scene report, kit map, maintainer backend |
 | `box` | Raspberry Pi service: hands-free audio, voice loop, scenario engine, kiosk screen, SOS and mock-911 flow, cloud link, ESP32 link, simulator, self-test |
 | `firmware` | ESP32 (PlatformIO): lid and mount switches, compartment LEDs, CPR rhythm, buzzer, MAX30102 pulse sensor |
@@ -64,9 +64,19 @@ Keys (`ANTHROPIC_API_KEY`, `CARTESIA_API_KEY`) go in `apps/web/.env.local`, neve
 
 ## Response coordinator (deepagents)
 
-For each open emergency a LangChain [deepagents](https://github.com/langchain-ai/deepagentsjs) agent (Claude Opus 5.5) plans the human response: it writes a todo plan, asks a `responder-scout` subagent who else to alert and a `logistics` subagent about a second kit or a ride to hospital, then acts through tools whose limits are enforced in code (at most 3 alerts per call and 6 extra per incident, only listed candidates; kits only from boxes within 1.5 km that are online; ride proposals still need the dispatcher). It never talks to the bystander or the box voice, never closes incidents, never marks anyone coming, and never contacts emergency services. The dispatch console shows its plan, actions with reasons, notes and needs-a-human flags.
+For each open emergency a LangChain [deepagents](https://github.com/langchain-ai/deepagentsjs) agent (Claude Opus 5.5) plans the human response: it writes a todo plan, asks a `responder-scout` subagent who else to alert and a `logistics` subagent about a second kit or a ride to hospital, and a `time-to-care` subagent whether the simulated ambulance gets the patient to hospital in time, then acts through tools whose limits are enforced in code (at most 3 alerts per call and 6 extra per incident, only listed candidates; kits only from boxes within 1.5 km that are online; ride proposals still need the dispatcher). **Time to care:** code compares the simulated 911 call's ambulance (`CLARA_AMBULANCE_ETA_MIN`, a demo setting, plus 15 min on scene and the drive to the nearest fictional hospital) with the best free volunteer driver (pickup, 5 min loading, same drive) against the scenario's demo deadline (`care.reach_hospital_within_min`; defaults bleeding 60, breathing 30, general 120 min; fictional, not medical guidance). When the ambulance would be late and a driver is at least 10 min faster, `request_ride` sends ride offers to the two best drivers at once (push, call fallback, first accept wins), once per incident; the dispatcher can cancel or reassign. It never talks to the bystander or the box voice, never closes incidents, never marks anyone coming, and never contacts emergency services. The dispatch console shows its plan, actions with reasons, notes and needs-a-human flags.
 
 `CLARA_COORDINATOR=on` (default) runs it when `ANTHROPIC_API_KEY` is set; `CLARA_COORDINATOR=rules` runs a deterministic planner with the same tools and no key; `off` disables it. Set `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` to trace runs in LangSmith. Details: [docs/coordinator.md](docs/coordinator.md).
+
+## Volunteer app (PWA): alerts, drivers, phone calls
+
+Volunteers join at [clara.living/join](https://clara.living/join): first aid nearby, driving patients to hospital (no medical skills needed), or both; then skills (self-reported), vehicle and seats, where they usually are with an alert radius (0.5–10 km), availability and quiet hours. The app installs to the home screen and gets loud push alerts with **I'M COMING / CAN'T** (or **I CAN DRIVE / CAN'T** for ride offers), even when closed. If an alert or ride offer is still unseen after 30 s, Clara can phone a volunteer who gave a number and agreed (press 1 / 2), once per alert, via Twilio.
+
+- **iPhone:** push alerts only work after **Share → Add to Home Screen** and opening Clara from there (iOS 16.4+). In a Safari tab, alerts show only while the page is open.
+- **Push keys:** set `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` (`npx web-push generate-vapid-keys`); without them the server generates a pair in memory and phones re-subscribe after each restart.
+- **Calls:** set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (and `PUBLIC_BASE_URL`, default `https://clara.living`). Without them calls are only logged and the maintainer console says "Calls: not configured". **A Twilio trial account can only call numbers verified in the Twilio console.** Clara never calls emergency services.
+
+Details: [docs/companion-pwa.md](docs/companion-pwa.md).
 
 ## Credits
 

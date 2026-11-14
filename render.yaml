@@ -42,3 +42,21 @@ services:
         sync: false
       - key: LANGSMITH_API_KEY
         sync: false
+      # Web push (companion PWA). Set a fixed VAPID pair so subscriptions survive restarts; without it the server
+      # generates one in memory at start. Generate with: npx web-push generate-vapid-keys
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      # Phone-call fallback (Twilio). Without all three, calls are only logged ("would call ...").
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      # Origin Twilio calls back on; its request signatures are checked against this.
+      - key: PUBLIC_BASE_URL
+        value: https://clara.living

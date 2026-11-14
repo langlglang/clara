@@ -276,12 +276,18 @@ function RidePlan({ d, now, announce, refresh }: { d: IncidentDetail; now: numbe
     <div className="card">
       <span className="lbl">Ride plan · {d.box?.name ?? d.incident.box_id}</span>
       {ride.note ? <span className="small muted">{ride.note}</span> : null}
+      <span className="small muted">
+        {d.box?.name ?? d.incident.box_id} → {ride.hospital.name}
+        {ride.hospital_km !== null ? ` · ${ride.hospital_km.toFixed(1)} km, about ${ride.hospital_minutes} min` : ""} · {ride.seats_needed} seat{ride.seats_needed === 1 ? "" : "s"}
+      </span>
       {ride.winner ? (
         <>
           <b className="t-green">
             {ride.winner.driver_name} accepted · pickup {Math.max(1, ride.winner.pickup_minutes)} min · hospital {ride.hospital_minutes ?? "?"} min
           </b>
-          <span className="small muted">To {ride.hospital.name}.</span>
+          <span className="small muted">
+            To {ride.hospital.name}. Driver says: {ride.trip ? TRIP_WORDS[ride.trip.step] : "accepted"}.
+          </span>
         </>
       ) : ride.suggested ? (
         <DriverCard o={ride.suggested} suggested />
@@ -338,6 +344,23 @@ function RidePlan({ d, now, announce, refresh }: { d: IncidentDetail; now: numbe
           ))}
         </div>
       ) : null}
+      {!ride.winner && ride.drivers_by_distance.length ? (
+        <details>
+          <summary className="lbl" style={{ cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center" }}>
+            Available drivers by distance · {ride.drivers_by_distance.length}
+          </summary>
+          <div className="stack" style={{ gap: 4 }}>
+            {ride.drivers_by_distance.map((o) => (
+              <div key={o.driver_id} className="row between small">
+                <span>
+                  {o.name} · {VEHICLE[o.vehicle] ?? o.vehicle}, {o.seats} seats{o.suitable ? "" : " · not suitable"}
+                </span>
+                <span className="muted mono">{o.distance_km.toFixed(1)} km</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
       <button type="button" className="btn small" aria-disabled={busy !== null || undefined} onClick={() => void run("cancel", `/api/rides/${rid}/cancel`, undefined, "Ride cancelled.")}>
         Cancel ride
       </button>
@@ -345,6 +368,8 @@ function RidePlan({ d, now, announce, refresh }: { d: IncidentDetail; now: numbe
     </div>
   );
 }
+
+const TRIP_WORDS: Record<string, string> = { to_pickup: "on the way to pickup", patient_in_car: "patient in the car", at_hospital: "arrived at hospital" };
 
 function DriverCard({ o, suggested }: { o: DriverOption; suggested?: boolean }) {
   return (

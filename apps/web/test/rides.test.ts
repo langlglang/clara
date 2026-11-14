@@ -113,3 +113,52 @@ describe("messages and availability", () => {
     expect((await availability(post("/api/volunteers/vol-amina/availability", { available: "no" }), params({ id: "vol-amina" }))).status).toBe(400);
   });
 });
+
+describe("requestNow (the coordinator's request_ride)", () => {
+  it("previews the hospital and drivers without opening a ride", async () => {
+    const incident = await openIncident();
+    const p = rt.rides.preview(incident.incident_id)!;
+    expect(p.hospital?.name).toMatch(/fictional/);
+    expect(p.hospital!.drive_minutes).toBeGreaterThan(0);
+    expect(p.seats_needed).toBe(1);
+    expect(p.drivers.find((d) => d.suitable)?.driver_id).toBe("vol-tomas");
+    expect(p.drivers.every((d) => typeof d.carries_lying_down === "boolean")).toBe(true);
+    expect(rt.rides.forIncident(incident.incident_id)).toBeUndefined();
+  });
+
+  it("opens the ride and offers it to the two best drivers at once; first accept wins; refuses an active ride", async () => {
+    const changes: AppChange[] = [];
+    rt.subscribe((c) => changes.push(c));
+    const incident = await openIncident();
+    const r = rt.rides.requestNow(incident.incident_id, null);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.offered_to).toEqual(["Tomas", "Samir"]);
+    expect(r.ride.state).toBe("offered");
+    expect(r.ride.offers.map((f) => f.state)).toEqual(["offered", "offered"]);
+    // No words at the box before an accept.
+    expect(changes.some((c) => c.kind === "push")).toBe(false);
+    expect(rt.rides.requestNow(incident.incident_id, null)).toEqual({ ok: false, error: "active" });
+
+    const inbox = (await (await getInbox(new Request("http://test/x"), params({ id: "vol-samir" }))).json()) as InboxResponse;
+    expect(inbox.rides[0]?.my_offer?.state).toBe("offered");
+    const won = await answer(post(`/api/rides/${r.ride.ride_id}/answer`, { driver_id: "vol-samir", action: "accept" }), params({ id: r.ride.ride_id }));
+    expect(won.status).toBe(200);
+    const ride = rt.rides.get(r.ride.ride_id)!;
+    expect(ride.winner?.driver_id).toBe("vol-samir");
+    expect(ride.offers.find((f) => f.driver_id === "vol-tomas")?.state).toBe("lost");
+    expect(ride.winner!.pickup_minutes).toBeGreaterThan(1); // Samir walks 0.4 km
+    // Time to care then follows the accepted driver.
+    expect(rt.rides.preview(incident.incident_id)!.drivers.map((d) => d.driver_id)).toEqual(["vol-samir"]);
+    expect(changes.some((c) => c.kind === "push")).toBe(true);
+  });
+
+  it("reuses a planning ride with no offers, and refuses unknown incidents", async () => {
+    const incident = await openIncident();
+    const plan = await newRide(incident.incident_id);
+    const r = rt.rides.requestNow(incident.incident_id, null);
+    expect(r.ok && r.ride.ride_id).toBe(plan.ride_id);
+    rt.rides.cancel(plan.ride_id);
+    expect(rt.rides.requestNow("inc-missing", null)).toEqual({ ok: false, error: "not_found" });
+  });
+});

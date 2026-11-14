@@ -75,10 +75,13 @@ export function createNetwork(options: NetworkOptions = {}) {
       store.putVolunteer(volunteer);
       return volunteer;
     },
-    updateVolunteer(volunteerId: string, patch: Partial<Pick<Volunteer, "available" | "location" | "skills" | "vehicle_seats">>): Volunteer | undefined {
+    /** Changes profile fields (checked against the contract). A field set to `undefined` is removed. */
+    updateVolunteer(volunteerId: string, patch: Partial<Omit<Volunteer, "volunteer_id">>): Volunteer | undefined {
       const current = store.getVolunteer(volunteerId);
       if (!current) return undefined;
-      const next = VolunteerSchema.parse({ ...current, ...patch });
+      const merged: Record<string, unknown> = { ...current, ...patch };
+      for (const key of Object.keys(merged)) if (merged[key] === undefined) delete merged[key];
+      const next = VolunteerSchema.parse(merged);
       store.putVolunteer(next);
       return next;
     },

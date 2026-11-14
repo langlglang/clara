@@ -68,6 +68,7 @@ export const rulesRunner: Runner = async (input: RunInput) => {
     { content: "Check who declined or hasn't answered", status: "pending" },
     { content: "Alert more responders if nobody is coming", status: "pending" },
     { content: "Check nearby kits for a second kit", status: "pending" },
+    { content: "Check time to care: simulated ambulance vs driver", status: "pending" },
     { content: "Check whether a ride to hospital is needed", status: "pending" },
     { content: "Post a status note for dispatch", status: "pending" },
   ];
@@ -117,8 +118,21 @@ export const rulesRunner: Runner = async (input: RunInput) => {
   }
 
   step(4);
+  // Time to care: when code says the (simulated) ambulance is late and a driver is clearly faster, request the ride now.
+  const care = ok<{ verdict: string; summary: string; qualifies_for_request: boolean; ride_active: boolean; driver: { name: string } | null; driver_faster_by_min: number | null }>(tools.estimate_time_to_care("rules"));
+  let requested = false;
+  if (care?.qualifies_for_request && !care.ride_active && !input.state.rideRequests) {
+    const r = tools.request_ride({ reason: `Time to care: ${care.summary}`.slice(0, LIMITS.REASON_MAX_CHARS) }, "rules");
+    const got = ok<{ offered_to: string[] }>(r);
+    if (got) {
+      requested = true;
+      done.push(`requested a ride (offered to ${got.offered_to.join(", ")}): ${care.driver?.name ?? "driver"} ~${Math.round(care.driver_faster_by_min ?? 0)} min faster than the simulated ambulance`);
+    }
+  }
+
+  step(5);
   const rides = ok<{ available: boolean; ride: { state: string; suggested: { driver_id: string; name: string; pickup_minutes: number } | null } | null; proposals: unknown[] }>(tools.get_rides("rules"));
-  if (rides?.available && incident.summary?.tourniquet && rides.proposals.length === 0 && rides.ride?.state !== "accepted") {
+  if (!requested && !input.state.rideRequests && rides?.available && incident.summary?.tourniquet && rides.proposals.length === 0 && rides.ride?.state !== "accepted") {
     // A tourniquet means hospital care is needed; propose the ride plan's suggested driver (dispatcher approves).
     // An empty driver_id means "the ride plan's suggested driver" (the plan opens if there is none yet).
     const r = tools.propose_ride({ driver_id: rides.ride?.suggested?.driver_id ?? "", reason: "Tourniquet on: patient needs hospital care; closest free driver" }, "rules");
@@ -134,7 +148,7 @@ export const rulesRunner: Runner = async (input: RunInput) => {
         : null;
   if (flagReason) tools.flag_for_dispatcher({ reason: flagReason }, "rules");
 
-  step(5);
+  step(6);
   const status = coming.length
     ? `${coming.map((a) => a.name).join(", ")} ${coming.length === 1 ? "is" : "are"} responding.`
     : `Nobody has accepted yet (${incident.escalation.level} wave).`;

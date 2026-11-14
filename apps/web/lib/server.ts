@@ -1,9 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { EVENTS_VERSION, type BoxEvent } from "@clara/contracts";
 import { createClaraAgent, type ClaraAgent, type ClaraAgentEnv } from "@clara/agent";
-import { createCoordinator, type Coordinator, type CoordinatorChange, type CoordinatorEnv, type RidesAdapter } from "@clara/coordinator";
+import { DEFAULT_CARE, createCoordinator, type CareThreshold, type Coordinator, type CoordinatorChange, type CoordinatorEnv, type Need, type RidesAdapter } from "@clara/coordinator";
 import { DEMO_BOXES, createNetwork, randomIds, type MaintainerAlert, type Network, type NetworkOptions, type ReportOptions } from "@clara/network";
-import { createRideBook, type RideBook, type RideChange, type VehicleKind } from "./rides";
+import { createRideBook, type Ride, type RideBook, type RideChange, type VehicleKind } from "./rides";
+import { createCallBook, type CallBook } from "./calls";
+import { ridePushListener, wireAlertPushes } from "./notify";
+import { createPushBook, resolveVapid, type PushBook, type PushSender, type VapidEnv } from "./push";
+import { publicBaseUrl, twilioConfig, type FetchLike, type TwilioConfig, type TwilioEnv } from "./twilio";
 import bleeding from "../../../content/scenarios/severe-bleeding.json";
 
 /**
@@ -48,6 +52,13 @@ export interface Runtime {
   simulatedBoxes: string[];
   /** Labels the scene report uses for step and scenario ids (from content/). */
   reportOptions: ReportOptions;
+  /** Web push subscriptions per volunteer and the VAPID keys (both in memory). */
+  push: PushBook;
+  /** The phone-call fallback (Twilio, or "would call" logs without it). */
+  calls: CallBook;
+  /** Twilio settings (null: calls only log) and the public origin Twilio calls back on. */
+  twilio: TwilioConfig | null;
+  publicBaseUrl: string;
   /** App-level live changes (box stream and /api/stream listen here as well as on the network). */
   subscribe(listener: (change: AppChange) => void): () => void;
   emit(change: AppChange): void;
@@ -57,13 +68,20 @@ export interface Runtime {
 /** Vehicles for the seeded drivers (fictional). */
 const DEMO_VEHICLES: Record<string, VehicleKind> = { "vol-tomas": "van", "vol-priya": "car", "vol-samir": "car" };
 
+/** The server's environment: the agent's keys plus web push (VAPID_*) and Twilio (TWILIO_*, PUBLIC_BASE_URL). */
+export type WebEnv = ClaraAgentEnv & VapidEnv & TwilioEnv;
+
 export interface RuntimeOptions extends NetworkOptions {
-  env?: ClaraAgentEnv;
+  env?: WebEnv;
+  /** Replace web-push's sender (tests). */
+  pushSender?: PushSender;
+  /** Replace fetch for Twilio (tests). */
+  fetch?: FetchLike;
   agent?: ClaraAgent;
   /** Start the tick loop (default true). Tests turn it off and call tick themselves. */
   timers?: boolean;
   /** Replace the coordinator (tests). */
-  coordinator?: (deps: { network: Network; rides: RidesAdapter }) => Coordinator;
+  coordinator?: (deps: { network: Network; rides: RidesAdapter; careFor: (need: Need) => CareThreshold; ambulanceEtaMin: number | null }) => Coordinator;
 }
 
 const stepLabels: Record<string, string> = Object.fromEntries(bleeding.steps.map((s: { step_id: string; label: string }) => [s.step_id, s.label]));
@@ -72,6 +90,10 @@ export const REPORT_OPTIONS: ReportOptions = {
   stepLabels,
   scenarioLabels: { [bleeding.scenario_id]: bleeding.title },
 };
+
+/** Demo time-to-care thresholds per need: the scenario's care block, else DEFAULT_CARE. Fictional, not medical guidance. */
+const SCENARIO_CARE: Partial<Record<Need, CareThreshold>> = { bleeding: (bleeding as { care?: CareThreshold }).care };
+export const careFor = (need: Need): CareThreshold => SCENARIO_CARE[need] ?? DEFAULT_CARE[need] ?? DEFAULT_CARE.general;
 
 function simulatedBoxIds(env: ClaraAgentEnv): string[] {
   const raw = env.CLARA_SIMULATED_BOXES;
@@ -87,7 +109,7 @@ function simulatedBoxIds(env: ClaraAgentEnv): string[] {
 const SIM_BATTERY: Record<string, number> = { "box-clinic": 86, "box-room-101": 64, "box-water-point": 23 };
 
 export function createRuntime(options: RuntimeOptions = {}): Runtime {
-  const env: ClaraAgentEnv = { CLARA_TURN_BUDGET_MS: "6500", ...(options.env ?? (process.env as ClaraAgentEnv)) };
+  const env: WebEnv = { CLARA_TURN_BUDGET_MS: "6500", ...(options.env ?? (process.env as WebEnv)) };
   const network = createNetwork(options);
   network.seedDemo();
   const agent = options.agent ?? createClaraAgent(env, { log: (line) => console.log(line) });
@@ -115,14 +137,27 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     vehicleOf: (id) => vehicles.get(id) ?? ((network.store.getVolunteer(id)?.vehicle_seats ?? 0) > 0 ? "car" : "none"),
     emit,
   });
-  // The coordinator only proposes rides; approving an offer stays with the dispatcher (no approve here).
-  const ridesAdapter: RidesAdapter = { forIncident: (id) => rides.forIncident(id), request: (id, note) => rides.request(id, note) };
-  const coordinator = options.coordinator
-    ? options.coordinator({ network, rides: ridesAdapter })
-    : createCoordinator({ network, rides: ridesAdapter, env: env as CoordinatorEnv, timers: options.timers !== false, log: (line) => console.log(line) });
-  coordinator.subscribe((change) => emit(change));
   const ambulance = Number(env.CLARA_AMBULANCE_ETA_MIN);
   const ambulanceEtaMin = env.CLARA_AMBULANCE_ETA_MIN && Number.isFinite(ambulance) && ambulance > 0 ? Math.round(ambulance) : null;
+  // The coordinator proposes rides for the dispatcher to approve. Its one way to send offers itself is requestNow,
+  // which its request_ride tool calls only behind the code-checked time-to-care bar (packages/coordinator/src/tools.ts).
+  const ridesAdapter: RidesAdapter = {
+    forIncident: (id) => rides.forIncident(id),
+    request: (id, note) => rides.request(id, note),
+    preview: (id) => rides.preview(id),
+    requestNow: (id, note) => rides.requestNow(id, note),
+  };
+  const coordinator = options.coordinator
+    ? options.coordinator({ network, rides: ridesAdapter, careFor, ambulanceEtaMin })
+    : createCoordinator({ network, rides: ridesAdapter, careFor, ambulanceEtaMin, env: env as CoordinatorEnv, timers: options.timers !== false, log: (line) => console.log(line) });
+  coordinator.subscribe((change) => emit(change));
+
+  const push = createPushBook({ vapid: resolveVapid(env), ...(options.pushSender ? { sender: options.pushSender } : {}) });
+  wireAlertPushes(network, push);
+  const onRide = ridePushListener(network, push);
+  listeners.add((change) => onRide(change as { kind: string; ride?: Ride }));
+  const twilio = twilioConfig(env);
+  const calls = createCallBook({ network, rides, twilio, baseUrl: publicBaseUrl(env), ...(options.fetch ? { fetch: options.fetch } : {}) });
 
   const simulatedBoxes = simulatedBoxIds(env).filter((id) => network.store.getBox(id));
   const heartbeat = () => {
@@ -147,6 +182,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       try {
         network.tick();
         rides.tick();
+        calls.tick();
       } catch (error) {
         console.error("[network] tick failed:", error);
       }
@@ -156,7 +192,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     beat.unref?.();
     timers.push(tick, beat);
   }
-  console.log(`[clara] network seeded (${network.store.listBoxes().length} boxes); agent ${agent.describe}; coordinator ${coordinator.describe}; simulated boxes: ${simulatedBoxes.join(", ") || "none"}`);
+  console.log(`[clara] network seeded (${network.store.listBoxes().length} boxes); agent ${agent.describe}; coordinator ${coordinator.describe}; simulated boxes: ${simulatedBoxes.join(", ") || "none"}; push VAPID ${push.vapid.source}; calls ${twilio ? "Twilio" : "not configured (logs only)"}`);
 
   return {
     network,
@@ -164,6 +200,10 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     rides,
     coordinator,
     vehicles,
+    push,
+    calls,
+    twilio,
+    publicBaseUrl: publicBaseUrl(env),
     messages: new Map(),
     ambulanceEtaMin,
     maintainerAlerts,

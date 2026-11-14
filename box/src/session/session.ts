@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { VISUALS, CAMERA_INSPECT_VERSION, actionAllowed, comingLine, localizeScenario, minorCutVisualAllowed, startTriage, visualById, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type ScenarioTranslation, type TurnResponse, type TurnState } from "@clara/contracts";
+import { VISUALS, CAMERA_INSPECT_VERSION, actionAllowed, comingLine, guidedAdvanceAllowed, guidedStartAllowed, localizeScenario, minorCutVisualAllowed, startTriage, visualById, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type ScenarioTranslation, type TurnResponse, type TurnState } from "@clara/contracts";
 import { EventFactory, type EventBody } from "../engine/events.js";
 import { ScenarioEngine, type RecentTurn, type Source, type StepIntent } from "../engine/engine.js";
 import type { Kit } from "../engine/kit.js";
@@ -570,7 +570,15 @@ export class BoxSession {
   /** The state a voice turn offers the model, or null outside a session. */
   turnState(): TurnState | null {
     if (!this.active || !this.lidOpen) return null;
+    const guides = this.scenarios.flatMap((scenario) => {
+      if (!scenario.guided || scenario.scenario_id === this.engine.scenario.scenario_id) return [];
+      const first = scenario.steps.find((step) => step.step_id === scenario.start);
+      if (!first || (first.item && (this.o.kit.get(first.item)?.on_hand ?? 0) <= 0)) return [];
+      return [{ scenario_id: scenario.scenario_id, label: scenario.title, start_step_id: scenario.start }];
+    });
     const state = { ...this.engine.turnState(this.recent),
+      guided_active: this.engine.scenario.guided === true && this.engine.started,
+      guided_scenarios: this.lang === "en" && !this.sos ? guides.slice(0, 12) : [],
       pulse_available: Boolean(this.o.pulseReader),
       ...(this.sos && !this.sos.nearbyAsked ? { nearby_kits_available: true as const } : {}),
       camera_available: Boolean(this.o.camera && this.o.cloud.inspectCamera && this.o.cameraCloudEnabled),
@@ -612,6 +620,11 @@ export class BoxSession {
     if (cpr && cpr.scenario_id !== this.engine.scenario.scenario_id && NOT_BREATHING.test(text)) this.switchScenario(cpr.scenario_id, "voice");
   }
 
+  private sameHeardReport(response: TurnResponse): boolean {
+    const report = this.heardByTurn.get(response.client_turn_id);
+    return Boolean(report && response.answered_by === "model" && report.sessionId === this.sessionId && report.text === response.heard);
+  }
+
   /**
    * Carries out a model action, only if `actionAllowed` against the box's own current state. Returns false
    * (and does nothing) otherwise.
@@ -625,6 +638,8 @@ export class BoxSession {
     switch (action.name) {
       case "select_step": {
         const step = this.engine.step(action.step_id);
+        if (state.guided_active && action.step_id !== state.step_id && (!response ||
+          !guidedAdvanceAllowed(response.heard ?? "") || !this.sameHeardReport(response))) return false;
         if (response && response.reply !== step.text) {
           this.log("selected guidance refused: cloud text differs from local content");
           this.say("I couldn't verify that guidance. Please tell me again.");
@@ -632,6 +647,15 @@ export class BoxSession {
         }
         const wav = response?.speech ? Buffer.from(response.speech.data_base64, "base64") : undefined;
         return this.goTo(action.step_id, source, wav);
+      }
+      case "start_guidance": {
+        const guide = this.scenarios.find((scenario) => scenario.scenario_id === action.scenario_id);
+        const first = guide?.steps.find((step) => step.step_id === guide.start);
+        if (!guide || !first || !response || !guidedStartAllowed(response.heard ?? "") ||
+          (guide.scenario_id === "minor_cut" && !minorCutVisualAllowed(response.heard ?? "")) ||
+          !this.sameHeardReport(response) || response.reply !== first.text) return false;
+        const wav = response.speech ? Buffer.from(response.speech.data_base64, "base64") : undefined;
+        return this.switchScenario(action.scenario_id, source, wav);
       }
       case "ask_clarifying": {
         const question = this.engine.scenario.questions.find((q) => q.question_id === action.question_id);
@@ -760,7 +784,7 @@ export class BoxSession {
   }
 
   /** Switches to another loaded scenario and starts it at its first step. False when unknown or already current. */
-  switchScenario(scenarioId: string, source: Source): boolean {
+  switchScenario(scenarioId: string, source: Source, wav?: Buffer): boolean {
     const next = this.scenarios.find((s) => s.scenario_id === scenarioId);
     if (!next) return false;
     this.ensureSession();
@@ -769,7 +793,7 @@ export class BoxSession {
       this.engine = this.makeEngine(next);
     } else if (this.engine.started) return false;
     this.log(`scenario: ${next.scenario_id} (${source})`);
-    this.apply(this.engine.start(source));
+    this.apply(this.engine.start(source), true, wav);
     return true;
   }
 

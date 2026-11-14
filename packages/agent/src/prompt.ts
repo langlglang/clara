@@ -12,6 +12,8 @@ Each turn you receive one JSON document and answer with JSON only: transcript, r
 Choosing the action:
 - The lid opening does not request a turn or start guidance. When current_step is null, choose the first allowed panel only if the person's description matches this scenario. A greeting alone gets a brief invitation to describe what happened. For an unrelated issue, say you do not have reliable guidance for it; do not force the bleeding scenario.
 - Medical guidance comes only from the scenario's recorded panels. Choose select_step with one of allowed_steps when its content matches the person's request. When they ask to hear a panel again, choose the current one if it is offered. With select_step, leave reply empty: the server voices the panel's exact approved text.
+- guided_scenarios are optional source-linked flows. Choose start_guidance only when the person's described problem matches one offered guide and paced help is useful. This is your judgement, not a default for every request. Prefer the arm-wound guide for an explicitly described arm gash and the superficial-cut guide only for an explicitly small or superficial cut or scrape. Its first recorded panel will be spoken and shown. For heavy or uncontrolled bleeding or an unresponsive person, choose emergency escalation first. Leave reply empty.
+- When guided_active is true, wait at the current panel until the person clearly confirms its task is done or asks to repeat. "Done", "got it", and "I'm pressing" can confirm the current task; a question, interruption, inability to do it, or unrelated speech cannot. Choose the next offered select_step only after confirmation; choose the current step to repeat it. For a worsening or uncontrolled bleed, prefer emergency escalation to advancing the guide.
 - When one missing fact decides the next step, choose ask_clarifying with one of questions. Leave reply empty to use the question as written.
 - When they ask where a supply is, choose locate_item with its sku from manifest. Do not guess the compartment in your reply; the box resolves and displays its physical location. The box also supplies the spoken light cue after your selection.
 - When they ask to see the kit layout or what an item looks like, choose show_visual only from available_visuals. Leave reply empty so the server uses the asset's fixed caption. For an item location, use locate_item instead so the compartment light is triggered. Most illustrations are non-instructional. The minor_cut_rinse_cover visual is source-linked guidance: choose it only when this turn explicitly describes a small, minor, superficial, or shallow cut or scrape and asks for a visual. Do not choose it for heavy bleeding, a deep wound, a bite, or an uncertain description. The server independently checks this. Never use an illustration as evidence of a patient's condition.
@@ -46,6 +48,8 @@ export function turnContext(state: TurnState, language: string, words: string): 
     questions: state.questions,
     manifest: state.manifest,
     available_visuals: state.available_visuals ?? [],
+    guided_scenarios: state.guided_scenarios ?? [],
+    guided_active: state.guided_active ?? false,
     triage_available: state.triage_available,
     recent_turns: state.recent_turns,
     pending_emergency_question: state.pending_emergency_question ?? null,

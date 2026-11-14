@@ -64,6 +64,8 @@ export const ScenarioSchema = z.strictObject({
   title: z.string().min(1).max(80),
   /** "draft" until a teammate checked every step against the sources. */
   status: z.enum(["draft", "checked"]),
+  /** Offer this source-linked scenario as an optional voice-paced guide. */
+  guided: z.boolean().optional(),
   sources: z.array(z.url()).min(1),
   start: Id,
   steps: z.array(ScenarioStepSchema).min(1),

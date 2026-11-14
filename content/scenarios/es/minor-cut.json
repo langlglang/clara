@@ -4,7 +4,9 @@
   "status": "draft",
   "title": "Corte o raspón superficial",
   "steps": {
-    "rinse_cover": { "label": "Enjuagar y cubrir un corte superficial", "text": "Para un corte o raspón superficial, si hay agua del grifo o suero estéril, enjuaga hasta que no quede suciedad visible. Una vez limpio, cúbrelo con una tirita." }
+    "get_bandage": { "label": "Buscar una tirita", "text": "Toma una tirita del compartimento superior izquierdo. Busca su luz; si está apagada, usa la ubicación en pantalla. Dime cuando la tengas; enjuagaremos el corte antes de cubrirlo." },
+    "rinse": { "label": "Enjuagar el corte superficial", "text": "Si hay agua corriente del grifo o suero estéril, enjuaga este corte superficial hasta que no quede suciedad visible. Dime cuando termines." },
+    "cover": { "label": "Cubrir el corte limpio", "text": "Cuando el corte superficial esté limpio, cúbrelo con la tirita. Dime si necesitas algo más." }
   },
   "questions": {}
 }

@@ -20,6 +20,23 @@ const assistantFor = (...outputs: Parameters<typeof scriptedModel>[0]) => create
 afterEach(() => vi.useRealTimers());
 
 describe("handleTurn", () => {
+  it("resolves an offered guide's first panel and advances only on explicit completion", async () => {
+    const guide = { scenario_id: "minor_cut", label: "Superficial cut", start_step_id: "get_bandage" };
+    const offered = { ...state, guided_scenarios: [guide] };
+    const first = json({ transcript: "x", reply: "invented wording", action: { name: "start_guidance", scenario_id: "minor_cut" } });
+    const deps = { assistant: assistantFor(first), ears: null, voice: null,
+      guidance: (scenarioId: string, stepId: string) => scenarioId === "minor_cut" && stepId === "get_bandage" ? "Take the bandage from the top-left compartment." : null };
+    expect(await handleTurn(textRequest("Help with a small cut", { state: offered }), deps)).toMatchObject({
+      action: { name: "start_guidance", scenario_id: "minor_cut" }, reply: "Take the bandage from the top-left compartment.",
+    });
+    expect(await handleTurn(textRequest("Heavy bleeding from a small cut", { state: offered }), deps)).toMatchObject({ action: null, reason: "invalid_reply" });
+    const active = { ...offered, scenario_id: "minor_cut", step_id: "get_bandage", guided_active: true,
+      allowed_steps: [{ step_id: "get_bandage", label: "Find bandage" }, { step_id: "rinse", label: "Rinse" }] };
+    const next = json({ transcript: "x", reply: "", action: { name: "select_step", step_id: "rinse" } });
+    const nextDeps = { ...deps, assistant: assistantFor(next), guidance: (_scenarioId: string, stepId: string) => stepId === "rinse" ? "Rinse with water." : null };
+    expect(await handleTurn(textRequest("Where is the water?", { state: active }), nextDeps)).toMatchObject({ action: null, reason: "invalid_reply" });
+    expect(await handleTurn(textRequest("Got it", { state: active }), nextDeps)).toMatchObject({ action: { name: "select_step", step_id: "rinse" }, reply: "Rinse with water." });
+  });
   it("voices a catalog caption instead of model-authored visual instructions", async () => {
     const v = voice();
     const offered = { ...state, available_visuals: [{ visual_id: "kit_overview", label: "Clara kit layout" }] };
@@ -72,6 +89,7 @@ describe("handleTurn", () => {
     expect(v.said).toEqual(["Checked demo guidance text."]);
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.1" }).success).toBe(false);
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.5" }).success).toBe(false);
+    expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.6" }).success).toBe(false);
   });
 
   it("refuses selected guidance missing from the server bundle", async () => {

@@ -18,6 +18,7 @@ import { createCoreSessionBook, type CoreSessionBook } from "./core-session";
 import { PERSISTENCE_OFF, parseSnapshot, type PersistenceStatus, type RuntimeState, type Snapshot } from "./snapshot";
 import bleeding from "../../../content/scenarios/severe-bleeding.json";
 import minorCut from "../../../content/scenarios/minor-cut.json";
+import armGash from "../../../content/scenarios/arm-gash.json";
 import notBreathing from "../../../content/scenarios/not-breathing.json";
 import bleedingEs from "../../../content/scenarios/es/severe-bleeding.json";
 import minorCutEs from "../../../content/scenarios/es/minor-cut.json";
@@ -115,7 +116,7 @@ export interface RuntimeOptions extends NetworkOptions {
   coordinator?: (deps: { network: Network; rides: RidesAdapter; careFor: (need: Need) => CareThreshold; ambulanceEtaMin: number | null }) => Coordinator;
 }
 
-const scenarios = [bleeding, minorCut, notBreathing];
+const scenarios = [bleeding, minorCut, armGash, notBreathing];
 const stepLabels: Record<string, string> = Object.fromEntries(scenarios.flatMap((scenario) => scenario.steps.map((s: { step_id: string; label: string }) => [s.step_id, s.label])));
 const guidanceText = new Map(scenarios.map((scenario) => [scenario.scenario_id, new Map(scenario.steps.map((s) => [s.step_id, s.text] as const))] as const));
 /** Scenario words in other languages (content/scenarios/<language>/), checked against the schema at startup. */

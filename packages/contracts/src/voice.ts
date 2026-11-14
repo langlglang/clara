@@ -3,10 +3,10 @@ import { z } from "zod";
 import { TriageObservationsSchema } from "./triage.js";
 
 /**
- * Voice turn API, `voice-turn/0.6`. The box sends one turn per utterance; the server answers
+ * Voice turn API, `voice-turn/0.7`. The box sends one turn per utterance; the server answers
  * with what it heard, a short reply and at most one action. See docs/contracts.md and docs/voice.md.
  */
-export const VOICE_TURN_VERSION = "voice-turn/0.6";
+export const VOICE_TURN_VERSION = "voice-turn/0.7";
 
 /** A clip is 16 kHz mono 16-bit PCM WAV: 32 bytes per millisecond. */
 export const CLIP_SAMPLE_RATE = 16_000;
@@ -36,6 +36,7 @@ export const QuestionSchema = z.strictObject({ question_id: Id, text: z.string()
 export const ManifestItemSchema = z.strictObject({ sku: Id, name: z.string().min(1).max(80), on_hand: z.number().int().min(0).max(999) });
 export const RecentTurnSchema = z.strictObject({ from: z.enum(["person", "clara"]), words: z.string().max(MAX_HEARD) });
 export const AvailableVisualSchema = z.strictObject({ visual_id: Id, label: z.string().min(1).max(80) });
+export const GuidedScenarioSchema = z.strictObject({ scenario_id: Id, label: z.string().min(1).max(80), start_step_id: Id });
 export const PendingEmergencyQuestionSchema = z.strictObject({ task_id: z.uuid(), question_id: z.enum(["situation", "people_count", "location"]), prompt: z.string().min(1).max(200) });
 export const CoreContextSchema = z.strictObject({
   reports: z.array(z.strictObject({ source_event_id: z.uuid(), at: z.iso.datetime({ offset: true }), text: z.string().max(500) })).max(4),
@@ -52,6 +53,8 @@ export const TurnStateSchema = z.strictObject({
   triage_available: z.boolean(),
   recent_turns: z.array(RecentTurnSchema).max(12),
   available_visuals: z.array(AvailableVisualSchema).max(12).optional(),
+  guided_scenarios: z.array(GuidedScenarioSchema).max(12).optional(),
+  guided_active: z.boolean().optional(),
   pending_emergency_question: PendingEmergencyQuestionSchema.optional(),
   pulse_available: z.boolean().optional(),
   camera_available: z.boolean().optional(),
@@ -77,6 +80,7 @@ export type TurnRequest = z.infer<typeof TurnRequestSchema>;
 export const UsageItemSchema = z.strictObject({ sku: Id, qty: z.number().int().min(1).max(99) });
 
 export const ActionSchema = z.discriminatedUnion("name", [
+  z.strictObject({ name: z.literal("start_guidance"), scenario_id: Id }),
   z.strictObject({ name: z.literal("select_step"), step_id: Id }),
   z.strictObject({ name: z.literal("ask_clarifying"), question_id: Id }),
   z.strictObject({ name: z.literal("locate_item"), sku: Id }),
@@ -93,6 +97,16 @@ export const ActionSchema = z.discriminatedUnion("name", [
 ]);
 export type Action = z.infer<typeof ActionSchema>;
 export type ActionName = Action["name"];
+
+/** Conservative English guards for paced guides; the model cannot advance on an unrelated utterance. */
+export function guidedStartAllowed(words: string): boolean {
+  return !/\b(heavy|severe|spurting|gushing|uncontrolled|unresponsive|unconscious|fainting|not breathing|won't stop|cannot stop)\b/i.test(words);
+}
+
+export function guidedAdvanceAllowed(words: string): boolean {
+  if (/\b(not|can't|cannot|couldn't|haven't|didn't|still bleeding|worse|worsening)\b/i.test(words)) return false;
+  return /\b(done|finished|ready|got it|found it|have it|i am pressing|i'm pressing|pressure is on|bleeding stopped)\b/i.test(words);
+}
 
 export const FixedReasonSchema = z.enum(["not_heard", "no_model", "timeout", "model_error", "invalid_reply", "refusal"]);
 export type FixedReason = z.infer<typeof FixedReasonSchema>;
@@ -122,6 +136,8 @@ export type TurnResponse = z.infer<typeof TurnResponseSchema>;
  */
 export function actionAllowed(action: Action, state: TurnState): boolean {
   switch (action.name) {
+    case "start_guidance":
+      return state.guided_scenarios?.some((s) => s.scenario_id === action.scenario_id) ?? false;
     case "select_step":
       return state.allowed_steps.some((s) => s.step_id === action.step_id);
     case "ask_clarifying":

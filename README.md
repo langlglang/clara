@@ -33,7 +33,7 @@ A real box connects by setting `CLARA_SERVER_URL=https://clara.living` in `/etc/
 | `apps/web` | Next.js: box API, companion app (`/app`), dispatch dashboard, EMS scene report, kit map, maintainer backend |
 | `box` | Raspberry Pi service: hands-free audio, voice loop, scenario engine, kiosk screen, SOS and mock-911 flow, cloud link, ESP32 link, simulator, self-test |
 | `firmware` | ESP32 (PlatformIO): lid and mount switches, compartment LEDs, CPR rhythm, buzzer, MAX30102 pulse sensor |
-| `content` | Scenarios (severe bleeding, draft) and the kit layout |
+| `content` | Draft source-linked scenarios, including optional voice-paced superficial-cut and arm-wound guides; visual assets and the verified three-slot kit layout |
 | `docs` | Design docs; start with [feature list](docs/feature-list.md) and [conversation runtime](docs/conversation-runtime.md) |
 
 ## Run it

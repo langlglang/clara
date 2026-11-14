@@ -23,15 +23,25 @@ describe("scenario loading", () => {
   it("binds the minor-cut demo wording and sequence art to a stocked bandage", () => {
     const scenario = loadScenario(content("scenarios/minor-cut.json"));
     const kit = loadKit(content("kits/clara-3slot-v1.json"));
-    const step = scenario.steps[0]!;
-    expect(scenario).toMatchObject({ scenario_id: "minor_cut", version: "minor-cut-demo-v1", status: "draft", start: "rinse_cover" });
-    expect(step).toMatchObject({ step_id: "rinse_cover", item: "ADHESIVE_BANDAGES", image: "visuals/minor-cut-sequence-v1.svg" });
-    expect(step.text).toMatch(/running tap water or sterile saline.*adhesive bandage/i);
-    expect(step.text).toMatch(/if running tap water or sterile saline is available/i);
-    expect(step.text).not.toMatch(/antiseptic|alcohol/i);
-    expect(kit.get(step.item!)?.on_hand).toBeGreaterThan(0);
+    const [getBandage, rinse, cover] = scenario.steps;
+    expect(scenario).toMatchObject({ scenario_id: "minor_cut", version: "minor-cut-demo-v2", status: "draft", guided: true, start: "get_bandage" });
+    expect(getBandage).toMatchObject({ step_id: "get_bandage", item: "ADHESIVE_BANDAGES", next: ["rinse"] });
+    expect(rinse).toMatchObject({ step_id: "rinse", image: "visuals/minor-cut-sequence-v1.svg", next: ["cover"] });
+    expect(cover).toMatchObject({ step_id: "cover", image: "visuals/minor-cut-sequence-v1.svg", next: [] });
+    expect(rinse!.text).toMatch(/running tap water or sterile saline is available/i);
+    expect(scenario.steps.map((step) => step.text).join(" ")).not.toMatch(/antiseptic|alcohol/i);
+    expect(kit.get(getBandage!.item!)?.on_hand).toBeGreaterThan(0);
     expect(kit.get("WATER")).toBeNull();
-    expect(existsSync(content(step.image!))).toBe(true);
+    expect(existsSync(content(rinse!.image!))).toBe(true);
+  });
+  it("binds the arm-wound pressure visual and gauze to the actual box", () => {
+    const scenario = loadScenario(content("scenarios/arm-gash.json"));
+    const kit = loadKit(content("kits/clara-3slot-v1.json"));
+    expect(scenario).toMatchObject({ version: "arm-gash-demo-v1", guided: true, start: "arm_pressure" });
+    expect(scenario.steps.map((step) => step.step_id)).toEqual(["arm_pressure", "arm_gauze", "arm_check"]);
+    expect(scenario.steps[0]?.text).toMatch(/call 911 now/i);
+    expect(kit.get(scenario.steps[1]!.item!)?.slot).toBe("bottom");
+    for (const step of scenario.steps) expect(existsSync(content(step.image!))).toBe(true);
   });
   it("maps every stocked item to one of the three physically verified compartments", () => {
     const kit = loadKit(content("kits/clara-3slot-v1.json"));

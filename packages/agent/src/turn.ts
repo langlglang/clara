@@ -1,5 +1,5 @@
 // Adapted from Sophi (github.com/mzhao1599/sophi), services/cloud-api/src/walker/service.ts (turn(): transcribe, model, fixed lines, voice, time budget).
-import { VOICE_TURN_VERSION, actionAllowed, minorCutVisualAllowed, visualById, type FixedReason, type TurnRequest, type TurnResponse } from "@clara/contracts";
+import { VOICE_TURN_VERSION, actionAllowed, guidedAdvanceAllowed, guidedStartAllowed, minorCutVisualAllowed, visualById, type FixedReason, type TurnRequest, type TurnResponse } from "@clara/contracts";
 import { startTriage, TRIAGE_QUESTIONS, type TriageObservations } from "@clara/contracts";
 
 const TAG_WORDS = { red: "red, urgent", yellow: "yellow, can wait a little", green: "green, walking wounded", black: "black" } as const;
@@ -149,12 +149,20 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   const { action } = result.reply;
   // The assistant already checked this; checked again here because acting on an unoffered ID is the one thing that must never happen.
   if (action && !actionAllowed(action, request.state)) return fixed("invalid_reply", words);
+  if (action?.name === "start_guidance" && (!request.language.startsWith("en") || !guidedStartAllowed(words))) return fixed("invalid_reply", words);
+  if (action?.name === "start_guidance" && action.scenario_id === "minor_cut" && !minorCutVisualAllowed(words)) return fixed("invalid_reply", words);
+  if (action?.name === "select_step" && request.state.guided_active && action.step_id !== request.state.step_id && !guidedAdvanceAllowed(words)) return fixed("invalid_reply", words);
 
   // 3. Resolve selected guidance against server-owned content, then voice that exact text. The model's
   // selected-step wording is discarded by parseReply; the box also checks this against its local bundle.
   let reply = result.reply.reply;
   if (action?.name === "select_step") {
     reply = (request.state.scenario_id && deps.guidance?.(request.state.scenario_id, action.step_id, request.language)) || "";
+    if (!reply) return fixed("invalid_reply", words);
+  }
+  if (action?.name === "start_guidance") {
+    const guide = request.state.guided_scenarios?.find((s) => s.scenario_id === action.scenario_id);
+    reply = guide ? deps.guidance?.(guide.scenario_id, guide.start_step_id, request.language) ?? "" : "";
     if (!reply) return fixed("invalid_reply", words);
   }
   if (action?.name === "locate_item" && (spanish || request.language.toLowerCase().startsWith("en"))) {

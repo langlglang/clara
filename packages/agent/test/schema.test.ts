@@ -38,6 +38,14 @@ describe("replyJsonSchema", () => {
     expect(named("start_triage")).toBeUndefined();
     expect(named("start_triage", { ...state, triage_available: true })).toBeDefined();
   });
+  it("offers only configured guides and uses a provider-compatible triage schema", () => {
+    const offered = { ...state, guided_scenarios: [{ scenario_id: "minor_cut", label: "Superficial cut", start_step_id: "get_bandage" }], triage_available: true };
+    expect(named("start_guidance", offered)).toBeDefined();
+    expect(replyZodSchema(offered).safeParse({ transcript: "small cut", reply: "", action: { name: "start_guidance", scenario_id: "minor_cut" } }).success).toBe(true);
+    expect(replyZodSchema(offered).safeParse({ transcript: "small cut", reply: "", action: { name: "start_guidance", scenario_id: "unknown" } }).success).toBe(false);
+    expect(replyJsonSchema(offered)).not.toMatchObject({ minimum: expect.anything() });
+    expect(JSON.stringify(replyJsonSchema(offered))).not.toMatch(/"(?:minimum|maximum)"/);
+  });
 
   it("is strict at every level", () => {
     const schema = replyJsonSchema(state) as { additionalProperties: boolean; required: string[] };

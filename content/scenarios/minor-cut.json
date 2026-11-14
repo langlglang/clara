@@ -1,20 +1,34 @@
 {
   "scenario_id": "minor_cut",
-  "version": "minor-cut-demo-v1",
+  "version": "minor-cut-demo-v2",
   "title": "Superficial cut or scrape",
   "status": "draft",
+  "guided": true,
   "sources": [
     "https://cpr.heart.org/en/resuscitation-science/2024-first-aid-guidelines",
     "https://www.redcross.org/content/dam/redcross/training-services/no-index/First%20Aid-CPR-AED-Participant%27s-Manual.pdf"
   ],
-  "start": "rinse_cover",
+  "start": "get_bandage",
   "steps": [
     {
-      "step_id": "rinse_cover",
-      "label": "Show rinse and cover for a superficial cut",
-      "text": "For a superficial cut or scrape, if running tap water or sterile saline is available, rinse until no visible debris remains. Once clean, cover with an adhesive bandage.",
-      "image": "visuals/minor-cut-sequence-v1.svg",
+      "step_id": "get_bandage",
+      "label": "Find an adhesive bandage",
+      "text": "Take an adhesive bandage from the top-left compartment. Look for its light; if it stays off, use the screen location. Tell me when you have it; we'll rinse the cut before covering it.",
       "item": "ADHESIVE_BANDAGES",
+      "next": ["rinse"]
+    },
+    {
+      "step_id": "rinse",
+      "label": "Rinse the superficial cut",
+      "text": "If running tap water or sterile saline is available, rinse this superficial cut until no visible debris remains. Tell me when you're done.",
+      "image": "visuals/minor-cut-sequence-v1.svg",
+      "next": ["cover"]
+    },
+    {
+      "step_id": "cover",
+      "label": "Cover the clean cut",
+      "text": "Once the superficial cut is clean, cover it with the adhesive bandage. Tell me if you need anything else.",
+      "image": "visuals/minor-cut-sequence-v1.svg",
       "next": []
     }
   ],

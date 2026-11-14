@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" role="img" aria-labelledby="title desc">
+<title id="title">Direct pressure on an arm wound</title>
+<desc id="desc">A clean dressing is held firmly over an arm wound with both hands. A callout says to seek emergency help for rapidly flowing or uncontrolled bleeding.</desc>
+<rect width="800" height="520" fill="#1f1f23"/>
+<text x="38" y="57" fill="#f5f5f5" font-family="sans-serif" font-size="32" font-weight="700">ARM WOUND · DIRECT PRESSURE</text>
+<rect x="34" y="82" width="732" height="350" rx="20" fill="#303036" stroke="#75c9e0" stroke-width="5"/>
+<path d="M105 290 C260 265 500 265 688 290" fill="none" stroke="#bd8d6f" stroke-width="106" stroke-linecap="round"/>
+<path d="M105 290 C260 265 500 265 688 290" fill="none" stroke="#e6b08a" stroke-width="82" stroke-linecap="round"/>
+<rect x="335" y="214" width="145" height="116" rx="12" fill="#f5f2e9" stroke="#a7bac1" stroke-width="6"/>
+<path d="M362 175 C390 206 398 226 407 240 M451 171 C432 203 424 224 414 242" fill="none" stroke="#e6b08a" stroke-width="42" stroke-linecap="round"/>
+<path d="M400 113 v62" stroke="#d9f45b" stroke-width="14" stroke-linecap="round"/>
+<path d="M373 145 l27 31 27-31" fill="none" stroke="#d9f45b" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="54" y="386" fill="#f5f5f5" font-family="sans-serif" font-size="26" font-weight="700">PRESS FIRMLY · KEEP PRESSING</text>
+<text x="38" y="482" fill="#f5f5f5" font-family="sans-serif" font-size="21">Rapidly flowing or uncontrolled bleeding? Call 911 now.</text>
+</svg>

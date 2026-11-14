@@ -281,7 +281,7 @@ class VoiceLoopImpl implements VoiceLoop {
     const spokenReply = actionRefused ? (this.turnLanguage.startsWith("es") ? "No he podido hacerlo. Por favor, inténtalo otra vez." : "I couldn't complete that request. Please try again.") : reply.reply;
     this.log.info("voice turn", { answered_by: reply.answered_by, reason: reply.reason, action: action?.name ?? "none", ms: Math.round(this.clock.now() - started) });
     this.emit({ type: "turn", clientTurnId: request.client_turn_id, heard: reply.heard, reply: spokenReply, action, answeredBy: reply.answered_by });
-    if (action?.name !== "select_step") {
+    if (action?.name !== "select_step" && action?.name !== "start_guidance") {
       // The server can silently reject an obvious noise/filler transcript. Do not turn that
       // deliberate empty reply into the local "didn't catch that" fallback.
       const silentNotHeard = reply.answered_by === "fixed" && reply.reason === "not_heard" && reply.heard === null

@@ -79,6 +79,8 @@ export function createKeywordStubModel(): ReplyModel {
         questions: { question_id: string }[];
         manifest: { sku: string; name: string; on_hand: number }[];
         available_visuals?: { visual_id: string; label: string }[];
+        guided_scenarios?: { scenario_id: string; label: string }[];
+        guided_active?: boolean;
         pulse_available?: boolean;
         camera_available?: boolean;
         pending_camera_consent?: string | null;
@@ -96,7 +98,11 @@ export function createKeywordStubModel(): ReplyModel {
         : undefined;
       const pulse = turn.pulse_available && /\b(pulse|heart rate|bpm)\b/i.test(said) && /\b(read|measure|check|what|show|get)\b/i.test(said);
       const camera = turn.camera_available && /\b(camera|photo|picture|look at|see this)\b/i.test(said) && /\b(show|look|see|inspect|check|take|use|photo|picture)\b/i.test(said);
-      const nextStep = step ?? entry;
+      const guide = turn.guided_scenarios?.find((g) => g.scenario_id === "minor_cut" && /\b(small|minor|superficial|shallow)\b/i.test(said) && /\b(cut|scrape)\b/i.test(said))
+        ?? turn.guided_scenarios?.find((g) => g.scenario_id === "arm_gash" && /\b(arm|forearm)\b/i.test(said) && /\b(gash|cut|wound|bleeding)\b/i.test(said));
+      const nextStep = turn.guided_active && /\b(done|finished|ready|got it|found it|have it|pressing)\b/i.test(said)
+        ? turn.allowed_steps.find((s) => s.step_id !== turn.current_step)
+        : step ?? entry;
       const relevantQuestion = /\b(blood|bleed|bleeding|wound|injured|hurt|pain)\b/i.test(said) && turn.current_step;
       const action = sos
         ? { name: "suggest_sos" }
@@ -108,6 +114,8 @@ export function createKeywordStubModel(): ReplyModel {
           ? { name: "locate_item", sku: item.sku }
         : visual
           ? { name: "show_visual", visual_id: visual.visual_id }
+        : guide
+          ? { name: "start_guidance", scenario_id: guide.scenario_id }
         : nextStep
           ? { name: "select_step", step_id: nextStep.step_id }
           : relevantQuestion && turn.questions[0]

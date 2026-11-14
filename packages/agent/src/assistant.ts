@@ -46,7 +46,7 @@ export function parseReply(text: string, state: TurnState): ModelReply {
     throw new RejectedReply("invalid_reply", "Server note: your previous action named something that was not offered or more than is on hand. Choose only from the options given.");
   }
   // select_step plays the step's own recorded audio, so the model's words are not used.
-  if (reply.action?.name === "select_step") return { ...reply, reply: "" };
+  if (reply.action?.name === "select_step" || reply.action?.name === "start_guidance") return { ...reply, reply: "" };
   if (reply.action?.name === "show_visual") return { ...reply, reply: "" };
   if (reply.action?.name === "assess_patient") return { ...reply, reply: "" };
   if (reply.action?.name === "read_pulse" || reply.action?.name === "request_camera" || reply.action?.name === "capture_camera") return { ...reply, reply: "" };

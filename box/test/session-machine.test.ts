@@ -76,7 +76,7 @@ class FakeSpeech implements SpeechQueue {
 let n = 0;
 const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
 
-function setup(contentDir?: string, extra: Partial<Pick<BoxSessionOptions, "configuredAddress" | "location" | "pulseReader" | "camera" | "cameraCloudEnabled">> = {}, kitPath = fixture("test-kit.json")) {
+function setup(contentDir?: string, extra: Partial<Pick<BoxSessionOptions, "configuredAddress" | "location" | "pulseReader" | "camera" | "cameraCloudEnabled" | "scenarios">> = {}, kitPath = fixture("test-kit.json")) {
   const clock = new ManualClock();
   const cloud = new FakeCloudLink();
   const board = new FakeBoard();
@@ -96,6 +96,47 @@ function setup(contentDir?: string, extra: Partial<Pick<BoxSessionOptions, "conf
   });
   return { clock, cloud, board, speech, session };
 }
+
+describe("optional voice-paced guides", () => {
+  it("starts a stocked guide, lights its item, and waits for a same-turn spoken completion", () => {
+    const guide = loadScenario(content("scenarios/minor-cut.json"));
+    const { session, board } = setup(content(""), { scenarios: [guide] }, content("kits/clara-3slot-v1.json"));
+    session.lidOpened();
+    expect(session.turnState()?.guided_scenarios).toContainEqual({ scenario_id: "minor_cut", label: guide.title, start_step_id: "get_bandage" });
+    const first = guide.steps[0]!;
+    const startTurn = uuid();
+    session.heard("Help with a small cut", startTurn);
+    const start: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: startTurn, heard: "Help with a small cut", reply: first.text,
+      action: { name: "start_guidance", scenario_id: "minor_cut" }, answered_by: "model", reason: null, speech: null };
+    expect(session.applyAction(start.action!, "voice", start)).toBe(true);
+    expect(session.view().step?.step_id).toBe("get_bandage");
+    expect(board.calls).toContain("light 0");
+    const rinse = guide.steps[1]!;
+    const premature: TurnResponse = { ...start, client_turn_id: uuid(), heard: "Where is the water?", reply: rinse.text,
+      action: { name: "select_step", step_id: "rinse" } };
+    session.heard(premature.heard!, premature.client_turn_id);
+    expect(session.applyAction(premature.action!, "voice", premature)).toBe(false);
+    expect(session.view().step?.step_id).toBe("get_bandage");
+    const done: TurnResponse = { ...premature, client_turn_id: uuid(), heard: "Got it" };
+    session.heard(done.heard!, done.client_turn_id);
+    expect(session.applyAction(done.action!, "voice", done)).toBe(true);
+    expect(session.view().step?.step_id).toBe("rinse");
+    expect(session.view().presentation?.image_url).toBe("/content/visuals/minor-cut-sequence-v1.svg");
+  });
+
+  it("offers an arm wound guide with pressure art, and rejects a mismatched cloud panel", () => {
+    const guide = loadScenario(content("scenarios/arm-gash.json"));
+    const { session } = setup(content(""), { scenarios: [guide] }, content("kits/clara-3slot-v1.json"));
+    session.lidOpened();
+    const id = uuid();
+    session.heard("There is a gash on his arm", id);
+    const response: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: id, heard: "There is a gash on his arm", reply: "Wrong text",
+      action: { name: "start_guidance", scenario_id: "arm_gash" }, answered_by: "model", reason: null, speech: null };
+    expect(session.applyAction(response.action!, "voice", response)).toBe(false);
+    expect(session.applyAction(response.action!, "voice", { ...response, reply: guide.steps[0]!.text })).toBe(true);
+    expect(session.view().presentation?.image_url).toBe("/content/visuals/arm-pressure-v1.svg");
+  });
+});
 
 describe("background sensor tasks", () => {
   it("surfaces a fresh pulse result after an intervening item request", async () => {

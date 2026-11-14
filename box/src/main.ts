@@ -71,7 +71,7 @@ export function readConfig(env: NodeJS.ProcessEnv, argv: readonly string[]): Box
     gpsPort: sim ? null : env.CLARA_GPS_PORT ?? null,
     token: env.CLARA_BOX_TOKEN ?? null,
     scenarioPath: flag(argv, "scenario") ?? env.CLARA_SCENARIO ?? resolve(REPO_ROOT, "content/scenarios/severe-bleeding.json"),
-    extraScenarioPaths: (env.CLARA_EXTRA_SCENARIOS ?? resolve(REPO_ROOT, "content/scenarios/not-breathing.json"))
+    extraScenarioPaths: (env.CLARA_EXTRA_SCENARIOS ?? ["not-breathing.json", "minor-cut.json", "arm-gash.json"].map((file) => resolve(REPO_ROOT, "content/scenarios", file)).join(","))
       .split(",").map((p) => p.trim()).filter((p) => p && p.toLowerCase() !== "none"),
     kitPath: flag(argv, "kit") ?? env.CLARA_KIT ?? resolve(REPO_ROOT, "content/kits/clara-3slot-v1.json"),
     contentDir: resolve(env.CLARA_CONTENT_DIR ?? resolve(REPO_ROOT, "content")),

@@ -121,13 +121,13 @@ export async function loadVoiceLoop(o: {
           session.heard(event.heard);
         }
         session.remember("clara", event.reply);
-        if (event.action?.name !== "select_step" && event.reply) session.showCaption(event.reply);
+        if (event.action?.name !== "select_step" && event.reply) session.showCaption(event.reply, !event.action);
       },
       log: logger("voice", o.log),
     });
-    return loop;
+    return Object.assign(loop, { handsFree: o.listener.handsFree === true });
   } catch (error) {
-    o.log(`voice loop not started (${(error as Error).message}); touch only`);
+    o.log(`voice loop not started (${(error as Error).message}); simulated SOS remains available`);
     return null;
   }
 }

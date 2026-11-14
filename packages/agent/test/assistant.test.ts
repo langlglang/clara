@@ -22,8 +22,8 @@ describe("parseReply", () => {
     expect(() => parse({ transcript: "x", reply: "", action: { name: "select_step", step_id: "packing" } })).toThrow(/not offered/);
   });
 
-  it("rejects usage above what is on hand (actionAllowed)", () => {
-    expect(() => parse({ transcript: "x", reply: "Got it.", action: { name: "record_usage", items: [{ sku: "GAUZE-01", qty: 3 }] } })).toThrow(/on hand/);
+  it("does not offer supply changes without a confirmation interface", () => {
+    expect(() => parse({ transcript: "x", reply: "Got it.", action: { name: "record_usage", items: [{ sku: "GAUZE-01", qty: 3 }] } })).toThrow(/not offered/);
   });
 
   it("rejects an empty reply without a step or question, and allows it with ask_clarifying", () => {
@@ -55,7 +55,7 @@ describe("createAssistant", () => {
     const model = scriptedModel([overuse, overuse]);
     const result = await createAssistant(model).reply(state, "en", "I used five gauze", 2_000);
     expect(result).toMatchObject({ ok: false, reason: "invalid_reply", attempts: 2 });
-    expect(model.notes[1]).toMatch(/not offered or more than is on hand/);
+    expect(model.notes[1]).toMatch(/not offered/);
   });
 
   it("treats a refusal as final, with no retry", async () => {

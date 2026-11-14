@@ -33,7 +33,7 @@ export const HONESTY_RULES: HonestyRule[] = [
     id: "false_comfort",
     pattern:
       /\b(you|he|she|they|it|everything|everyone|this|that)('ll| will| is going to| are going to| 're going to| 's going to)\s+(be\s+)?(fine|okay|ok|alright|all right|good|safe)\b|\b(it|that|this)('s| is)\s+(okay|ok|fine|alright|all right|not serious|nothing serious)\b|\b(don't|do not) worry\b|\bnothing to worry about\b|\bno need to (worry|panic)\b|\b(not|nothing) (that |too )?serious\b|\bno big deal\b/i,
-    note: "Never reassure about the outcome or say it's okay. Acknowledge them and point to the step on the screen instead.",
+    note: "Never reassure about the outcome or say it's okay. Acknowledge the person without promising an outcome.",
   },
   {
     id: "diagnosis",

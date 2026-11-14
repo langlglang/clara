@@ -5,15 +5,16 @@ import { actionAllowed, comingLine, type Action, type Alert, type BoxEvent, type
 import { EventFactory, type EventBody } from "../engine/events.js";
 import { ScenarioEngine, type RecentTurn, type Source, type StepIntent } from "../engine/engine.js";
 import type { Kit } from "../engine/kit.js";
+import type { LocationProvider } from "../location/gps.js";
 import type { Board, CloudLink, CueName, SpeechQueue } from "../ports.js";
-import type { ScreenPress, ScreenView } from "../screen/view.js";
+import { SCREEN_VIEW_VERSION, type ScreenPresentation, type ScreenPress, type ScreenView } from "../screen/view.js";
 import { systemClock, type Cancel, type Clock } from "./clock.js";
 import { LINES, coachingLines } from "./lines.js";
 
 /**
  * The box's state machine:
  *
- *   idle ──lid opened──▶ guiding ──SOS──▶ countdown (5 s, Cancel) ──▶ sos (mock 911 screen)
+ *   idle ──lid opened──▶ listening ──spoken request──▶ guiding ──SOS──▶ countdown ──▶ sos
  *     ▲                                                                       │
  *     └────────────────────────────── lid closed ends the session ◀───────────┘
  *
@@ -26,6 +27,7 @@ export type Need = "bleeding" | "breathing" | "general";
 
 /** The parts of the hands-free voice loop the session drives (box/src/voice adapts to this). */
 export interface VoiceControl {
+  readonly handsFree?: boolean;
   start(): void;
   stop(): void;
   pressTalk(): void;
@@ -37,6 +39,9 @@ export interface BoxSessionOptions {
   boxName?: string;
   /** Written directions to this box, for the mock-911 coaching. */
   directions?: string | null;
+  /** Site address shown as a fallback when USB GPS has no fresh fix. */
+  configuredAddress?: string | null;
+  location?: Pick<LocationProvider, "current"> | null;
   scenario: Scenario;
   kit: Kit;
   cloud: CloudLink;
@@ -78,6 +83,8 @@ export class BoxSession {
   private readonly countdownSeconds: number;
 
   private voice: VoiceControl | null = null;
+  private lidOpen = false;
+  private presentation: ScreenPresentation | null = null;
   private countdown: Countdown | null = null;
   private sos: { need: Need; openedAt: number; overlay: boolean } | null = null;
   private readonly alerts = new Map<string, Alert>();
@@ -132,7 +139,7 @@ export class BoxSession {
 
   attachVoice(voice: VoiceControl | null): void {
     this.voice = voice;
-    if (voice && this.active) voice.start();
+    if (voice && this.lidOpen) voice.start();
     this.publish();
   }
 
@@ -149,15 +156,21 @@ export class BoxSession {
   // ---------- Lid ----------
 
   lidOpened(): void {
-    if (this.active) return; // switch bounce or a repeated report
-    this.beginSession();
+    if (this.lidOpen) return; // switch bounce or a repeated report
+    this.lidOpen = true;
+    if (!this.active) this.beginSession();
     this.board((b) => b.buzz("chime"));
-    this.apply(this.engine.start("device"));
     this.voice?.start();
+    this.publish();
   }
 
   lidClosed(): void {
-    if (!this.active) return;
+    if (!this.lidOpen) return;
+    this.lidOpen = false;
+    if (!this.active) {
+      this.publish();
+      return;
+    }
     if (this.countdown) {
       this.countdown.cancelTick();
       this.countdown = null;
@@ -174,6 +187,7 @@ export class BoxSession {
     this.lastComing = null;
     this.multipleInjured = false;
     this.caption = null;
+    this.presentation = null;
     this.notice = null;
     this.messages = [];
     this.pendingUsage = null;
@@ -304,6 +318,7 @@ export class BoxSession {
         this.goTo(press.step_id, "touch");
         return;
       case "talk":
+        if (!this.lidOpen) return;
         if (!this.voice) {
           this.say(LINES.noVoice);
           this.publish();
@@ -313,6 +328,7 @@ export class BoxSession {
         this.voice.pressTalk();
         return;
       case "talk_end":
+        if (!this.lidOpen) return;
         this.voice?.endPress?.();
         return;
       case "sos":
@@ -361,7 +377,7 @@ export class BoxSession {
 
   /** The state a voice turn offers the model, or null outside a session. */
   turnState(): TurnState | null {
-    if (!this.active) return null;
+    if (!this.active || !this.lidOpen) return null;
     return this.engine.turnState(this.recent);
   }
 
@@ -393,12 +409,23 @@ export class BoxSession {
       case "ask_clarifying": {
         const question = this.o.scenario.questions.find((q) => q.question_id === action.question_id);
         this.notice = question?.text ?? null;
+        if (question) {
+          this.caption = question.text;
+          this.presentation = { kind: "question", title: "Clara asks", body: question.text, image_url: null, item: null, source_label: "Demo scenario" };
+          this.o.speech?.say({ text: question.text }).catch(() => {});
+        }
         this.publish();
         return true;
       }
-      case "locate_item":
+      case "locate_item": {
+        const item = this.o.kit.get(action.sku);
+        this.presentation = item && item.on_hand > 0
+          ? { kind: "item", title: item.name, body: `Listed in compartment ${item.slot}.`, image_url: null,
+              item: { sku: item.sku, name: item.name, slot: item.slot, lit: false, missing: false }, source_label: "Demo kit manifest" }
+          : { kind: "status", title: "Item unavailable", body: "This item is not listed as available in this box.", image_url: null, item: null, source_label: "Demo kit manifest" };
         this.apply(this.engine.locate(action.sku), false);
         return true;
+      }
       case "record_usage":
         // Proposed only: the count changes after a tap on Confirm.
         this.pendingUsage = action.items.map((item) => ({ ...item, name: this.o.kit.get(item.sku)?.name ?? item.sku }));
@@ -415,14 +442,18 @@ export class BoxSession {
   }
 
   /** Shows and says a line (a server reply, or a fixed line). */
-  say(text: string, wav?: Buffer): void {
+  say(text: string, wav?: Buffer, showAsAnswer = true): void {
     this.caption = text;
+    if (showAsAnswer && text.trim()) this.presentation = { kind: "answer", title: "Clara", body: text, image_url: null, item: null, source_label: null };
     this.o.speech?.say(wav ? { text, wav } : { text }).catch(() => {});
+    this.publish();
   }
 
   /** Shows a line someone else is already speaking (the voice loop's reply), without saying it again. */
-  showCaption(text: string): void {
+  showCaption(text: string, showAsAnswer = true): void {
+    if (!this.lidOpen) return;
     this.caption = text;
+    if (showAsAnswer && text.trim()) this.presentation = { kind: "answer", title: "Clara", body: text, image_url: null, item: null, source_label: null };
     this.publish();
   }
 
@@ -506,8 +537,10 @@ export class BoxSession {
     const step = this.engine.current;
     const countdown = this.countdown;
     return {
+      schema_version: SCREEN_VIEW_VERSION,
       revision: this.revision,
       phase: !this.active ? "idle" : countdown ? "countdown" : this.sos?.overlay ? "sos" : "guiding",
+      lid_open: this.lidOpen,
       box_name: this.boxName,
       online: this.online,
       simulated: this.o.simulated ?? false,
@@ -533,13 +566,19 @@ export class BoxSession {
             is_end: step.next.length === 0,
           }
         : null,
+      presentation: this.presentation
+        ? { ...this.presentation, item: this.presentation.item
+            ? { ...this.presentation.item, lit: this.lit?.sku === this.presentation.item.sku, missing: this.missing?.sku === this.presentation.item.sku }
+            : null }
+        : null,
       countdown: countdown ? { seconds_left: Math.max(0, Math.ceil((countdown.endsAt - this.clock.monotonic()) / 1000)), total: countdown.total } : null,
       sos: this.sos
         ? {
             need: this.sos.need,
             opened_at: this.sos.openedAt,
             overlay: this.sos.overlay,
-            coaching: coachingLines({ boxName: this.boxName, directions: this.o.directions ?? null, multipleInjured: this.multipleInjured }),
+            coaching: coachingLines({ boxName: this.boxName, directions: this.o.directions ?? null, multipleInjured: this.multipleInjured,
+              location: this.o.location?.current() ?? null, configuredAddress: this.o.configuredAddress ?? null }),
           }
         : null,
       coming: this.lastComing,
@@ -550,7 +589,7 @@ export class BoxSession {
       notice: this.notice,
       messages: this.messages.map((m) => ({ ...m })),
       pending_usage: this.pendingUsage ? this.pendingUsage.map((u) => ({ ...u })) : null,
-      voice_available: this.voice !== null,
+      voice_available: this.lidOpen && this.voice?.handsFree === true,
       report_url: this.reportUrl,
     };
   }
@@ -573,6 +612,15 @@ export class BoxSession {
           this.lit = null;
           this.missing = null;
           if (!intent.replay) this.notice = null;
+          this.presentation = {
+            kind: "guidance", title: intent.step.label, body: intent.step.text,
+            image_url: intent.step.image ? `/content/${intent.step.image.split("/").map(encodeURIComponent).join("/")}` : null,
+            item: intent.step.item ? {
+              sku: intent.step.item, name: this.o.kit.get(intent.step.item)?.name ?? null,
+              slot: this.o.kit.get(intent.step.item)?.slot ?? null, lit: false, missing: false,
+            } : null,
+            source_label: `Demo scenario ${this.o.scenario.version}`,
+          };
           if (speakStep) this.speakStep(intent.step);
           break;
         case "light":

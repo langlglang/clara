@@ -11,9 +11,10 @@
 <body>
 <div id="app">
   <header id="top">
-    <span id="brand">CLARA</span>
+    <span id="brand">CLARA DEMO</span>
     <span id="box-name"></span>
     <span id="tag-sim" class="tag sim" hidden>SIMULATION</span>
+    <span id="voice-state" class="tag">MIC OFF</span>
     <span id="status" class="tag status"><i class="dot"></i><span id="status-text">ONLINE</span></span>
     <span id="tag-link" class="tag lost" hidden><i class="dot"></i>SCREEN LOST THE BOX SERVICE</span>
   </header>
@@ -21,54 +22,37 @@
   <div id="banners">
     <div id="coming" class="banner coming" hidden><i class="dot"></i><span id="coming-text"></span></div>
     <div id="nearby-banner" class="banner nearby" hidden><b>EMERGENCY NEARBY</b><span id="nearby-banner-text"></span></div>
-    <div id="notice" class="banner notice" hidden><span id="notice-text"></span><button data-action="dismiss_notice" class="small">OK</button></div>
+    <div id="notice" class="banner notice" hidden><span id="notice-text"></span></div>
   </div>
 
   <main id="main">
     <section id="idle" hidden>
-      <div class="lbl">FIRST-AID KIT · READY</div>
+      <div class="lbl">CLARA DEMO</div>
       <h1>Clara</h1>
-      <p>Open the lid to start, or tap Start. Clara shows one step at a time.</p>
-      <button data-action="start" class="big strong">START</button>
+      <p id="idle-instruction">Open the lid to speak with Clara.</p>
+      <div id="idle-caption"></div>
     </section>
 
-    <section id="guide" hidden>
+    <section id="presentation" aria-live="polite" hidden>
       <div id="words">
-        <div id="step-label" class="lbl"></div>
-        <div id="step-text"></div>
+        <div id="visual-title" class="lbl"></div>
+        <div id="visual-body"></div>
         <div id="item" hidden>
           <span id="slot"></span>
           <span id="item-text"></span>
           <span id="item-state"></span>
         </div>
-        <div id="options"></div>
         <div id="caption"></div>
+        <div id="visual-source" class="lbl"></div>
       </div>
-      <div id="picture"><img id="step-image" alt=""><div id="no-image">NO PICTURE</div></div>
+      <div id="picture"><img id="visual-image" alt=""><div id="no-image">NO PICTURE</div></div>
     </section>
   </main>
 
   <aside id="rail">
     <button data-action="sos" id="sos-button" class="sos">SOS<small>SIMULATED 911</small></button>
-    <button data-action="multiple_injured" id="multi-button" class="multi">MULTIPLE INJURED</button>
     <div id="tiles"></div>
   </aside>
-
-  <footer id="controls">
-    <button data-action="back" id="back-button">BACK</button>
-    <button data-action="repeat" id="repeat-button">REPEAT</button>
-    <button data-action="next" id="next-button" class="strong">NEXT</button>
-    <button data-action="talk" id="talk-button" class="talk"><i class="dot"></i>TALK</button>
-  </footer>
-
-  <div id="usage" class="overlay" hidden>
-    <div class="card">
-      <div class="lbl">RESTOCK</div>
-      <h2>Used from the kit?</h2>
-      <ul id="usage-list"></ul>
-      <div class="row"><button data-action="confirm_usage" class="strong">CONFIRM</button><button data-action="dismiss_usage">NOT NOW</button></div>
-    </div>
-  </div>
 
   <div id="countdown" class="overlay danger" hidden>
     <div class="card center">
@@ -87,20 +71,10 @@
       <ol id="coaching"></ol>
       <div id="call-network"></div>
       <div id="call-coming"></div>
-      <div class="row"><button data-action="hide_911" class="strong">BACK TO STEPS</button></div>
+      <div class="row"><button data-action="hide_911" class="strong">BACK TO CLARA</button></div>
     </div>
   </div>
 
-  <div id="nearby-card" class="overlay alert" hidden>
-    <div class="alert-strip">EMERGENCY NEARBY</div>
-    <div class="card">
-      <h2 id="nearby-title"></h2>
-      <div class="lbl">DIRECTIONS</div>
-      <p id="nearby-directions"></p>
-      <p id="nearby-note"></p>
-      <div class="row"><button id="bringing-button" class="big primary">BRINGING THIS KIT</button><button id="nearby-dismiss" class="big">DISMISS</button></div>
-    </div>
-  </div>
 </div>
 <script src="/screen/assets/app.js"></script>
 </body>

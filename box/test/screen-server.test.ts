@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { contentPath, startScreenServer, type ScreenPress, type ScreenServer, type ScreenView } from "../src/screen/index.js";
+import { SCREEN_VIEW_VERSION, contentPath, startScreenServer, type ScreenPress, type ScreenServer, type ScreenView } from "../src/screen/index.js";
 
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 let server: ScreenServer | null = null;
@@ -16,13 +16,16 @@ afterEach(async () => {
 });
 
 const view = (revision: number): ScreenView => ({
+  schema_version: SCREEN_VIEW_VERSION,
   revision,
   phase: "idle",
+  lid_open: false,
   box_name: "Test",
   online: true,
   simulated: true,
   scenario_title: null,
   step: null,
+  presentation: null,
   countdown: null,
   sos: null,
   coming: null,
@@ -63,6 +66,10 @@ describe("screen server", () => {
     const page = await call(s.port, "/");
     expect(page.status).toBe(200);
     expect(page.body).toContain('content="test-token"');
+    expect(page.body).toContain('data-action="sos"');
+    for (const action of ["next", "back", "repeat", "talk", "goto", "start"]) {
+      expect(page.body).not.toContain(`data-action="${action}"`);
+    }
     expect(page.headers["content-security-policy"]).toContain("default-src 'none'");
     expect((await call(s.port, "/screen/assets/app.js")).status).toBe(200);
     expect((await call(s.port, "/screen/assets/style.css")).status).toBe(200);
@@ -110,6 +117,9 @@ describe("screen server", () => {
       req.end();
     });
     expect(chunks.join("")).toContain("event: view");
+    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.0"');
+    expect(chunks.join("")).toContain('"presentation":null');
+    expect(chunks.join("")).toContain('"step":null');
   });
 
   it("serves content images only, never outside content/", async () => {

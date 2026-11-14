@@ -37,6 +37,13 @@ describe("scenario loading", () => {
 });
 
 describe("ScenarioEngine", () => {
+  it("offers only the entry package before guidance starts", () => {
+    const { engine } = setup();
+    expect(engine.turnState().allowed_steps.map((s) => s.step_id)).toEqual(["s1"]);
+    expect(engine.goTo("s2", "voice")).toBeNull();
+    expect(engine.goTo("s1", "voice")?.[0]).toMatchObject({ kind: "show", replay: false });
+  });
+
   it("starts at the first step, emits events and lights the step's compartment", () => {
     const { engine, events, types } = setup();
     const intents = engine.start("device");

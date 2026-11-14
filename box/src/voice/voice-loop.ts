@@ -3,8 +3,8 @@
  * (turn deadline, fixed local lines, half-duplex), and Clara's pre-event scaffold (box/src/conversation.ts).
  *
  * Half-duplex: the listener is paused from the moment a clip is taken until the answer has finished playing,
- * and whenever the speech queue is busy. A Talk tap interrupts at any point. Every turn has a deadline; a
- * timeout or no link ends in a fixed local line, and the touch flow keeps working.
+ * and whenever the speech queue is busy. Every turn has a deadline; a timeout or no link ends in a
+ * fixed local line, while the current visual and mock SOS remain available.
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -29,9 +29,9 @@ export const LISTENING_CUE_MAX_MS = 1_000;
 
 /** Fixed local lines (English until other languages are recorded). */
 export const LOCAL_LINES = {
-  timeout: "That took too long. Follow the step on the screen, or tell me again.",
-  unreachable: "I can't reach the assistant right now. Follow the step on the screen.",
-  notCaught: "I didn't catch that. Tap the step on the screen, or tell me again.",
+  timeout: "That took too long. Please tell me again.",
+  unreachable: "I can't reach the assistant right now. The simulated SOS button is available.",
+  notCaught: "I didn't catch that. Please tell me again.",
 } as const;
 
 /** What the box is doing now, for the screen. */

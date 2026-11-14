@@ -26,12 +26,12 @@ const VOICE_RESERVE_MS = 900;
 
 /** Fixed lines in English; other languages fall back to English until they are written and checked. */
 export const FIXED_LINES: Record<FixedReason, string> = {
-  not_heard: "I didn't catch that. Tell me again, or tap the step on the screen.",
-  no_model: "I can't answer right now. Follow the steps on the screen.",
-  timeout: "That took too long. Follow the step on the screen, or tell me again.",
-  model_error: "Something went wrong. Follow the step on the screen, or tell me again.",
-  invalid_reply: "I didn't catch that. Tell me again, or tap the step on the screen.",
-  refusal: "I can't help with that. Follow the steps on the screen.",
+  not_heard: "I didn't catch that. Please tell me again.",
+  no_model: "I can't answer right now. The simulated SOS button is available.",
+  timeout: "That took too long. Please tell me again.",
+  model_error: "Something went wrong. Please tell me again.",
+  invalid_reply: "I didn't catch that. Please tell me again.",
+  refusal: "I can't help with that request. The simulated SOS button is available.",
 };
 
 export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedAt = Date.now()): Promise<TurnResponse> {

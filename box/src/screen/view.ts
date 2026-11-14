@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Id } from "@clara/contracts";
 
 export type ScreenPhase = "idle" | "guiding" | "countdown" | "sos";
+export const SCREEN_VIEW_VERSION = "screen-view/1.0" as const;
 
 export interface ScreenStep {
   step_id: string;
@@ -21,16 +22,32 @@ export interface ScreenStep {
   is_end: boolean;
 }
 
+/** The current visual, independent of whether the scenario engine has a step. */
+export interface ScreenPresentation {
+  kind: "answer" | "question" | "guidance" | "item" | "diagram" | "reading" | "handoff" | "status";
+  title: string;
+  body: string;
+  /** Only local, allowlisted `/content/...` assets may be provided by a producer. */
+  image_url: string | null;
+  item: ScreenStep["item"];
+  source_label: string | null;
+}
+
 export interface ScreenView {
+  schema_version: typeof SCREEN_VIEW_VERSION;
   revision: number;
   phase: ScreenPhase;
+  /** Physical lid state; an SOS session may exist while the lid and microphone are closed. */
+  lid_open: boolean;
   box_name: string;
-  /** The box's link to the server. The touch flow works either way. */
+  /** The box's link to the server. Local simulated SOS works either way. */
   online: boolean;
   /** Simulator, or parts missing: shown as a tag so nobody mistakes it for the real thing. */
   simulated: boolean;
   scenario_title: string | null;
   step: ScreenStep | null;
+  /** Additive in screen-view/1.0; `step` remains for older consumers. */
+  presentation: ScreenPresentation | null;
   countdown: { seconds_left: number; total: number } | null;
   /** Mock 911 only: never a real call. */
   sos: { need: "bleeding" | "breathing" | "general"; opened_at: number; overlay: boolean; coaching: string[] } | null;

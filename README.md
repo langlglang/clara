@@ -2,7 +2,7 @@
 
 **AI-guided first-aid boxes that bring a network of nearby help to the scene.** HackPrinceton Fall 2026, Healthcare track.
 
-Where professional help is far away (conflict zones, refugee camps, remote and high-poverty areas), the first responder is whoever is standing nearby. Clara is a box on the wall: open it and an AI talks you through the injury step by step, lights the compartment holding what you need, and alerts trained volunteers nearby through a companion app. The box only says someone is coming once a real person has accepted. Paramedics get a live scene report: what happened, what was done, and when the tourniquet went on.
+Where professional help is far away (conflict zones, refugee camps, remote and high-poverty areas), the first responder is whoever is standing nearby. Clara is a box on the wall: open it and talk to an AI about what is needed. It can show a relevant visual, light the compartment holding a requested item, and coordinate a demo response network. The box only says someone is coming once a real person has accepted. A scene report can separate what was reported, observed, and done.
 
 > Clara is a hackathon proof of concept. It is never used on a patient, the demo scenarios are fictional, and the 911 call is simulated.
 
@@ -25,13 +25,13 @@ A real box connects by setting `CLARA_SERVER_URL=https://clara.living` in `/etc/
 | Path | What it is |
 | --- | --- |
 | `packages/contracts` | Shared types (zod): box events, scenarios, voice turns, the response network, ESP32 serial messages |
-| `packages/agent` | The voice brain: Cartesia speech-to-text → Claude (Haiku 5.5, Opus 5.5 backup) picks one allowed action → Cartesia voice. Honesty guard in code. |
+| `packages/agent` | Current one-turn voice brain: Cartesia speech-to-text → Claude (Haiku 5.5, Opus 5.5 backup) picks one allowed action → Cartesia voice. Honesty guard in code. The persistent multiagent runtime is proposed in [conversation-runtime](docs/conversation-runtime.md). |
 | `packages/network` | Incidents, volunteer matching, alerts (sent → shown → coming → arrived), escalation, the EMS scene report, box status, supply ledger |
 | `apps/web` | Next.js: box API, companion app (`/app`), dispatch dashboard, EMS scene report, kit map, maintainer backend |
 | `box` | Raspberry Pi service: hands-free audio, voice loop, scenario engine, kiosk screen, SOS and mock-911 flow, cloud link, ESP32 link, simulator, self-test |
 | `firmware` | ESP32 (PlatformIO): lid and mount switches, compartment LEDs, CPR rhythm, buzzer, MAX30102 pulse sensor |
 | `content` | Scenarios (severe bleeding, draft) and the kit layout |
-| `docs` | Design docs; start with [docs/feature-list.md](docs/feature-list.md) |
+| `docs` | Design docs; start with [feature list](docs/feature-list.md) and [conversation runtime](docs/conversation-runtime.md) |
 
 ## Run it
 

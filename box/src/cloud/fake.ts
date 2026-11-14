@@ -5,7 +5,7 @@ import { CloudError } from "./http.js";
 export type TurnResponder = (request: TurnRequest, signal: AbortSignal) => Promise<TurnResponse> | TurnResponse;
 
 /** A fixed "not heard" answer: what the fake says when nothing else is set. */
-export function fixedReply(request: TurnRequest, reply = "I can't answer that here. Follow the step on the screen."): TurnResponse {
+export function fixedReply(request: TurnRequest, reply = "I can't answer that here. The simulated SOS button is available."): TurnResponse {
   return { schema_version: VOICE_TURN_VERSION, client_turn_id: request.client_turn_id, heard: null, reply, action: null, answered_by: "fixed", reason: "no_model", speech: null };
 }
 

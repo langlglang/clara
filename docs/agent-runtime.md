@@ -1,6 +1,6 @@
 # Agent runtime blueprint — proposal v0.1
 
-**Status:** no runtime exists. Cloud workers stay warm; lid opening creates a new session. A missed cloud handshake must never block the local interface. The agent is a streaming, tool-using orchestrator constrained by versioned step packages, not a scripted menu. All scenarios are fictional. Clara will never be used on a patient; see [demo content boundaries](medical-safety.md).
+**Status:** a constrained one-turn voice runtime exists; the general multiagent runtime is proposed. [Conversation and presentation runtime](conversation-runtime.md) is the current design for one user-facing Core Clara, request-driven turns, background workers, and general visual cards. This older blueprint describes the preauthored scenario adapter and safety constraints. Where it assumes mandatory sequential steps, touchscreen navigation, or offline voice, follow the newer document. All scenarios are fictional. Clara will never be used on a patient; see [demo content boundaries](medical-safety.md).
 
 ## Event loop
 

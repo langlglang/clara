@@ -73,21 +73,37 @@ export function createKeywordStubModel(): ReplyModel {
     async generate({ context }) {
       const turn = JSON.parse(context) as {
         person_words: string;
+        current_step: string | null;
         allowed_steps: { step_id: string; label: string }[];
         questions: { question_id: string }[];
+        manifest: { sku: string; name: string; on_hand: number }[];
       };
       const said = turn.person_words;
       const heard = tokens(said);
       const step = turn.allowed_steps.find((s) => [...tokens(s.label)].some((w) => heard.has(w)));
-      const sos = /\b(emergency|dying|not breathing|unconscious|unresponsive)\b/i.test(said);
-      const action = step
-        ? { name: "select_step", step_id: step.step_id }
-        : sos
-          ? { name: "suggest_sos" }
-          : turn.questions[0]
+      const entry = !turn.current_step && /\b(blood|bleed|bleeding|wound)\b/i.test(said) ? turn.allowed_steps[0] : undefined;
+      const sos = /\b(911|sos|emergency|dying|not breathing|unconscious|unresponsive)\b/i.test(said);
+      const item = /\b(where|find|locate|grab|get)\b/i.test(said)
+        ? turn.manifest.find((m) => m.on_hand > 0 && [...tokens(m.name)].some((w) => heard.has(w)))
+        : undefined;
+      const nextStep = step ?? entry;
+      const relevantQuestion = /\b(blood|bleed|bleeding|wound|injured|hurt|pain)\b/i.test(said) && turn.current_step;
+      const action = sos
+        ? { name: "suggest_sos" }
+        : item
+          ? { name: "locate_item", sku: item.sku }
+        : nextStep
+          ? { name: "select_step", step_id: nextStep.step_id }
+          : relevantQuestion && turn.questions[0]
             ? { name: "ask_clarifying", question_id: turn.questions[0].question_id }
             : null;
-      const reply = action?.name === "suggest_sos" ? "Tap the SOS button on the screen if you need emergency help." : action ? "" : "I'm here. Tap the step on the screen, or tell me what happened.";
+      const reply = action?.name === "suggest_sos"
+        ? "Starting the simulated SOS countdown. No real call is made."
+        : action?.name === "locate_item"
+          ? "I'm showing the recorded kit location."
+          : action
+            ? ""
+            : "I'm here. Tell me what happened.";
       return { text: JSON.stringify({ transcript: said, reply, action }), stopReason: "end_turn" };
     },
   };

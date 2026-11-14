@@ -1,6 +1,6 @@
 # Clara feature inventory — proposal
 
-**Status as of 2026-11-03:** documentation only. Nothing below is marked implemented or verified. “Demo target” means a planned HackPrinceton interaction with fictional scenarios and consenting volunteers; “later concept” means work outside this demo. Clara will never be used on a patient.
+**Historical inventory from 2026-11-03.** This table is retained for earlier feature ideas and its phase labels are not current implementation status. Use the [current feature list](feature-list.md) for status and the [conversation runtime](conversation-runtime.md) for the current interaction design. In particular, step navigation, an on-screen Talk button, and a generic offline voice guide are not part of the current screen. Clara will never be used on a patient.
 
 | Feature | Phase | What is proposed |
 | --- | --- | --- |

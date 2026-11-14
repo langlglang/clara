@@ -27,6 +27,8 @@ export interface Microphone {
 
 /** Hands-free listening: emits one clip per utterance (voice-activity detection ends it). */
 export interface Listener {
+  /** True only when this listener captures hands-free without a screen button. */
+  readonly handsFree?: boolean;
   start(onClip: (clip: Clip) => void): void;
   /** Half-duplex: paused while the box speaks. */
   pause(): void;

@@ -1,4 +1,4 @@
-// Clara box screen. Draws the ScreenView the box service streams (Server-Sent Events) and posts presses.
+// Clara box screen. Draws the ScreenView the box service streams (Server-Sent Events) and posts SOS presses.
 // Pattern from Sophi's walker screen (github.com/mzhao1599/sophi, devices/pi/src/screen/page.tsx), without React.
 (() => {
   "use strict";
@@ -100,8 +100,9 @@
     const v = view;
     text($("box-name"), v.box_name);
     show($("tag-sim"), v.simulated);
+    text($("voice-state"), !v.lid_open ? "MIC OFF" : v.voice_available ? "VOICE ENABLED" : "VOICE UNAVAILABLE");
     $("status").classList.toggle("offline", !v.online);
-    text($("status-text"), v.online ? "ONLINE" : "OFFLINE · STEPS STILL WORK");
+    text($("status-text"), v.online ? "ONLINE" : "OFFLINE · SOS AVAILABLE");
     show($("tag-link"), !linkOk);
 
     show($("coming"), Boolean(v.coming));
@@ -111,84 +112,59 @@
       $("coming").classList.toggle("here", strip.here);
     }
 
-    const busy = v.phase !== "idle";
     const firstNearby = v.nearby[0];
-    show($("nearby-banner"), busy && Boolean(firstNearby));
+    show($("nearby-banner"), Boolean(firstNearby));
     if (firstNearby) text($("nearby-banner-text"), `${firstNearby.from_box_name}: ${firstNearby.directions}`);
 
     show($("notice"), Boolean(v.notice));
     text($("notice-text"), v.notice);
 
-    show($("idle"), !v.step);
-    show($("guide"), Boolean(v.step));
-    if (v.step) {
-      const s = v.step;
-      text($("step-label"), s.label);
-      text($("step-text"), s.text);
-      // Long steps, or steps with branch buttons, get a smaller size so everything fits 800x480 unscrolled.
-      $("step-text").classList.toggle("long", s.text.length > 110 || (s.options.length > 1 && s.text.length > 70));
-      const img = $("step-image");
-      if (s.image_url) {
-        if (img.getAttribute("src") !== s.image_url) img.setAttribute("src", s.image_url);
+    const p = v.presentation || (v.step ? {
+      title: v.step.label, body: v.step.text, image_url: v.step.image_url, item: v.step.item, source_label: null,
+    } : null);
+    show($("idle"), !p);
+    show($("presentation"), Boolean(p));
+    text($("idle-instruction"), v.lid_open ? v.voice_available ? "Talk to Clara about what you need. Visuals appear here when useful." : "Voice is unavailable. The simulated SOS button still works." : "Open the lid to speak with Clara. The microphone is off while closed.");
+    text($("idle-caption"), v.caption);
+    if (p) {
+      text($("visual-title"), p.title);
+      text($("visual-body"), p.body);
+      text($("visual-source"), p.source_label);
+      $("visual-body").classList.toggle("long", p.body.length > 110);
+      const img = $("visual-image");
+      if (p.image_url) {
+        if (img.getAttribute("src") !== p.image_url) img.setAttribute("src", p.image_url);
+        img.alt = p.title;
         show(img, true);
         show($("no-image"), false);
       } else {
         img.removeAttribute("src");
+        img.alt = "";
         show(img, false);
         show($("no-image"), true);
       }
-      $("guide").classList.toggle("no-pic", !s.image_url);
-      // Compartment callout: "COMPARTMENT B1 · TOURNIQUET", the slot drawn lit when the box lit it.
+      $("presentation").classList.toggle("no-pic", !p.image_url);
+      // Compartment callout only when the presentation names an item.
       const item = $("item");
-      show(item, Boolean(s.item));
+      show(item, Boolean(p.item));
       item.className = "";
-      if (s.item) {
-        const name = s.item.name || s.item.sku;
-        text($("slot"), s.item.slot);
-        if (s.item.missing) {
+      if (p.item) {
+        const name = p.item.name || p.item.sku;
+        text($("slot"), p.item.slot);
+        if (p.item.missing) {
           item.className = "missing";
           text($("item-text"), name);
           text($("item-state"), "NOT IN THIS BOX");
         } else {
-          item.className = s.item.lit ? "lit" : "";
-          text($("item-text"), s.item.slot ? `COMPARTMENT ${s.item.slot} · ${name}` : name);
-          text($("item-state"), s.item.lit ? "LIT" : "");
+          item.className = p.item.lit ? "lit" : "";
+          text($("item-text"), p.item.slot ? `COMPARTMENT ${p.item.slot} · ${name}` : name);
+          text($("item-state"), p.item.lit ? "LED CUE" : "");
         }
       }
-      const options = $("options");
-      options.replaceChildren(
-        ...s.options.map((o) => {
-          const b = document.createElement("button");
-          b.dataset.action = "goto";
-          b.dataset.step = o.step_id;
-          b.textContent = o.label;
-          return b;
-        }),
-      );
-      text($("caption"), v.caption && v.caption !== s.text ? v.caption : "");
-      $("back-button").disabled = !s.can_back;
-      $("next-button").disabled = !s.can_next;
-      $("repeat-button").disabled = false;
-    } else {
-      $("back-button").disabled = true;
-      $("repeat-button").disabled = true;
-      $("next-button").disabled = true;
+      text($("caption"), v.caption && v.caption !== p.body ? v.caption : "");
     }
-    $("talk-button").classList.toggle("off", !v.voice_available);
-    $("multi-button").classList.toggle("on", v.multiple_injured);
     $("sos-button").classList.toggle("open", Boolean(v.sos));
     // report_url stays in the view model but is not drawn: the team dropped QR codes.
-
-    show($("usage"), Boolean(v.pending_usage) && v.phase === "guiding");
-    if (v.pending_usage) {
-      $("usage-list").replaceChildren(
-        ...v.pending_usage.map((u) => {
-          const li = document.createElement("li");
-          li.textContent = `${u.qty} × ${u.name}`;
-          return li;
-        }),
-      );
-    }
 
     show($("countdown"), v.phase === "countdown");
     if (v.countdown) text($("countdown-number"), v.countdown.seconds_left);
@@ -207,17 +183,6 @@
       $("call-coming").classList.toggle("none", !v.coming);
     }
 
-    // Idle box: another box's emergency takes the whole screen.
-    show($("nearby-card"), !busy && Boolean(firstNearby));
-    if (firstNearby) {
-      text($("nearby-title"), `${firstNearby.from_box_name}: bring this kit`);
-      text($("nearby-directions"), firstNearby.directions);
-      text($("nearby-note"), firstNearby.bringing ? "Noted on this box (not confirmed to the other box)." : "");
-      $("bringing-button").dataset.action = "bringing_kit";
-      $("bringing-button").dataset.incident = firstNearby.incident_id;
-      $("nearby-dismiss").dataset.action = "dismiss_nearby";
-      $("nearby-dismiss").dataset.incident = firstNearby.incident_id;
-    }
     drawTimers();
   }
 
@@ -230,7 +195,13 @@
     source.addEventListener("view", (event) => {
       linkOk = true;
       try {
-        view = JSON.parse(event.data);
+        const incoming = JSON.parse(event.data);
+        if (!/^screen-view\/1\.\d+$/.test(incoming.schema_version)) {
+          text($("tag-link"), "SCREEN VERSION MISMATCH");
+          show($("tag-link"), true);
+          return;
+        }
+        view = incoming;
       } catch {
         return;
       }
@@ -248,8 +219,8 @@
   }
 
   // A picture that fails to load shows the placeholder instead of a broken image.
-  $("step-image").addEventListener("error", () => {
-    show($("step-image"), false);
+  $("visual-image").addEventListener("error", () => {
+    show($("visual-image"), false);
     show($("no-image"), true);
   });
 

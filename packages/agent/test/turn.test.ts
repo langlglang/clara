@@ -128,4 +128,16 @@ describe("createClaraAgent", () => {
     const response = await handleTurn(textRequest("she is not breathing"), { assistant: createAssistant(createKeywordStubModel()), ears: null, voice: null });
     expect(response).toMatchObject({ answered_by: "model", action: { name: "suggest_sos" } });
   });
+
+  it("a greeting does not start the scenario or ask an injury-specific question", async () => {
+    const request = textRequest("hello", { state: { ...state, step_id: null, allowed_steps: [state.allowed_steps[0]!] } });
+    const response = await handleTurn(request, { assistant: createAssistant(createKeywordStubModel()), ears: null, voice: null });
+    expect(response).toMatchObject({ answered_by: "model", action: null, reply: "I'm here. Tell me what happened." });
+  });
+
+  it("locates a requested in-stock kit item without selecting a scenario panel", async () => {
+    const request = textRequest("Where can I find the gauze?", { state: { ...state, step_id: null, allowed_steps: [state.allowed_steps[0]!] } });
+    const response = await handleTurn(request, { assistant: createAssistant(createKeywordStubModel()), ears: null, voice: null });
+    expect(response).toMatchObject({ answered_by: "model", action: { name: "locate_item", sku: "GAUZE-01" } });
+  });
 });

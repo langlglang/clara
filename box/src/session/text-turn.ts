@@ -11,7 +11,7 @@ export const TURN_DEADLINE_MS = 10_000;
 
 export const TURN_LINES = {
   noSession: "Open the box first.",
-  unreachable: "I can't reach the assistant right now. Follow the step on the screen.",
+  unreachable: "I can't reach the assistant right now. The simulated SOS button is available.",
 } as const;
 
 export type TextTurnResult =
@@ -21,7 +21,7 @@ export type TextTurnResult =
 /**
  * Sends what the bystander typed as one turn. The reply is spoken unless the action moved to a step (then
  * the step's own recorded words play). An action the box doesn't allow now is ignored and the reply still
- * plays. Any failure ends in a fixed line and the touch flow keeps working.
+ * plays. Any failure ends in a fixed line and the local simulated SOS remains available.
  */
 export async function textTurn(
   session: BoxSession,
@@ -57,7 +57,7 @@ export async function textTurn(
   session.remember("clara", response.reply);
   const moved = actionApplied && response.action?.name === "select_step";
   if (!moved && response.reply) {
-    session.say(response.reply, response.speech ? Buffer.from(response.speech.data_base64, "base64") : undefined);
+    session.say(response.reply, response.speech ? Buffer.from(response.speech.data_base64, "base64") : undefined, !actionApplied);
   }
   return { ok: true, response, actionApplied };
 }

@@ -14,6 +14,7 @@ describe("replyJsonSchema", () => {
     expect(named("select_step")!.properties.step_id!.enum).toEqual(["start", "pressure", "tourniquet"]);
     expect(named("ask_clarifying")!.properties.question_id!.enum).toEqual(["where"]);
     expect(named("locate_item")!.properties.sku!.enum).toEqual(["GAUZE-01"]);
+    expect(named("record_usage")).toBeUndefined();
   });
 
   it("leaves out actions with nothing to choose from, and triage when unavailable", () => {
@@ -40,6 +41,7 @@ describe("replyZodSchema", () => {
     expect(parse({ name: "start_triage" }).success).toBe(false);
     expect(parse({ name: "start_triage" }, { ...state, triage_available: true }).success).toBe(true);
     expect(parse({ name: "suggest_sos", extra: 1 }).success).toBe(false);
+    expect(parse({ name: "record_usage", items: [{ sku: "GAUZE-01", qty: 1 }] }).success).toBe(false);
     expect(parse(null).success).toBe(true);
   });
 });

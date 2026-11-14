@@ -199,6 +199,7 @@ function clipFromSegment(segment: Segment, sampleRate: number): Clip {
  * hears itself. Talk forces a clip to start now and unpauses.
  */
 export class VadListener implements Listener {
+  readonly handsFree = true;
   private readonly endpointer: Endpointer;
   private readonly clock: Clock;
   private readonly log: Logger;
@@ -297,6 +298,7 @@ export class VadListener implements Listener {
  * `endPress` (or the 15 s cap) sends it. Clips under 0.3 s are dropped.
  */
 export class PressListener implements Listener {
+  readonly handsFree = false;
   private readonly clock: Clock;
   private readonly log: Logger;
   private onClip: ((clip: Clip) => void) | null = null;

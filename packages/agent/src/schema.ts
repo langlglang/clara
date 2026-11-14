@@ -14,7 +14,7 @@ export interface ModelReply {
   action: Action | null;
 }
 
-/** What each action can name this turn. Supplies with none on hand cannot be located or recorded. */
+/** What each action can name this turn. Supplies with none on hand cannot be located. */
 export function allowedOptions(state: TurnState) {
   return {
     stepIds: state.allowed_steps.map((s) => s.step_id),
@@ -37,20 +37,6 @@ export function replyJsonSchema(state: TurnState): Record<string, unknown> {
   if (questionIds.length > 0) variants.push(obj("ask_clarifying", { question_id: { type: "string", enum: questionIds } }));
   if (skus.length > 0) {
     variants.push(obj("locate_item", { sku: { type: "string", enum: skus } }));
-    variants.push(
-      obj("record_usage", {
-        items: {
-          type: "array",
-          description: "Supplies the person says they used, each at most the quantity on hand.",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            required: ["sku", "qty"],
-            properties: { sku: { type: "string", enum: skus }, qty: { type: "integer" } },
-          },
-        },
-      }),
-    );
   }
   if (triage) variants.push(obj("start_triage"));
   variants.push(obj("suggest_sos"));
@@ -79,12 +65,6 @@ export function replyZodSchema(state: TurnState) {
   if (questionIds.length > 0) variants.push(z.strictObject({ name: z.literal("ask_clarifying"), question_id: oneOf(questionIds) }));
   if (skus.length > 0) {
     variants.push(z.strictObject({ name: z.literal("locate_item"), sku: oneOf(skus) }));
-    variants.push(
-      z.strictObject({
-        name: z.literal("record_usage"),
-        items: z.array(z.strictObject({ sku: oneOf(skus), qty: z.number().int().min(1).max(99) })).min(1).max(10),
-      }),
-    );
   }
   if (triage) variants.push(z.strictObject({ name: z.literal("start_triage") }));
   variants.push(z.strictObject({ name: z.literal("suggest_sos") }));

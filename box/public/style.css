@@ -44,7 +44,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.big { min-height: 72px; font-size: 22px; padding: 0 32px; }
 button.small { min-height: 44px; min-width: 64px; font-size: 15px; }
 
-#app { display: grid; grid-template-columns: 1fr var(--rail); grid-template-rows: var(--top) auto 1fr 72px; width: 800px; height: 480px; margin: 0 auto; position: relative; overflow: hidden; }
+#app { display: grid; grid-template-columns: 1fr var(--rail); grid-template-rows: var(--top) auto 1fr; width: 800px; height: 480px; margin: 0 auto; position: relative; overflow: hidden; }
 
 /* Top bar */
 #top { grid-column: 1 / 3; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-bottom: 1px solid var(--border); font: 700 13px var(--font-head); letter-spacing: var(--track); text-transform: uppercase; white-space: nowrap; overflow: hidden; }
@@ -66,17 +66,19 @@ button.small { min-height: 44px; min-width: 64px; font-size: 15px; }
 .banner.notice { background: var(--surface); border-left: 6px solid var(--warn); font-size: 16px; font-weight: 600; }
 .banner.notice button { margin-left: auto; }
 
-/* Main: one step at a time */
-#main { grid-column: 1 / 2; overflow: hidden; padding: 12px 14px 4px; }
+/* Main: conversation idle state or one agent-chosen visual */
+#main { grid-column: 1 / 2; grid-row: 3; overflow: hidden; padding: 12px 14px 4px; }
 #idle { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px 10px; }
 #idle h1 { font: 700 52px/1 var(--font-head); letter-spacing: 0.04em; text-transform: uppercase; margin: 0; }
 #idle p { margin: 0 0 8px; color: var(--muted); font-size: 19px; max-width: 460px; }
-#guide { display: grid; grid-template-columns: 1fr 168px; gap: 14px; height: 100%; }
-#guide.no-pic { grid-template-columns: 1fr; }
-#guide.no-pic #picture { display: none; }
+#idle-caption { font-size: 22px; max-width: 460px; }
+#idle-caption:empty { display: none; }
+#presentation { display: grid; grid-template-columns: 1fr 168px; gap: 14px; height: 100%; }
+#presentation.no-pic { grid-template-columns: 1fr; }
+#presentation.no-pic #picture { display: none; }
 #words { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
-#step-label { color: var(--accent); }
-#step-text { font: 700 27px/1.22 var(--font-body); margin: 6px 0 10px; }
+#visual-title { color: var(--accent); }
+#visual-body { font: 700 27px/1.22 var(--font-body); margin: 6px 0 10px; }
 
 /* Compartment callout: COMPARTMENT B1 · TOURNIQUET with the slot lit */
 #item { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 8px; background: var(--surface); border: 1px solid var(--border); border-left: 6px solid var(--muted); font: 700 16px/1.2 var(--font-head); letter-spacing: 0.08em; text-transform: uppercase; }
@@ -90,23 +92,19 @@ button.small { min-height: 44px; min-width: 64px; font-size: 15px; }
 #item.missing #slot { border-color: var(--warn); color: var(--warn); }
 #item.missing #item-state { color: var(--warn); }
 
-#step-text.long { font-size: 22px; margin-bottom: 8px; }
-#options { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 8px; }
-#options:empty { display: none; }
-#options button { min-height: 56px; padding: 4px 10px; font-size: 13px; line-height: 1.2; letter-spacing: 0.06em; white-space: normal; text-align: left; justify-content: flex-start; }
+#visual-body.long { font-size: 22px; margin-bottom: 8px; }
 #caption { margin-top: 10px; color: var(--muted); font-size: 16px; }
-#picture { background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; height: 100%; max-height: 260px; }
-#step-image { max-width: 100%; max-height: 100%; object-fit: contain; }
+#visual-source { margin-top: auto; padding-top: 8px; }
+#picture { background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; height: 100%; max-height: 340px; }
+#visual-image { max-width: 100%; max-height: 100%; object-fit: contain; }
 #no-image { font: 700 12px var(--font-head); letter-spacing: var(--track); color: var(--muted); }
 
-/* Rail: SOS, multiple injured, stat tiles */
-#rail { grid-column: 2 / 3; grid-row: 2 / 5; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-left: 1px solid var(--border); background: var(--surface); }
+/* Rail: SOS and read-only status tiles */
+#rail { grid-column: 2 / 3; grid-row: 2 / 4; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-left: 1px solid var(--border); background: var(--surface); }
 button.sos { background: var(--accent); border: 0; color: var(--on-accent); font-size: 54px; letter-spacing: 0.12em; min-height: 150px; flex-direction: column; gap: 6px; }
 button.sos small { font-size: 12px; letter-spacing: var(--track); }
 button.sos:active { background: #EA580C; }
 button.sos.open { background: var(--bg); color: var(--accent); border: 3px solid var(--accent); }
-button.multi { min-height: 52px; font-size: 14px; background: var(--bg); }
-button.multi.on { border: 2px solid var(--accent); color: var(--accent); }
 #tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .tile { background: var(--bg); border: 1px solid var(--border); padding: 8px; min-height: 68px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
 .tile .v { font: 700 22px/1.1 var(--font-head); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -115,18 +113,12 @@ button.multi.on { border: 2px solid var(--accent); color: var(--accent); }
 .tile.info .v { color: var(--info); }
 .tile.ok .v { color: var(--ok); }
 
-/* Controls */
-#controls { grid-column: 1 / 2; grid-row: 4; display: grid; grid-template-columns: 1fr 1fr 1.5fr 1fr; gap: 8px; padding: 8px 14px 10px; }
-button.talk { color: var(--ok); }
-button.talk.off { color: #71717A; }
-
 /* Overlays */
 .overlay { position: absolute; top: var(--top); right: var(--rail); bottom: 0; left: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 5; }
 .card { width: 100%; padding: 14px 20px; text-align: left; }
 .card.center { text-align: center; display: flex; flex-direction: column; align-items: center; }
 .card h2 { margin: 4px 0 8px; font: 700 26px/1.15 var(--font-head); letter-spacing: 0.04em; text-transform: uppercase; }
 .row { display: flex; gap: 12px; margin-top: 12px; }
-#usage-list { margin: 0; padding-left: 24px; font: 700 20px/1.5 var(--font-head); }
 
 /* SOS countdown: the whole working area turns orange; Cancel is the only button. */
 .overlay.danger { background: var(--accent); color: var(--on-accent); }
@@ -143,12 +135,3 @@ button.cancel { background: var(--bg); border: 0; color: var(--text); min-width:
 #call-network { color: var(--muted); font-size: 15px; }
 #call-coming { margin-top: 6px; font: 700 16px var(--font-head); letter-spacing: 0.06em; text-transform: uppercase; color: var(--info); }
 #call-coming.none { color: var(--muted); }
-
-/* Idle box, another box's emergency: the whole screen. */
-.overlay.alert { top: 0; right: 0; z-index: 6; flex-direction: column; align-items: stretch; justify-content: flex-start; }
-.alert-strip { background: var(--accent); color: var(--on-accent); font: 700 22px var(--font-head); letter-spacing: 0.12em; padding: 14px 20px; }
-.overlay.alert .card { padding: 18px 20px; }
-.overlay.alert h2 { font-size: 30px; }
-#nearby-directions { margin: 4px 0 6px; font-size: 22px; font-weight: 600; }
-#nearby-note { margin: 0; color: var(--muted); font-size: 16px; }
-#nearby-note:empty { display: none; }

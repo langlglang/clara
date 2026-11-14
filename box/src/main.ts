@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { HttpCloudLink } from "./cloud/http.js";
 import { Kit, loadKit } from "./engine/kit.js";
 import { loadScenario } from "./engine/scenario.js";
+import { UsbGpsLocation } from "./location/usb-gps.js";
 import type { Board, CloudLink } from "./ports.js";
 import { DEFAULT_SCREEN_PORT, startScreenServer, type ScreenServer } from "./screen/server.js";
 import { BoxSession, type Need } from "./session/session.js";
@@ -22,6 +23,8 @@ export interface BoxConfig {
   boxId: string;
   boxName: string;
   directions: string | null;
+  configuredAddress: string | null;
+  gpsPort: string | null;
   token: string | null;
   scenarioPath: string | null;
   kitPath: string | null;
@@ -58,6 +61,8 @@ export function readConfig(env: NodeJS.ProcessEnv, argv: readonly string[]): Box
     boxId: env.CLARA_BOX_ID ?? (sim ? "box-sim" : "box-demo"),
     boxName: env.CLARA_BOX_NAME ?? (sim ? "Simulated box" : "Clara box"),
     directions: env.CLARA_BOX_DIRECTIONS ?? null,
+    configuredAddress: env.CLARA_BOX_ADDRESS ?? null,
+    gpsPort: sim ? null : env.CLARA_GPS_PORT ?? null,
     token: env.CLARA_BOX_TOKEN ?? null,
     scenarioPath: flag(argv, "scenario") ?? env.CLARA_SCENARIO ?? resolve(REPO_ROOT, "content/scenarios/severe-bleeding.json"),
     kitPath: flag(argv, "kit") ?? env.CLARA_KIT ?? resolve(REPO_ROOT, "content/kits/demo-kit.json"),
@@ -81,6 +86,7 @@ export interface RunningBox {
   board: Board | null;
   audio: AudioParts | null;
   screen: ScreenServer | null;
+  location: UsbGpsLocation | null;
   stop(): Promise<void>;
 }
 
@@ -102,6 +108,8 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
     cloud = http;
   }
   const board = o.board !== undefined ? o.board : await loadBoard({ sim: config.sim, log });
+  const location = config.gpsPort ? new UsbGpsLocation(config.gpsPort, (message) => log(`[gps] ${message}`)) : null;
+  location?.start();
   const audio = await loadAudio(
     { kind: config.audio, micDevice: config.micDevice, speakerDevice: config.speakerDevice, piperModel: config.piperModel, micFiles: config.micFiles, print: o.print ?? log },
     log,
@@ -111,6 +119,8 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
     boxId: config.boxId,
     boxName: config.boxName,
     directions: config.directions,
+    configuredAddress: config.configuredAddress,
+    location,
     scenario,
     kit,
     cloud,
@@ -145,7 +155,7 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
   session.startHeartbeat(config.heartbeatMs, () =>
     [board && !board.simulated ? "board" : null, audio ? "audio" : null, audio?.listener ? "mic" : null, screen ? "screen" : null].filter((p): p is string => p !== null),
   );
-  log(`box ${config.boxId} ready (scenario ${scenario.scenario_id}, board: ${board?.label ?? "none"}, voice: ${audio?.listener ? "on" : "touch only"})`);
+  log(`box ${config.boxId} ready (scenario ${scenario.scenario_id}, board: ${board?.label ?? "none"}, voice: ${audio?.listener?.handsFree ? "hands-free" : "unavailable"})`);
 
   let stopped = false;
   return {
@@ -154,12 +164,14 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
     board,
     audio,
     screen,
+    location,
     async stop() {
       if (stopped) return;
       stopped = true;
       session.close();
       await screen?.close();
       await board?.close().catch(() => {});
+      await location?.close().catch(() => {});
       cloud.close();
     },
   };

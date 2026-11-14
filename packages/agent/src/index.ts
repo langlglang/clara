@@ -38,7 +38,7 @@ export interface ClaraAgentOptions {
   anthropic?: Anthropic;
   log?: (line: string) => void;
   /** Server-owned, source-linked demo text for a scenario and step ID. */
-  guidance?: (scenarioId: string, stepId: string) => string | null;
+  guidance?: (scenarioId: string, stepId: string, language: string) => string | null;
 }
 
 export interface ClaraAgent {

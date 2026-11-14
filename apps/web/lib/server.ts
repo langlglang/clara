@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { EVENTS_VERSION, type BoxEvent } from "@clara/contracts";
+import { EVENTS_VERSION, ScenarioTranslationSchema, type BoxEvent } from "@clara/contracts";
 import { createClaraAgent, type ClaraAgent, type ClaraAgentEnv } from "@clara/agent";
 import { DEFAULT_CARE, createCoordinator, type CareThreshold, type Coordinator, type CoordinatorChange, type CoordinatorEnv, type Need, type RidesAdapter } from "@clara/coordinator";
 import { DEMO_BOXES, createNetwork, randomIds, type MaintainerAlert, type Network, type NetworkOptions, type ReportOptions } from "@clara/network";
@@ -18,6 +18,9 @@ import { PERSISTENCE_OFF, parseSnapshot, type PersistenceStatus, type RuntimeSta
 import bleeding from "../../../content/scenarios/severe-bleeding.json";
 import minorCut from "../../../content/scenarios/minor-cut.json";
 import notBreathing from "../../../content/scenarios/not-breathing.json";
+import bleedingEs from "../../../content/scenarios/es/severe-bleeding.json";
+import minorCutEs from "../../../content/scenarios/es/minor-cut.json";
+import notBreathingEs from "../../../content/scenarios/es/not-breathing.json";
 
 /**
  * One response network and one Clara agent per server process. Kept on globalThis so `next dev` hot reloads
@@ -112,9 +115,16 @@ export interface RuntimeOptions extends NetworkOptions {
 const scenarios = [bleeding, minorCut, notBreathing];
 const stepLabels: Record<string, string> = Object.fromEntries(scenarios.flatMap((scenario) => scenario.steps.map((s: { step_id: string; label: string }) => [s.step_id, s.label])));
 const guidanceText = new Map(scenarios.map((scenario) => [scenario.scenario_id, new Map(scenario.steps.map((s) => [s.step_id, s.text] as const))] as const));
-/** Resolve guidance from the server's versioned demo bundle, never from model or device text. */
-export function resolveGuidance(scenarioId: string, stepId: string): string | null {
-  return guidanceText.get(scenarioId)?.get(stepId) ?? null;
+/** Scenario words in other languages (content/scenarios/<language>/), checked against the schema at startup. */
+const translations = [bleedingEs, minorCutEs, notBreathingEs].map((t) => ScenarioTranslationSchema.parse(t));
+/**
+ * Resolve guidance from the server's versioned demo bundle, never from model or device text. Another language uses
+ * its translation's words for the same step (the box checks the same text); a step it lacks stays English.
+ */
+export function resolveGuidance(scenarioId: string, stepId: string, language = "en"): string | null {
+  const lang = language.toLowerCase().split("-")[0]!;
+  const translated = lang === "en" ? undefined : translations.find((t) => t.language === lang && t.scenario_id === scenarioId)?.steps[stepId]?.text;
+  return translated ?? guidanceText.get(scenarioId)?.get(stepId) ?? null;
 }
 export const REPORT_OPTIONS: ReportOptions = {
   timeZone: "America/New_York",

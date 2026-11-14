@@ -772,3 +772,35 @@ describe("asking nearby boxes", () => {
     expect(session.turnState()?.nearby_kits_available).toBeUndefined();
   });
 });
+
+describe("second language", () => {
+  it("switches screen words, fixed lines and the turn language, keeping the current step", () => {
+    const clock = new ManualClock();
+    const cloud = new FakeCloudLink();
+    const speech = new FakeSpeech();
+    const session = new BoxSession({
+      boxId: "box-test", boxName: "Test Box", scenario: loadScenario(fixture("test-scenario.json")), kit: loadKit(fixture("test-kit.json")),
+      cloud, board: new FakeBoard(), speech, clock, newId: uuid,
+      translations: [{ scenario_id: "test_fixture", language: "es", status: "draft", title: "Prueba", steps: { s1: { label: "Paso uno", text: "MARCADOR 1." } }, questions: {} }],
+    });
+    expect(session.view().languages).toEqual(["en", "es"]);
+    session.lidOpened();
+    session.press({ action: "start" });
+    expect(session.view().step?.text).toContain("TEST PLACEHOLDER 1");
+    session.press({ action: "set_language", language: "es" });
+    const view = session.view();
+    expect(view.language).toBe("es");
+    expect(view.step?.text).toBe("MARCADOR 1.");
+    expect(view.scenario_title).toBe("Prueba");
+    expect(session.turnState()?.allowed_steps[0]?.label).toBe("Paso uno");
+    expect(session.turnState()?.available_visuals).toEqual([]);
+    expect(speech.said.at(-1)).toBe("MARCADOR 1."); // the current step again, in Spanish
+    session.press({ action: "sos" });
+    expect(speech.said.at(-1)).toMatch(/^Abriendo la llamada de emergencia simulada/);
+    // A language without translations is refused.
+    session.press({ action: "set_language", language: "fr" });
+    expect(session.view().language).toBe("es");
+    session.press({ action: "set_language", language: "en" });
+    expect(session.view().step?.text).toContain("TEST PLACEHOLDER 1");
+  });
+});

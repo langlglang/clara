@@ -97,15 +97,32 @@ describe("handleTurn", () => {
   it("transcribes audio in the session's language and speaks a worded reply", async () => {
     const e = ears("where is the gauze");
     const v = voice();
-    const response = await handleTurn(textRequest("", { language: "es", input: audioInput }), {
+    const response = await handleTurn(textRequest("", { language: "fr", input: audioInput }), {
       assistant: assistantFor(json({ transcript: "where is the gauze", reply: "Look for the lit slot.", action: { name: "locate_item", sku: "GAUZE-01" } })),
       ears: e,
       voice: v,
     });
-    expect(e.languages).toEqual(["es"]);
+    expect(e.languages).toEqual(["fr"]);
     expect(TurnResponseSchema.parse(response)).toMatchObject({ heard: "where is the gauze", reply: "Look for the lit slot.", action: { name: "locate_item" } });
     expect(response.speech?.mime).toBe("audio/wav");
     expect(v.said).toEqual(["Look for the lit slot."]);
+  });
+
+  it("answers Spanish turns with Spanish guidance, fixed lines and action lines", async () => {
+    const v = voice();
+    const guidance = (scenarioId: string, stepId: string, language: string) => (language === "es" ? `ES:${scenarioId}:${stepId}` : "EN");
+    const step = await handleTurn(textRequest("sangra mucho", { language: "es" }), {
+      assistant: assistantFor(json({ transcript: "x", reply: "", action: { name: "select_step", step_id: "pressure" } })),
+      ears: null, voice: v, guidance,
+    });
+    expect(step.reply).toMatch(/^ES:/);
+    const item = await handleTurn(textRequest("¿dónde está la gasa?", { language: "es" }), {
+      assistant: assistantFor(json({ transcript: "x", reply: "Quizás arriba.", action: { name: "locate_item", sku: "GAUZE-01" } })),
+      ears: null, voice: v,
+    });
+    expect(item.reply).toMatch(/^La pantalla muestra dónde está/);
+    const failed = await handleTurn(textRequest("hola", { language: "es" }), { assistant: { reply: async () => ({ ok: false, reason: "timeout", attempts: 1, ms: 1, model: "x" }) }, ears: null, voice: v });
+    expect(failed.reply).toBe("Eso tardó demasiado. Por favor, dímelo otra vez.");
   });
 
   it("voices a fixed light cue for an English item lookup", async () => {

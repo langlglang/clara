@@ -23,7 +23,7 @@ export interface TurnDeps {
   ears: Ears | null;
   voice: Voice | null;
   /** Canonical demo content resolver; model and box-supplied text cannot author guidance. */
-  guidance?: (scenarioId: string, stepId: string) => string | null;
+  guidance?: (scenarioId: string, stepId: string, language: string) => string | null;
   /** The whole turn's limit, speech included. */
   budgetMs?: number;
   /** Time kept back for text-to-speech after the model answers. */
@@ -44,6 +44,36 @@ export const FIXED_LINES: Record<FixedReason, string> = {
   invalid_reply: "I didn't catch that. Please tell me again.",
   refusal: "I can't help with that request. The simulated SOS button is available.",
 };
+
+/** Spanish fixed lines (draft: to be checked by a fluent speaker). */
+export const FIXED_LINES_ES: Record<FixedReason, string> = {
+  not_heard: "No te he entendido. Por favor, dímelo otra vez.",
+  no_model: "Ahora no puedo responder. El botón de SOS simulado está disponible.",
+  timeout: "Eso tardó demasiado. Por favor, dímelo otra vez.",
+  model_error: "Algo salió mal. Por favor, dímelo otra vez.",
+  invalid_reply: "No te he entendido. Por favor, dímelo otra vez.",
+  refusal: "No puedo ayudar con eso. El botón de SOS simulado está disponible.",
+};
+
+/** The server's own fixed replies to actions, per language (Spanish is a draft). */
+const ACTION_LINES = {
+  en: {
+    locate: (name: string) => `The screen shows where to find ${name}. Look for the compartment light in the box.`,
+    emergencyAnswer: "Got it. You can keep talking with me.",
+    nearbyKits: "I'll ask the other Clara boxes nearby to bring their kits.",
+    readPulse: "I'll read the pulse sensor now. Keep a finger steady on it while I continue listening.",
+    requestCamera: "I'll take one photo and send it to Clara's cloud to describe what I can see. You can keep talking with me.",
+    captureCamera: "I'll take and inspect one photo now. You can keep talking with me.",
+  },
+  es: {
+    locate: (name: string) => `La pantalla muestra dónde está ${name}. Busca la luz del compartimento en la caja.`,
+    emergencyAnswer: "Entendido. Puedes seguir hablando conmigo.",
+    nearbyKits: "Voy a pedir a las otras cajas Clara cercanas que traigan sus kits.",
+    readPulse: "Voy a leer el sensor de pulso. Mantén un dedo quieto sobre él mientras sigo escuchando.",
+    requestCamera: "Voy a tomar una foto y enviarla a la nube de Clara para describir lo que veo. Puedes seguir hablando conmigo.",
+    captureCamera: "Voy a tomar y revisar una foto ahora. Puedes seguir hablando conmigo.",
+  },
+} as const;
 
 export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedAt = Date.now(), cancel?: AbortSignal): Promise<TurnResponse> {
   const budget = deps.budgetMs ?? TURN_BUDGET_MS;
@@ -69,8 +99,10 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
     deps.log?.(
       `[turn] input=${request.input.type} answered_by=${response.answered_by} reason=${response.reason ?? "none"} action=${response.action?.name ?? "none"} speech=${response.speech ? "yes" : "no"} stt_ms=${timings.stt_ms} model_ms=${timings.model_ms} tts_ms=${timings.tts_ms} ms=${Date.now() - receivedAt}`,
     );
+  const spanish = request.language.toLowerCase().startsWith("es");
+  const lines = spanish ? ACTION_LINES.es : ACTION_LINES.en;
   const fixed = async (reason: FixedReason, heard: string | null): Promise<TurnResponse> => {
-    const reply = FIXED_LINES[reason];
+    const reply = (spanish ? FIXED_LINES_ES : FIXED_LINES)[reason];
     const response: TurnResponse = { ...base, heard, reply, action: null, answered_by: "fixed", reason, speech: await say(reply) };
     log(response);
     return response;
@@ -122,13 +154,13 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   // selected-step wording is discarded by parseReply; the box also checks this against its local bundle.
   let reply = result.reply.reply;
   if (action?.name === "select_step") {
-    reply = (request.state.scenario_id && deps.guidance?.(request.state.scenario_id, action.step_id)) || "";
+    reply = (request.state.scenario_id && deps.guidance?.(request.state.scenario_id, action.step_id, request.language)) || "";
     if (!reply) return fixed("invalid_reply", words);
   }
-  if (action?.name === "locate_item" && request.language.toLowerCase().startsWith("en")) {
+  if (action?.name === "locate_item" && (spanish || request.language.toLowerCase().startsWith("en"))) {
     const item = request.state.manifest.find((entry) => entry.sku === action.sku);
     if (!item) return fixed("invalid_reply", words);
-    reply = `The screen shows where to find ${item.name}. Look for the compartment light in the box.`;
+    reply = lines.locate(item.name);
   }
   if (action?.name === "show_visual") {
     const visual = visualById(action.visual_id);
@@ -141,13 +173,13 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   }
   if (action?.name === "answer_emergency_question") {
     // The model supplies only IDs; the Pi sends this turn's exact heard transcript as the user report.
-    reply = "Got it. You can keep talking with me.";
+    reply = lines.emergencyAnswer;
   }
-  if (action?.name === "request_nearby_kits") reply = "I'll ask the other Clara boxes nearby to bring their kits.";
+  if (action?.name === "request_nearby_kits") reply = lines.nearbyKits;
   if (action?.name === "assess_patient") reply = triageLine(action.observations);
-  if (action?.name === "read_pulse") reply = "I'll read the pulse sensor now. Keep a finger steady on it while I continue listening.";
-  if (action?.name === "request_camera") reply = "I'll take one photo and send it to Clara's cloud to describe what I can see. You can keep talking with me.";
-  if (action?.name === "capture_camera") reply = "I'll take and inspect one photo now. You can keep talking with me.";
+  if (action?.name === "read_pulse") reply = lines.readPulse;
+  if (action?.name === "request_camera") reply = lines.requestCamera;
+  if (action?.name === "capture_camera") reply = lines.captureCamera;
   const response: TurnResponse = {
     ...base,
     heard: words,

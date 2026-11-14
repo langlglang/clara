@@ -36,18 +36,36 @@ export class ScenarioEngine {
   private currentId: string | null = null;
   private history: string[] = [];
   private readonly timers = new Map<TimerName, number>();
-  private readonly byId: Map<string, ScenarioStep>;
+  private byId: Map<string, ScenarioStep>;
+  private current_scenario: Scenario;
   private readonly now: () => number;
   private readonly lightMs: number;
 
   constructor(
-    readonly scenario: Scenario,
+    scenario: Scenario,
     readonly kit: Kit,
     private readonly o: EngineOptions,
   ) {
+    this.current_scenario = scenario;
     this.byId = new Map(scenario.steps.map((step) => [step.step_id, step]));
     this.now = o.now ?? Date.now;
     this.lightMs = Math.min(30_000, Math.max(0, o.lightMs ?? 30_000));
+  }
+
+  get scenario(): Scenario {
+    return this.current_scenario;
+  }
+
+  /**
+   * Swaps in the same scenario in another language. Only words differ (localizeScenario), so the current step,
+   * history and timers stay. Throws if the steps don't match.
+   */
+  relabel(scenario: Scenario): void {
+    const same = scenario.scenario_id === this.current_scenario.scenario_id && scenario.steps.length === this.byId.size &&
+      scenario.steps.every((s) => this.byId.get(s.step_id)?.next.join() === s.next.join());
+    if (!same) throw new Error(`relabel: ${scenario.scenario_id} doesn't match the running scenario`);
+    this.current_scenario = scenario;
+    this.byId = new Map(scenario.steps.map((step) => [step.step_id, step]));
   }
 
   get started(): boolean {

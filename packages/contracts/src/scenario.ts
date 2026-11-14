@@ -72,6 +72,35 @@ export const ScenarioSchema = z.strictObject({
 });
 export type Scenario = z.infer<typeof ScenarioSchema>;
 
+/**
+ * A scenario's words in another language (content/scenarios/<language>/<file>.json). Only words: step order,
+ * items, timers and SOS stay with the English scenario, so a translation can never change what the box does.
+ * "draft" until a fluent teammate checked it against the English text.
+ */
+export const ScenarioTranslationSchema = z.strictObject({
+  scenario_id: Id,
+  language: z.string().regex(/^[a-z]{2,3}$/),
+  status: z.enum(["draft", "checked"]),
+  title: z.string().min(1).max(80),
+  steps: z.record(Id, z.strictObject({ label: z.string().min(1).max(120), text: z.string().min(1).max(400) })),
+  questions: z.record(Id, z.string().min(1).max(200)).default({}),
+});
+export type ScenarioTranslation = z.infer<typeof ScenarioTranslationSchema>;
+
+/** The scenario with a translation's words swapped in. A step or question the translation lacks keeps its English words. */
+export function localizeScenario(scenario: Scenario, translation: ScenarioTranslation | null | undefined): Scenario {
+  if (!translation || translation.scenario_id !== scenario.scenario_id) return scenario;
+  return {
+    ...scenario,
+    title: translation.title,
+    steps: scenario.steps.map((step) => {
+      const words = translation.steps[step.step_id];
+      return words ? { ...step, label: words.label, text: words.text } : step;
+    }),
+    questions: scenario.questions.map((q) => ({ ...q, text: translation.questions[q.question_id] ?? q.text })),
+  };
+}
+
 /** Throws when a step's `next` or `start` names a step that doesn't exist. */
 export function checkScenario(scenario: Scenario): Scenario {
   const ids = new Set(scenario.steps.map((s) => s.step_id));

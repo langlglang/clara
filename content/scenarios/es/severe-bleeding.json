@@ -1,0 +1,26 @@
+{
+  "scenario_id": "severe_bleeding",
+  "language": "es",
+  "status": "draft",
+  "title": "Sangrado grave",
+  "steps": {
+    "start": { "label": "Dime qué pasó", "text": "Dime qué pasó y en qué necesitas ayuda." },
+    "safety": { "label": "Comprueba que es seguro y ponte los guantes", "text": "Primero, asegúrate de que es seguro acercarte. Ponte los guantes del compartimento iluminado." },
+    "get_help": { "label": "Pide ayuda ahora", "text": "Un sangrado abundante puede poner la vida en peligro. Pide a alguien cercano que llame a emergencias ahora. Esta pantalla puede guiar una llamada de emergencia." },
+    "find_wound": { "label": "Encuentra de dónde sale la sangre", "text": "Encuentra de dónde sale la sangre. Abre o corta la ropa para poder ver la herida. Usa las tijeras del compartimento iluminado." },
+    "tourniquet": { "label": "Brazo o pierna: coloca el torniquete", "text": "En un brazo o una pierna, usa el torniquete. Colócalo alto en la extremidad, a un palmo por encima de la herida, no sobre una articulación. Tira fuerte de la correa." },
+    "tighten": { "label": "Gira la varilla hasta que pare el sangrado", "text": "Gira la varilla hasta que pare el sangrado y luego fíjala en su pinza. Va a doler. Es normal. No lo aflojes." },
+    "second_tourniquet": { "label": "Sigue sangrando: añade un segundo torniquete", "text": "Si sigue sangrando, coloca el segundo torniquete justo por encima del primero y apriétalo de la misma forma." },
+    "pack_wound": { "label": "Cuerpo, cuello o ingle: rellena la herida", "text": "Si la herida está en el cuerpo, el cuello, la axila o la ingle, rellénala. Empuja la gasa del compartimento iluminado hasta el fondo de la herida hasta llenarla." },
+    "direct_pressure": { "label": "Presiona fuerte sobre la herida", "text": "Pon gasa sobre la herida y presiona fuerte con las dos manos, usando el peso de tu cuerpo." },
+    "hold_pressure": { "label": "Sigue presionando 3 minutos", "text": "Sigue presionando fuerte con las dos manos durante al menos 3 minutos. No levantes las manos para mirar." },
+    "bandage": { "label": "Envuelve la venda de presión", "text": "Envuelve la venda de presión bien apretada sobre la gasa para mantener la presión." },
+    "keep_warm": { "label": "Abrígale y quédate a su lado", "text": "Cúbrelo con la manta de emergencia para mantenerlo abrigado. Quédate a su lado, que no se mueva, y vigila su respiración." },
+    "handoff": { "label": "Muestra el resumen a quien llegue", "text": "Cuando llegue ayuda, muéstrales esta pantalla. Tiene lo que pasó y cuándo se hizo cada paso." }
+  },
+  "questions": {
+    "where": "¿Dónde está el sangrado: en un brazo, una pierna, o en el cuerpo, el cuello o la ingle?",
+    "still_bleeding": "¿Sigue sangrando?",
+    "awake": "¿Está despierto y te habla?"
+  }
+}

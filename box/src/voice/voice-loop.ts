@@ -27,12 +27,19 @@ export const VOICE_TURN_DEADLINE_MS = 8_000;
 /** Placeholder: the listening cue's player gets this long before the mic opens anyway. */
 export const LISTENING_CUE_MAX_MS = 1_000;
 
-/** Fixed local lines (English until other languages are recorded). */
+/** Fixed local lines. */
 export const LOCAL_LINES = {
   timeout: "That took too long. Please tell me again.",
   unreachable: "I can't reach the assistant right now. The simulated SOS button is available.",
   notCaught: "I didn't catch that. Please tell me again.",
 } as const;
+
+/** Spanish (draft: to be checked by a fluent speaker). */
+export const LOCAL_LINES_ES: Record<keyof typeof LOCAL_LINES, string> = {
+  timeout: "Eso tardó demasiado. Por favor, dímelo otra vez.",
+  unreachable: "Ahora no puedo conectar con el asistente. El botón de SOS simulado sigue disponible.",
+  notCaught: "No te he entendido. Por favor, dímelo otra vez.",
+};
 
 /** What the box is doing now, for the screen. */
 export type VoiceStatus = "off" | "listening" | "hearing" | "thinking" | "speaking" | "unavailable";
@@ -101,12 +108,17 @@ class VoiceLoopImpl implements VoiceLoop {
   private micAvailable = true;
   private readonly clock: Clock;
   private readonly log: Logger;
-  private readonly lines: Record<keyof typeof LOCAL_LINES, string>;
+  private readonly englishLines: Record<keyof typeof LOCAL_LINES, string>;
+  /** The language of the latest turn: failure lines are said in it. */
+  private turnLanguage = "en";
+  private get lines(): Record<keyof typeof LOCAL_LINES, string> {
+    return this.turnLanguage.startsWith("es") ? LOCAL_LINES_ES : this.englishLines;
+  }
 
   constructor(private readonly o: VoiceLoopOptions) {
     this.clock = o.clock ?? systemClock;
     this.log = o.log ?? silentLogger;
-    this.lines = { ...LOCAL_LINES, ...o.lines };
+    this.englishLines = { ...LOCAL_LINES, ...o.lines };
     o.queue.onIdle(() => this.settle());
     // Our own queue also says when playback starts, so lines queued elsewhere (a touched step) pause the mic too.
     (o.queue as Partial<{ onBusy(listener: () => void): void }>).onBusy?.(() => {
@@ -213,6 +225,7 @@ class VoiceLoopImpl implements VoiceLoop {
   private async runTurn(input: TurnInput): Promise<void> {
     const context = this.o.getContext();
     if (!context) return; // no session: nothing to talk about
+    this.turnLanguage = context.language;
     const turn = new AbortController();
     this.turn = turn;
     this.o.listener.pause();
@@ -265,7 +278,7 @@ class VoiceLoopImpl implements VoiceLoop {
       if (action) this.emit({ type: "ignored_action", action });
       action = null;
     }
-    const spokenReply = actionRefused ? "I couldn't complete that request. Please try again." : reply.reply;
+    const spokenReply = actionRefused ? (this.turnLanguage.startsWith("es") ? "No he podido hacerlo. Por favor, inténtalo otra vez." : "I couldn't complete that request. Please try again.") : reply.reply;
     this.log.info("voice turn", { answered_by: reply.answered_by, reason: reply.reason, action: action?.name ?? "none", ms: Math.round(this.clock.now() - started) });
     this.emit({ type: "turn", clientTurnId: request.client_turn_id, heard: reply.heard, reply: spokenReply, action, answeredBy: reply.answered_by });
     if (action?.name !== "select_step") {

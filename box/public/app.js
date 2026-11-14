@@ -23,6 +23,7 @@
     if (button.dataset.step) body.step_id = button.dataset.step;
     if (button.dataset.incident) body.incident_id = button.dataset.incident;
     if (button.dataset.scenario) body.scenario_id = button.dataset.scenario;
+    if (button.dataset.language) body.language = button.dataset.language;
     press(body);
   });
 
@@ -41,6 +42,47 @@
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
   const upper = (value) => String(value).toUpperCase();
+
+  // Screen words in Spanish (draft: to be checked by a fluent speaker). Clara's own words come translated from the box.
+  const ES = {
+    "SIMULATION · NO REAL CALL IS MADE": "SIMULACIÓN · NO SE HACE NINGUNA LLAMADA REAL",
+    "OPENING MOCK 911 CALL IN": "ABRIENDO LLAMADA 911 SIMULADA EN",
+    CANCEL: "CANCELAR",
+    "MOCK 911 CALL": "LLAMADA 911 SIMULADA",
+    "WHAT TO SAY": "QUÉ DECIR",
+    "SHOW / READ SUMMARY": "VER / LEER RESUMEN",
+    "BACK TO CLARA": "VOLVER A CLARA",
+    "911 GUIDE": "GUÍA 911",
+    "NEARBY EMERGENCY": "EMERGENCIA CERCANA",
+    DISMISS: "DESCARTAR",
+    "I'M BRINGING IT": "YO LO LLEVO",
+    DONE: "HECHO",
+    "STOP CPR COACH": "PARAR GUÍA DE RCP",
+    "NO PULSE DETECTED BY THE SENSOR": "EL SENSOR NO DETECTA PULSO",
+    "Is the person responding? Are they breathing normally?": "¿La persona responde? ¿Respira con normalidad?",
+    "NOT BREATHING": "NO RESPIRA",
+    BREATHING: "RESPIRA",
+  };
+  let lang = "en";
+  const tr = (en, es) => (lang === "es" ? es : en);
+  function applyLanguage(next) {
+    if (next === lang) return;
+    lang = next;
+    document.documentElement.lang = lang;
+    for (const el of document.querySelectorAll("[data-i18n]")) {
+      if (el.dataset.en === undefined) el.dataset.en = el.textContent;
+      el.textContent = lang === "es" ? ES[el.dataset.en] ?? el.dataset.en : el.dataset.en;
+    }
+  }
+  const voiceLabelsEs = {
+    off: "MICRÓFONO APAGADO",
+    starting: "INICIANDO MICRÓFONO",
+    ready: "LISTA PARA HABLAR",
+    listening: "ESCUCHANDO",
+    processing: "PROCESANDO",
+    speaking: "HABLANDO",
+    unavailable: "VOZ NO DISPONIBLE",
+  };
   const voiceLabels = {
     off: "MIC OFF",
     starting: "STARTING MIC",
@@ -90,11 +132,11 @@
     const now = Date.now();
     const tiles = [];
     for (const t of view.timers) {
-      if (t.timer === "tourniquet") tiles.push(tile("TQ ON", timeOfDay(t.started_at), `${clock(now - t.started_at)} AGO`, "hot"));
-      else if (t.timer === "pressure") tiles.push(tile("PRESSURE", clock(now - t.started_at), "HOLDING", "hot"));
+      if (t.timer === "tourniquet") tiles.push(tile(tr("TQ ON", "TORNIQUETE"), timeOfDay(t.started_at), tr(`${clock(now - t.started_at)} AGO`, `HACE ${clock(now - t.started_at)}`), "hot"));
+      else if (t.timer === "pressure") tiles.push(tile(tr("PRESSURE", "PRESIÓN"), clock(now - t.started_at), tr("HOLDING", "MANTENIENDO"), "hot"));
       else tiles.push(tile(upper(t.timer), clock(now - t.started_at), null, null));
     }
-    if (view.sos) tiles.push(tile("911 SIM", clock(now - view.sos.opened_at), "MOCK CALL OPEN", null));
+    if (view.sos) tiles.push(tile(tr("911 SIM", "911 SIMULADO"), clock(now - view.sos.opened_at), tr("MOCK CALL OPEN", "LLAMADA ABIERTA"), null));
     if (view.coming) {
       const strip = comingStrip(view.coming);
       const min = /\b(\d+) MIN\b/.exec(strip.text);
@@ -103,13 +145,22 @@
     }
     if (view.multiple_injured) tiles.push(tile("INJURED", "2+", "MULTIPLE", "hot"));
     $("tiles").replaceChildren(...tiles.slice(0, 4));
-    if (view.sos) text($("call-time"), `OPEN ${clock(now - view.sos.opened_at)}`);
+    if (view.sos) text($("call-time"), `${tr("OPEN", "ABIERTA")} ${clock(now - view.sos.opened_at)}`);
   }
 
   function draw() {
     if (!view) return;
     const v = view;
     if (v.lid_open) wakeUntil = 0;
+    applyLanguage(v.language === "es" ? "es" : "en");
+    const langButton = $("lang-button");
+    const other = (v.languages || []).find((l) => l !== v.language);
+    show(langButton, Boolean(other));
+    if (other) {
+      langButton.dataset.language = other;
+      text(langButton, other === "es" ? "ESPAÑOL" : "ENGLISH");
+    }
+    const labels = lang === "es" ? voiceLabelsEs : voiceLabels;
     // Another box's emergency wakes this screen even with the lid closed ("bring this kit").
     const near = v.nearby && v.nearby.length ? v.nearby[v.nearby.length - 1] : null;
     show($("sleep"), !v.lid_open && !v.sos && !v.countdown && !near && Date.now() >= wakeUntil);
@@ -117,19 +168,19 @@
     show($("nearby"), Boolean(near && !near.bringing) && !v.sos && !v.countdown);
     show($("nearby-banner"), Boolean(near && near.bringing));
     if (near) {
-      text($("nearby-title"), `EMERGENCY AT ${upper(near.from_box_name)} · BRING THIS KIT`);
+      text($("nearby-title"), tr(`EMERGENCY AT ${upper(near.from_box_name)} · BRING THIS KIT`, `EMERGENCIA EN ${upper(near.from_box_name)} · LLEVA ESTE KIT`));
       text($("nearby-directions"), near.directions);
-      text($("nearby-banner-text"), `BRING THIS KIT TO ${upper(near.from_box_name)}${near.directions ? ` · ${near.directions}` : ""}`);
+      text($("nearby-banner-text"), `${tr("BRING THIS KIT TO", "LLEVA ESTE KIT A")} ${upper(near.from_box_name)}${near.directions ? ` · ${near.directions}` : ""}`);
       for (const id of ["nearby-dismiss", "nearby-bring", "nearby-done"]) $(id).dataset.incident = near.incident_id;
     }
     const voiceState = !v.lid_open ? "off" : voiceLabels[v.voice_state] ? v.voice_state : "unavailable";
-    text($("voice-state"), voiceLabels[voiceState]);
+    text($("voice-state"), labels[voiceState]);
     $("voice-state").className = `tag ${voiceState}`;
     show($("idle-activity"), v.lid_open);
     $("idle-activity").className = `voice-activity ${voiceState}`;
-    text($("activity-text"), voiceLabels[voiceState]);
+    text($("activity-text"), labels[voiceState]);
     $("status").classList.toggle("offline", !v.online);
-    text($("status-text"), v.online ? "ONLINE" : "OFFLINE · SOS AVAILABLE");
+    text($("status-text"), v.online ? tr("ONLINE", "EN LÍNEA") : tr("OFFLINE · SOS AVAILABLE", "SIN CONEXIÓN · SOS DISPONIBLE"));
     show($("tag-link"), !linkOk);
 
     show($("coming"), Boolean(v.coming));
@@ -147,7 +198,7 @@
     } : null);
     show($("idle"), !p);
     show($("presentation"), Boolean(p));
-    text($("idle-instruction"), v.lid_open ? "" : "Open the lid to speak with Clara. The microphone is off while closed.");
+    text($("idle-instruction"), v.lid_open ? "" : tr("Open the lid to speak with Clara. The microphone is off while closed.", "Abre la tapa para hablar con Clara. El micrófono está apagado mientras está cerrada."));
     text($("idle-caption"), v.caption);
     if (p) {
       text($("visual-title"), p.title);
@@ -190,12 +241,12 @@
     $("sos-button").classList.toggle("open", Boolean(v.sos));
     const mute = $("mute-button");
     mute.dataset.action = v.speech_muted ? "unmute" : "mute";
-    mute.textContent = v.speech_muted ? "UNMUTE CLARA" : "MUTE CLARA";
+    mute.textContent = v.speech_muted ? tr("UNMUTE CLARA", "ACTIVAR VOZ") : tr("MUTE CLARA", "SILENCIAR CLARA");
     mute.setAttribute("aria-pressed", String(v.speech_muted));
     mute.classList.toggle("active", v.speech_muted);
     // The report link is drawn as text only (QR codes were dropped by design).
     show($("paramedics"), Boolean(v.sos));
-    text($("paramedics-text"), v.report_link ? `PARAMEDICS: ${upper(v.report_link)}` : "PARAMEDICS: HANDOFF SUMMARY");
+    text($("paramedics-text"), v.report_link ? `${tr("PARAMEDICS", "PARAMÉDICOS")}: ${upper(v.report_link)}` : tr("PARAMEDICS: HANDOFF SUMMARY", "PARAMÉDICOS: RESUMEN DE ENTREGA"));
     $("presentation").classList.toggle("handoff", Boolean(v.presentation && v.presentation.kind === "handoff"));
     show($("coach"), Boolean(v.coach));
     if (v.coach) {
@@ -217,12 +268,12 @@
           return li;
         }),
       );
-      text($("call-network"), v.online ? "Alert queued for the response network." : "Offline: the response network is not notified yet. It is sent when the link returns.");
-      text($("call-coming"), v.coming ? comingStrip(v.coming).text : "NOBODY HAS ACCEPTED YET");
+      text($("call-network"), v.online ? tr("Alert queued for the response network.", "Alerta en cola para la red de respuesta.") : tr("Offline: the response network is not notified yet. It is sent when the link returns.", "Sin conexión: la red de respuesta aún no está avisada. Se enviará cuando vuelva la conexión."));
+      text($("call-coming"), v.coming ? comingStrip(v.coming).text : tr("NOBODY HAS ACCEPTED YET", "NADIE HA ACEPTADO TODAVÍA"));
       // Other boxes are only asked when the person here taps this (or asks Clara); never by default.
       const ask = $("ask-nearby");
       ask.disabled = Boolean(v.sos.nearby_asked);
-      text(ask, v.sos.nearby_asked ? "NEARBY BOXES ASKED" : "ASK NEARBY BOXES FOR KITS");
+      text(ask, v.sos.nearby_asked ? tr("NEARBY BOXES ASKED", "CAJAS CERCANAS AVISADAS") : tr("ASK NEARBY BOXES FOR KITS", "PEDIR KITS A CAJAS CERCANAS"));
       $("call-coming").classList.toggle("none", !v.coming);
     }
 

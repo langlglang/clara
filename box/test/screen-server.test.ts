@@ -45,6 +45,8 @@ const view = (revision: number): ScreenView => ({
   scenarios: [],
   coach: null,
   pulse_prompt: false,
+  language: "en",
+  languages: ["en"],
 });
 
 /** Loopback only: the server under test. */

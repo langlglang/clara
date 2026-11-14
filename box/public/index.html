@@ -13,15 +13,16 @@
   <header id="top">
     <span id="brand">CLARA</span>
     <span id="voice-state" class="tag off" role="status" aria-live="polite">MIC OFF</span>
+    <button data-action="set_language" id="lang-button" class="small lang" hidden></button>
     <span id="status" class="tag status"><i class="dot"></i><span id="status-text">ONLINE</span></span>
     <span id="tag-link" class="tag lost" hidden><i class="dot"></i>SCREEN LOST THE BOX SERVICE</span>
   </header>
 
   <div id="banners">
     <div id="coming" class="banner coming" hidden><i class="dot"></i><span id="coming-text"></span></div>
-    <div id="nearby-banner" class="banner coming" hidden><i class="dot"></i><span id="nearby-banner-text"></span><button data-action="dismiss_nearby" id="nearby-done" class="small">DONE</button></div>
+    <div id="nearby-banner" class="banner coming" hidden><i class="dot"></i><span id="nearby-banner-text"></span><button data-action="dismiss_nearby" id="nearby-done" class="small" data-i18n>DONE</button></div>
     <div id="notice" class="banner notice" hidden><span id="notice-text"></span></div>
-    <div id="paramedics" class="banner paramedics" hidden><span id="paramedics-text"></span><button data-action="read_summary" class="small">SHOW / READ SUMMARY</button></div>
+    <div id="paramedics" class="banner paramedics" hidden><span id="paramedics-text"></span><button data-action="read_summary" class="small" data-i18n>SHOW / READ SUMMARY</button></div>
   </div>
 
   <main id="main">
@@ -46,52 +47,52 @@
         <div id="visual-source" class="lbl"></div>
       </div>
       <div id="picture"><img id="visual-image" alt=""><div id="no-image">NO PICTURE</div>
-        <div id="coach" hidden><div id="coach-ring"><span id="coach-count">0</span><small>PUSHES</small></div><div id="coach-bpm" class="lbl"></div><button data-action="stop_coach" class="small">STOP CPR COACH</button></div>
+        <div id="coach" hidden><div id="coach-ring"><span id="coach-count">0</span><small>PUSHES</small></div><div id="coach-bpm" class="lbl"></div><button data-action="stop_coach" class="small" data-i18n>STOP CPR COACH</button></div>
       </div>
     </section>
   </main>
 
   <aside id="rail">
-    <button data-action="sos" id="sos-button" class="sos">SOS<small>911 GUIDE</small></button>
+    <button data-action="sos" id="sos-button" class="sos">SOS<small data-i18n>911 GUIDE</small></button>
     <button data-action="mute" id="mute-button" class="mute" aria-pressed="false">MUTE CLARA</button>
     <div id="tiles"></div>
   </aside>
 
   <div id="countdown" class="overlay danger" hidden>
     <div class="card center">
-      <div class="sim-strip">SIMULATION · NO REAL CALL IS MADE</div>
-      <h2>OPENING MOCK 911 CALL IN</h2>
+      <div class="sim-strip" data-i18n>SIMULATION · NO REAL CALL IS MADE</div>
+      <h2 data-i18n>OPENING MOCK 911 CALL IN</h2>
       <div id="countdown-number">5</div>
-      <button data-action="cancel_sos" class="big cancel">CANCEL</button>
+      <button data-action="cancel_sos" class="big cancel" data-i18n>CANCEL</button>
     </div>
   </div>
 
   <div id="call" class="overlay call" hidden>
     <div class="card">
-      <div class="sim-strip">SIMULATION · NO REAL CALL IS MADE</div>
-      <div class="call-head"><h2>MOCK 911 CALL</h2><span id="call-time"></span></div>
-      <div class="lbl">WHAT TO SAY</div>
+      <div class="sim-strip" data-i18n>SIMULATION · NO REAL CALL IS MADE</div>
+      <div class="call-head"><h2 data-i18n>MOCK 911 CALL</h2><span id="call-time"></span></div>
+      <div class="lbl" data-i18n>WHAT TO SAY</div>
       <ol id="coaching"></ol>
       <div id="call-network"></div>
       <div id="call-coming"></div>
-      <div class="row"><button data-action="ask_nearby" id="ask-nearby">ASK NEARBY BOXES FOR KITS</button><button data-action="read_summary">SHOW / READ SUMMARY</button><button data-action="hide_911" class="strong">BACK TO CLARA</button></div>
+      <div class="row"><button data-action="ask_nearby" id="ask-nearby">ASK NEARBY BOXES FOR KITS</button><button data-action="read_summary" data-i18n>SHOW / READ SUMMARY</button><button data-action="hide_911" class="strong" data-i18n>BACK TO CLARA</button></div>
     </div>
   </div>
 
   <div id="pulse-prompt" class="overlay danger" hidden>
     <div class="card center">
-      <h2>NO PULSE DETECTED BY THE SENSOR</h2>
-      <p>Is the person responding? Are they breathing normally?</p>
-      <div class="row"><button data-action="pulse_not_breathing" class="big cancel">NOT BREATHING</button><button data-action="pulse_breathing" class="big">BREATHING</button></div>
+      <h2 data-i18n>NO PULSE DETECTED BY THE SENSOR</h2>
+      <p data-i18n>Is the person responding? Are they breathing normally?</p>
+      <div class="row"><button data-action="pulse_not_breathing" class="big cancel" data-i18n>NOT BREATHING</button><button data-action="pulse_breathing" class="big" data-i18n>BREATHING</button></div>
     </div>
   </div>
 
   <div id="nearby" class="overlay danger" hidden>
     <div class="card center">
-      <div class="lbl">NEARBY EMERGENCY</div>
+      <div class="lbl" data-i18n>NEARBY EMERGENCY</div>
       <h2 id="nearby-title"></h2>
       <p id="nearby-directions"></p>
-      <div class="row"><button data-action="dismiss_nearby" id="nearby-dismiss" class="big">DISMISS</button><button data-action="bringing_kit" id="nearby-bring" class="big primary">I'M BRINGING IT</button></div>
+      <div class="row"><button data-action="dismiss_nearby" id="nearby-dismiss" class="big" data-i18n>DISMISS</button><button data-action="bringing_kit" id="nearby-bring" class="big primary" data-i18n>I'M BRINGING IT</button></div>
     </div>
   </div>
 

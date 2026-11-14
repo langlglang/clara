@@ -61,8 +61,35 @@ export const HONESTY_RULES: HonestyRule[] = [
   },
 ];
 
+/**
+ * The same rules for Spanish replies (draft, conservative: a false hit only means a safe fixed line). Checked on
+ * every reply, whatever the language.
+ */
+export const HONESTY_RULES_ES: HonestyRule[] = [
+  {
+    id: "promise",
+    pattern: /\b(viene|vienen|vendr[áa]n?|llega|llegan|llegar[áa]n?|est[áa]n? (en camino|llegando|cerca)|en camino|ya (va|van|viene|vienen))\b|\b(he |ya )?(llamado|llam[ée]|avis[ée]|avisado|contactado|contact[ée]|notificado|notifiqu[ée])\b|\b(en|dentro de) (unos|pocos|un par de|w+) (minutos?|segundos?)\b/i,
+    note: HONESTY_RULES[0]!.note,
+  },
+  {
+    id: "false_comfort",
+    pattern: /\b(va|van|vas|estar[áa]s?|estar[áa]n) (a estar )?(bien|perfectamente)\b|\btodo (va a )?(est[áa]|estar[áa]|saldr[áa]) bien\b|\bno (te )?preocupes\b|\bno es (grave|nada|serio)\b|\bnada (grave|serio)\b|\btranquil[oa], (todo|no pasa)\b/i,
+    note: HONESTY_RULES[1]!.note,
+  },
+  {
+    id: "diagnosis",
+    pattern: /\bdiagn[óo]sticw*\b|\b(es|parece|seguramente|probablemente|tiene|tienes) (un[ao]? )?(fractura|roto|rota|esguince|luxaci[óo]n|conmoci[óo]n|derrame|ictus|infarto|ataque (al coraz[óo]n|card[íi]aco)|paro card[íi]aco|convulsi[óo]n|epilepsia|shock|choque|hipotermia|golpe de calor|anafilaxia|reacci[óo]n al[ée]rgica|asma|diabetes|hipoglucemia|hemorragia interna|envenenamiento|intoxicaci[óo]n|sobredosis|infecci[óo]n|quemadura de)\b/i,
+    note: HONESTY_RULES[2]!.note,
+  },
+  {
+    id: "advice",
+    pattern: /\b(presiona|presione|aprieta|apriete|aplica|aplique|eleva|eleve|levanta (la|el|su)|venda|vende|envuelve|envuelva|ata|ate|rellena|limpia|enjuaga|vierte|entablilla|hielo|enfr[íi]a|inclina|gira (la|el|su)|tumba|acuesta|mueve(lo|la|le)?|dale|d[ée]le|rcp|reanimaci[óo]n|compresiones|respiraciones de rescate|posici[óo]n lateral|heimlich|aspirina|ibuprofeno|paracetamol|epinefrina|adrenalina|torniquete)\b/i,
+    note: HONESTY_RULES[3]!.note,
+  },
+];
+
 /** The first rule the reply breaks, or null when it passes. */
 export function checkHonesty(reply: string): HonestyRule | null {
-  for (const rule of HONESTY_RULES) if (rule.pattern.test(reply)) return rule;
+  for (const rule of [...HONESTY_RULES, ...HONESTY_RULES_ES]) if (rule.pattern.test(reply)) return rule;
   return null;
 }

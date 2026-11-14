@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HttpCloudLink } from "./cloud/http.js";
 import { Kit, loadKit } from "./engine/kit.js";
-import { loadScenario } from "./engine/scenario.js";
+import { loadScenario, loadTranslations } from "./engine/scenario.js";
 import { UsbGpsLocation } from "./location/usb-gps.js";
 import { CameraCapture, captureUsbJpeg, defaultCameraDevice } from "./camera/capture.js";
 import { PulseReader } from "./sensors/pulse-reader.js";
@@ -106,12 +106,14 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
   else log("no kit manifest (CLARA_KIT): no compartment will light");
   if (scenario.status !== "checked") log(`scenario ${scenario.scenario_id} is a DRAFT: not checked against its sources`);
   const extras = [];
+  const translations = loadTranslations(config.scenarioPath, log);
   for (const path of config.extraScenarioPaths ?? []) {
     if (!existsSync(path)) continue;
     try {
       const extra = loadScenario(path);
       if (extra.status !== "checked") log(`scenario ${extra.scenario_id} is a DRAFT: not checked against its sources`);
       extras.push(extra);
+      translations.push(...loadTranslations(path, log));
     } catch (error) {
       log(`extra scenario ${path} not loaded: ${(error as Error).message}`);
     }
@@ -145,6 +147,7 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
     location,
     scenario,
     scenarios: extras,
+    translations,
     kit,
     tick: !audio ? null
       : config.audio === "silent"

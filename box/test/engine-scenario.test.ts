@@ -170,3 +170,21 @@ describe("ScenarioEngine", () => {
     expect(engine.kit.low().map((i) => i.sku)).toContain("sku_a");
   });
 });
+
+describe("scenario translations", () => {
+  it("every shipped translation covers its scenario's steps and questions, and fits the screen limits", async () => {
+    const { loadTranslations } = await import("../src/engine/scenario.js");
+    const { localizeScenario, checkScenario, ScenarioSchema } = await import("@clara/contracts");
+    const { fileURLToPath } = await import("node:url");
+    const dir = fileURLToPath(new URL("../../content/scenarios/", import.meta.url));
+    for (const file of ["severe-bleeding.json", "minor-cut.json", "not-breathing.json"]) {
+      const scenario = loadScenario(dir + file);
+      const [es] = loadTranslations(dir + file);
+      expect(es?.language).toBe("es");
+      expect(Object.keys(es!.steps).sort()).toEqual(scenario.steps.map((s) => s.step_id).sort());
+      expect(Object.keys(es!.questions).sort()).toEqual(scenario.questions.map((q) => q.question_id).sort());
+      const local = checkScenario(ScenarioSchema.parse(localizeScenario(scenario, es)));
+      expect(local.steps.map((s) => [s.step_id, s.next, s.item, s.sos, s.timer])).toEqual(scenario.steps.map((s) => [s.step_id, s.next, s.item, s.sos, s.timer]));
+    }
+  });
+});

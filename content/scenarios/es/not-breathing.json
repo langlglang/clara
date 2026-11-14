@@ -1,0 +1,18 @@
+{
+  "scenario_id": "not_breathing",
+  "language": "es",
+  "status": "draft",
+  "title": "No respira",
+  "steps": {
+    "check_response": { "label": "Comprueba si responde", "text": "Asegúrate de que es seguro. Tócale el hombro y grita: \"¿Estás bien?\"" },
+    "get_help": { "label": "Grita pidiendo ayuda y llama", "text": "Si no responde, grita pidiendo ayuda. Pide a alguien que llame a emergencias y traiga un DEA. Esta pantalla puede guiar una llamada de emergencia." },
+    "check_breathing": { "label": "Comprueba la respiración", "text": "Mira su pecho durante no más de 10 segundos. Si no respira, o solo boquea, empieza la RCP." },
+    "hand_position": { "label": "Manos en el centro del pecho", "text": "Túmbalo boca arriba sobre una superficie firme. Pon el talón de una mano en el centro del pecho. Pon la otra mano encima." },
+    "compressions": { "label": "Empuja fuerte y rápido", "text": "Empuja fuerte y rápido, al menos 5 centímetros de profundidad, al ritmo. Deja que el pecho vuelva a subir después de cada empuje." },
+    "keep_going": { "label": "Sigue hasta que llegue ayuda o un DEA", "text": "Sigue empujando al ritmo. No pares hasta que la ayuda te releve, haya un DEA listo o empiece a respirar." }
+  },
+  "questions": {
+    "responds": "¿Responde cuando le tocas y le gritas?",
+    "breathing": "¿Respira con normalidad?"
+  }
+}

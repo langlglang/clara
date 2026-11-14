@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { VISUALS, CAMERA_INSPECT_VERSION, actionAllowed, comingLine, minorCutVisualAllowed, startTriage, visualById, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type TurnResponse, type TurnState } from "@clara/contracts";
+import { VISUALS, CAMERA_INSPECT_VERSION, actionAllowed, comingLine, localizeScenario, minorCutVisualAllowed, startTriage, visualById, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type ScenarioTranslation, type TurnResponse, type TurnState } from "@clara/contracts";
 import { EventFactory, type EventBody } from "../engine/events.js";
 import { ScenarioEngine, type RecentTurn, type Source, type StepIntent } from "../engine/engine.js";
 import type { Kit } from "../engine/kit.js";
@@ -12,7 +12,7 @@ import type { Board, CloudLink, CueName, SpeechQueue, Utterance } from "../ports
 import { SCREEN_VIEW_VERSION, type ScreenPresentation, type ScreenPress, type ScreenView, type ScreenVoiceState } from "../screen/view.js";
 import type { VoiceStatus } from "../voice/voice-loop.js";
 import { systemClock, type Cancel, type Clock } from "./clock.js";
-import { LINES, coachingLines } from "./lines.js";
+import { GREETINGS, coachingLines, linesFor } from "./lines.js";
 import { RhythmCoach } from "./coach.js";
 import { buildHandoffSummary } from "./summary.js";
 import { CloudError } from "../cloud/http.js";
@@ -60,6 +60,8 @@ export interface BoxSessionOptions {
   scenario: Scenario;
   /** Other scenarios the box may switch to (start-screen picker, or a bystander saying "not breathing"). */
   scenarios?: Scenario[];
+  /** Scenario words in other languages (content/scenarios/<language>/). The bystander can switch on screen. */
+  translations?: ScenarioTranslation[];
   /** Plays a generated WAV straight to the speaker: the CPR metronome tick. */
   tick?: ((wav: Buffer) => Utterance) | null;
   kit: Kit;
@@ -98,7 +100,6 @@ const EMERGENCY_PROMPTS = {
   people_count: "How many people need help?",
   location: "Where are you? I do not have a verified box address.",
 } as const;
-const GREETING = "I'm Clara, I'm here to help. Let me know what happened and I can guide you through treatment, diagnosis, or call for help.";
 const GREETING_AUDIO = "audio/clara-greeting-v3-fast.wav";
 const SLOT_IMAGES: Record<string, string> = {
   "top-left": "/content/kits/layout-3slot-v1-top-left.svg",
@@ -110,13 +111,14 @@ export class BoxSession {
   /** The current scenario's engine; replaced when the box switches scenario (picker or "not breathing"). */
   engine: ScenarioEngine;
   readonly events: EventFactory;
-  readonly language: string;
+  private lang: string;
   private readonly clock: Clock;
   private readonly newId: () => string;
   private readonly log: (line: string) => void;
   private readonly boxName: string;
   private readonly fixedNeed: Need | null;
-  private readonly scenarios: Scenario[];
+  private readonly baseScenarios: Scenario[];
+  private scenarios: Scenario[];
   private readonly coach: RhythmCoach;
   /** This lid session's own events, for the offline handoff summary. */
   private sessionEvents: BoxEvent[] = [];
@@ -167,14 +169,16 @@ export class BoxSession {
     this.clock = o.clock ?? systemClock;
     this.newId = o.newId ?? randomUUID;
     this.log = o.log ?? (() => {});
-    this.language = o.language ?? "en";
+    this.lang = o.language ?? "en";
     this.boxName = o.boxName ?? o.boxId;
     this.countdownSeconds = o.countdownSeconds ?? 5;
     this.fixedNeed = o.need ?? null;
-    this.scenarios = [o.scenario, ...(o.scenarios ?? []).filter((s) => s.scenario_id !== o.scenario.scenario_id)];
+    this.baseScenarios = [o.scenario, ...(o.scenarios ?? []).filter((s) => s.scenario_id !== o.scenario.scenario_id)];
+    if (!this.languages().includes(this.lang)) this.lang = "en";
+    this.scenarios = this.baseScenarios.map((s) => this.loc(s));
     this.coach = new RhythmCoach({ clock: this.clock, board: o.board ?? null, speech: o.speech ?? null, play: o.tick ?? null, log: this.log });
     this.events = new EventFactory(o.boxId, () => this.clock.now(), this.newId, this.log);
-    this.engine = this.makeEngine(o.scenario);
+    this.engine = this.makeEngine(this.loc(o.scenario));
     this.online = o.cloud.online;
     o.speech?.onIdle(() => { this.presentEmergencyQuestion(); this.presentCompletedTask(); });
     o.cloud.onPush((push) => this.onPush(push));
@@ -190,6 +194,49 @@ export class BoxSession {
         if (event.ir !== null && event.ir >= FINGER_IR_MIN) this.fingerSeenAt = this.clock.monotonic();
       } else if ("t" in event && event.t === "pulse") this.onPulse(event.bpm, event.quality);
     });
+  }
+
+  /** The language the box speaks and shows now. */
+  get language(): string {
+    return this.lang;
+  }
+
+  /** English plus every language with at least one scenario translation. */
+  languages(): string[] {
+    return ["en", ...new Set((this.o.translations ?? []).map((t) => t.language))];
+  }
+
+  private get L() {
+    return linesFor(this.lang);
+  }
+
+  private loc(scenario: Scenario): Scenario {
+    if (this.lang === "en") return scenario;
+    return localizeScenario(scenario, this.o.translations?.find((t) => t.scenario_id === scenario.scenario_id && t.language === this.lang));
+  }
+
+  /**
+   * Switches the box's language: screen words, Clara's voice (speech-to-text, the model's replies, text-to-speech)
+   * and fixed lines. The current step stays where it is and is shown and said again in the new language.
+   */
+  setLanguage(language: string): boolean {
+    if (language === this.lang || !this.languages().includes(language)) return false;
+    this.lang = language;
+    this.scenarios = this.baseScenarios.map((s) => this.loc(s));
+    const base = this.baseScenarios.find((s) => s.scenario_id === this.engine.scenario.scenario_id);
+    if (base) this.engine.relabel(this.loc(base));
+    this.recent = [];
+    this.o.speech?.stopAll();
+    this.log(`language: ${language}`);
+    if (this.engine.current) this.repeat();
+    else if (this.lidOpen) {
+      const greeting = GREETINGS[this.lang] ?? GREETINGS.en!;
+      this.caption = greeting;
+      this.presentation = { kind: "answer", title: "Clara", body: greeting, image_url: null, item: null, source_label: null };
+      this.o.speech?.say({ text: greeting }).catch(() => {});
+    }
+    this.publish();
+    return true;
   }
 
   get sessionId(): string | null {
@@ -231,13 +278,14 @@ export class BoxSession {
     this.lidOpen = true;
     if (!this.active) this.beginSession();
     this.board((b) => b.buzz("chime"));
-    this.caption = GREETING;
-    this.presentation = { kind: "answer", title: "Clara", body: GREETING, image_url: null, item: null, source_label: null };
-    const audio = this.o.contentDir ? join(this.o.contentDir, GREETING_AUDIO) : null;
+    const greeting = GREETINGS[this.lang] ?? GREETINGS.en!;
+    this.caption = greeting;
+    this.presentation = { kind: "answer", title: "Clara", body: greeting, image_url: null, item: null, source_label: null };
+    const audio = this.o.contentDir && this.lang === "en" ? join(this.o.contentDir, GREETING_AUDIO) : null;
     if (audio && (this.o.fileExists ?? existsSync)(audio)) {
       // No local-voice fallback if the recorded greeting cannot play.
       this.o.speech?.say({ text: "", file: audio }).catch(() => {});
-    }
+    } else if (this.lang !== "en") this.o.speech?.say({ text: greeting }).catch(() => {});
     this.voice?.start();
     this.presentEmergencyQuestion();
     this.publish();
@@ -289,7 +337,7 @@ export class BoxSession {
     this.lastPulseRecord = null;
     this.coach.stop();
     this.sessionEvents = [];
-    if (this.engine.scenario.scenario_id !== this.o.scenario.scenario_id) this.engine = this.makeEngine(this.o.scenario);
+    if (this.engine.scenario.scenario_id !== this.o.scenario.scenario_id) this.engine = this.makeEngine(this.loc(this.o.scenario));
     this.publish();
   }
 
@@ -307,7 +355,7 @@ export class BoxSession {
     }
     const intents = this.engine.next(source);
     if (!intents) {
-      this.say(LINES.endOfSteps);
+      this.say(this.L.endOfSteps);
       this.publish();
       return false;
     }
@@ -351,7 +399,7 @@ export class BoxSession {
     this.emit("sos.countdown", { seconds: total, source });
     // A step that opens SOS has just started speaking: the countdown line follows it instead of cutting it off.
     if (source !== "system") this.o.speech?.stopAll();
-    this.say(LINES.countdown(total));
+    this.say(this.L.countdown(total));
     this.scheduleTick();
     this.publish();
   }
@@ -362,7 +410,7 @@ export class BoxSession {
     this.countdown = null;
     this.emit("sos.cancelled", { source });
     this.o.speech?.stopAll();
-    this.say(LINES.cancelled);
+    this.say(this.L.cancelled);
     this.publish();
     return true;
   }
@@ -398,7 +446,7 @@ export class BoxSession {
     this.board((b) => b.buzz("alert"));
     this.o.cue?.("sos");
     this.o.speech?.stopAll();
-    this.say(LINES.sosOpened);
+    this.say(this.L.sosOpened);
     this.publish();
   }
 
@@ -410,7 +458,7 @@ export class BoxSession {
     if (!this.sos || this.sos.nearbyAsked) return false;
     this.sos.nearbyAsked = true;
     this.emit("nearby.requested", { source });
-    this.say(this.online ? LINES.nearbyAsked : LINES.nearbyAskedOffline);
+    this.say(this.online ? this.L.nearbyAsked : this.L.nearbyAskedOffline);
     this.publish();
     return true;
   }
@@ -437,7 +485,7 @@ export class BoxSession {
       case "talk":
         if (!this.lidOpen) return;
         if (!this.voice) {
-          this.say(LINES.noVoice);
+          this.say(this.L.noVoice);
           this.publish();
           return;
         }
@@ -493,6 +541,9 @@ export class BoxSession {
         if (!this.active) return;
         this.readSummary();
         return;
+      case "set_language":
+        this.setLanguage(press.language);
+        return;
       case "pick_scenario":
         this.switchScenario(press.scenario_id, "touch");
         return;
@@ -523,7 +574,8 @@ export class BoxSession {
       pulse_available: Boolean(this.o.pulseReader),
       ...(this.sos && !this.sos.nearbyAsked ? { nearby_kits_available: true as const } : {}),
       camera_available: Boolean(this.o.camera && this.o.cloud.inspectCamera && this.o.cameraCloudEnabled),
-      available_visuals: VISUALS.filter((visual) => {
+      // Visual captions are English and checked word for word, so other languages don't offer them yet.
+      available_visuals: this.lang !== "en" ? [] : VISUALS.filter((visual) => {
       if (visual.id === "kit_overview" && this.o.kit.layoutRevision !== "3slot-v1") return false;
       if (visual.sku && (this.o.kit.get(visual.sku)?.on_hand ?? 0) <= 0) return false;
       const file = this.o.contentDir && join(this.o.contentDir, visual.image_url.slice("/content/".length));
@@ -746,7 +798,7 @@ export class BoxSession {
     this.pulsePrompt = true;
     this.pulsePromptAt = now;
     this.o.cue?.("alert");
-    this.say(LINES.noPulse);
+    this.say(this.L.noPulse);
   }
 
   /** The bystander's answer to the no-pulse prompt: NOT BREATHING goes straight to the CPR coach step and SOS. */
@@ -823,7 +875,7 @@ export class BoxSession {
           if (line) {
             this.o.cue?.("alert");
             this.say(line);
-          } else if (this.lastComing) this.say(LINES.helperWithdrew);
+          } else if (this.lastComing) this.say(this.L.helperWithdrew);
           this.lastComing = line;
         }
         this.publish();
@@ -834,7 +886,7 @@ export class BoxSession {
         this.messages.push({ from: push.from, text: push.text, at: this.clock.now() });
         if (this.messages.length > MAX_MESSAGES) this.messages.splice(0, this.messages.length - MAX_MESSAGES);
         this.o.cue?.("alert");
-        this.say(LINES.responderMessage(push.from, push.text));
+        this.say(this.L.responderMessage(push.from, push.text));
         this.publish();
         return;
       }
@@ -846,7 +898,7 @@ export class BoxSession {
           // Said even with the lid closed, so someone near this box hears it. A box helping its own patient isn't
           // interrupted: the card waits on its screen.
           this.o.cue?.("alert");
-          this.o.speech?.say({ text: LINES.nearbyEmergency(push.from_box_name, push.directions) }).catch(() => {});
+          this.o.speech?.say({ text: this.L.nearbyEmergency(push.from_box_name, push.directions) }).catch(() => {});
         }
         this.publish();
         return;
@@ -940,7 +992,7 @@ export class BoxSession {
             overlay: this.sos.overlay,
             nearby_asked: this.sos.nearbyAsked,
             coaching: coachingLines({ directions: this.o.directions ?? null, multipleInjured: this.multipleInjured,
-              location: this.o.location?.current() ?? null, configuredAddress: this.o.configuredAddress ?? null }),
+              location: this.o.location?.current() ?? null, configuredAddress: this.o.configuredAddress ?? null, language: this.lang }),
           }
         : null,
       coming: this.lastComing,
@@ -959,6 +1011,8 @@ export class BoxSession {
       scenario_id: this.engine.scenario.scenario_id,
       scenarios: this.scenarios.map((s) => ({ scenario_id: s.scenario_id, title: s.title })),
       pulse_prompt: this.pulsePrompt,
+      language: this.lang,
+      languages: this.languages(),
       coach: this.coach.active ? { kind: "cpr", bpm: this.coach.active.bpm, started_at: this.coach.active.started_at } : null,
     };
   }
@@ -1006,7 +1060,7 @@ export class BoxSession {
           break;
         case "item_missing":
           this.missing = { sku: intent.sku, name: intent.name };
-          this.notice = LINES.itemMissing(intent.name);
+          this.notice = this.L.itemMissing(intent.name);
           this.o.speech?.say({ text: this.notice }).catch(() => {});
           break;
         case "clear_lights":
@@ -1081,7 +1135,7 @@ export class BoxSession {
       for (const item of usage) {
         if (this.o.kit.use(item.sku, item.qty)) this.emit("supply.used", { sku: item.sku, qty: item.qty, confirmed: true });
       }
-      this.say(LINES.usageConfirmed);
+      this.say(this.L.usageConfirmed);
     }
     this.publish();
   }
@@ -1246,8 +1300,8 @@ const FINGER_RECENT_MS = 5_000;
 const PULSE_REPROMPT_MS = 60_000;
 const PULSE_RECORD_EVERY_MS = 10_000;
 /** Checked only after NOT_BREATHING fails, and only while the no-pulse prompt is open. */
-const BREATHING_YES = /\b(?:yes|breathing)\b/i;
-const NOT_BREATHING = /\b(?:not|isn'?t|no|stopped|can'?t (?:see|hear|feel) (?:him |her |them )?)\s*breath|\bcpr\b/i;
+const BREATHING_YES = /\b(?:yes|breathing|sí|si|respira)\b/i;
+const NOT_BREATHING = /\b(?:not|isn'?t|no|stopped|can'?t (?:see|hear|feel) (?:him |her |them )?)\s*breath|\bcpr\b|\bno (?:respira|está respirando)|dej[óo] de respirar|\brcp\b/i;
 
 /** "clara.living/r/AB12CD": the short report link as shown on screen (no scheme), or the full link without a code. */
 export function shortLink(url: string, code: string): string {

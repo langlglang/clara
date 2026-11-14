@@ -39,3 +39,16 @@ describe("checkHonesty", () => {
     "Okay. Tell me what happened.",
   ])("allows %s", (text) => expect(checkHonesty(text)).toBeNull());
 });
+
+describe("Spanish honesty rules", () => {
+  it("blocks Spanish promises, false comfort, diagnoses and advice, and lets plain words through", () => {
+    expect(checkHonesty("La ambulancia ya viene en camino.")?.id).toBe("promise");
+    expect(checkHonesty("He llamado a emergencias.")?.id).toBe("promise");
+    expect(checkHonesty("Tranquilo, todo va a estar bien.")?.id).toBe("false_comfort");
+    expect(checkHonesty("No te preocupes.")?.id).toBe("false_comfort");
+    expect(checkHonesty("Parece una fractura.")?.id).toBe("diagnosis");
+    expect(checkHonesty("Presiona fuerte la herida.")?.id).toBe("advice");
+    expect(checkHonesty("Cuéntame qué pasó, por favor.")).toBeNull();
+    expect(checkHonesty("Estoy aquí contigo. ¿Dónde está la herida?")).toBeNull();
+  });
+});

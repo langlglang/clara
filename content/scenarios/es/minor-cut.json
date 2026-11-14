@@ -1,0 +1,10 @@
+{
+  "scenario_id": "minor_cut",
+  "language": "es",
+  "status": "draft",
+  "title": "Corte o raspón superficial",
+  "steps": {
+    "rinse_cover": { "label": "Enjuagar y cubrir un corte superficial", "text": "Para un corte o raspón superficial, si hay agua del grifo o suero estéril, enjuaga hasta que no quede suciedad visible. Una vez limpio, cúbrelo con una tirita." }
+  },
+  "questions": {}
+}

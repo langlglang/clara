@@ -79,6 +79,9 @@ export interface ScreenView {
   coach: { kind: "cpr"; bpm: number; started_at: number } | null;
   /** Additive in 1.3: the no-pulse question is open (NOT BREATHING / BREATHING buttons). */
   pulse_prompt: boolean;
+  /** Additive in 1.4: the language the box speaks and shows now, and the ones it can switch to. */
+  language: string;
+  languages: string[];
 }
 
 /** What the page may send (POST /screen/press). Anything else is refused with 400. */
@@ -110,6 +113,7 @@ export const ScreenPressSchema = z.union([
   }),
   z.strictObject({ action: z.literal("goto"), step_id: Id }),
   z.strictObject({ action: z.literal("pick_scenario"), scenario_id: Id }),
+  z.strictObject({ action: z.literal("set_language"), language: z.string().regex(/^[a-z]{2,3}$/) }),
   z.strictObject({ action: z.enum(["bringing_kit", "dismiss_nearby"]), incident_id: Id }),
 ]);
 export type ScreenPress = z.infer<typeof ScreenPressSchema>;

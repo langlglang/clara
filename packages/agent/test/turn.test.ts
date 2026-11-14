@@ -20,6 +20,16 @@ const assistantFor = (...outputs: Parameters<typeof scriptedModel>[0]) => create
 afterEach(() => vi.useRealTimers());
 
 describe("handleTurn", () => {
+  it("asks about severity instead of showing the severe-bleeding panel for an unspecified finger cut", async () => {
+    const severe = { ...state, scenario_id: "severe_bleeding", allowed_steps: [
+      { step_id: "start", label: "Tell me what happened" }, { step_id: "safety", label: "Check safety" },
+    ] };
+    const response = await handleTurn(textRequest("I have a cut on my finger. Can you help?", { state: severe }), {
+      assistant: assistantFor(json({ transcript: "x", reply: "", action: { name: "select_step", step_id: "safety" } })),
+      ears: null, voice: null, guidance: () => "First, make sure it is safe for you to go to them.",
+    });
+    expect(response).toMatchObject({ action: null, reply: "Is it a small, shallow cut, or is it bleeding heavily?" });
+  });
   it("resolves an offered guide's first panel and advances only on explicit completion", async () => {
     const guide = { scenario_id: "minor_cut", label: "Superficial cut", start_step_id: "get_bandage" };
     const offered = { ...state, guided_scenarios: [guide] };

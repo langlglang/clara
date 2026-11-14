@@ -1,5 +1,5 @@
 // Adapted from Sophi (github.com/mzhao1599/sophi), services/cloud-api/src/walker/service.ts (turn(): transcribe, model, fixed lines, voice, time budget).
-import { VOICE_TURN_VERSION, actionAllowed, guidedAdvanceAllowed, guidedStartAllowed, minorCutVisualAllowed, visualById, type FixedReason, type TurnRequest, type TurnResponse } from "@clara/contracts";
+import { VOICE_TURN_VERSION, actionAllowed, fingerCutNeedsClarification, guidedAdvanceAllowed, guidedStartAllowed, minorCutVisualAllowed, visualById, type FixedReason, type TurnRequest, type TurnResponse } from "@clara/contracts";
 import { startTriage, TRIAGE_QUESTIONS, type TriageObservations } from "@clara/contracts";
 
 const TAG_WORDS = { red: "red, urgent", yellow: "yellow, can wait a little", green: "green, walking wounded", black: "black" } as const;
@@ -101,8 +101,8 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
     );
   const spanish = request.language.toLowerCase().startsWith("es");
   const lines = spanish ? ACTION_LINES.es : ACTION_LINES.en;
-  const fixed = async (reason: FixedReason, heard: string | null): Promise<TurnResponse> => {
-    const reply = (spanish ? FIXED_LINES_ES : FIXED_LINES)[reason];
+  const fixed = async (reason: FixedReason, heard: string | null, override?: string): Promise<TurnResponse> => {
+    const reply = override ?? (spanish ? FIXED_LINES_ES : FIXED_LINES)[reason];
     const response: TurnResponse = { ...base, heard, reply, action: null, answered_by: "fixed", reason, speech: await say(reply) };
     log(response);
     return response;
@@ -149,6 +149,11 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   const { action } = result.reply;
   // The assistant already checked this; checked again here because acting on an unoffered ID is the one thing that must never happen.
   if (action && !actionAllowed(action, request.state)) return fixed("invalid_reply", words);
+  if (action?.name === "select_step" && request.state.scenario_id === "severe_bleeding" && fingerCutNeedsClarification(words)) {
+    return fixed("invalid_reply", words, spanish
+      ? "¿Es un corte pequeño y superficial, o sangra mucho?"
+      : "Is it a small, shallow cut, or is it bleeding heavily?");
+  }
   if (action?.name === "start_guidance" && (!request.language.startsWith("en") || !guidedStartAllowed(words))) return fixed("invalid_reply", words);
   if (action?.name === "start_guidance" && action.scenario_id === "minor_cut" && !minorCutVisualAllowed(words)) return fixed("invalid_reply", words);
   if (action?.name === "select_step" && request.state.guided_active && action.step_id !== request.state.step_id && !guidedAdvanceAllowed(words)) return fixed("invalid_reply", words);

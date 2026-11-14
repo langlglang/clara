@@ -17,6 +17,14 @@ describe("one-frame vision output boundary", () => {
     expect(parseVisibleObservation(JSON.stringify({ setting: "unclear", people: "unclear", objects: ["hand", "skin", "red_area"] })))
       .toBe("This single photo may show a hand, skin, a red area. Please tell me what you see.");
   });
+  it("describes a plainly visible red mark and asks the relevant question", () => {
+    expect(parseVisibleObservation(JSON.stringify({ setting: "indoors", people: "unclear", objects: ["hand", "red_area"], detail: "red_mark_on_finger" })))
+      .toBe("This photo may show a red mark on a finger. I can't tell how serious it is from one image. Is it bleeding heavily?");
+    expect(parseVisibleObservation(JSON.stringify({ setting: "indoors", people: "unclear", objects: ["hand"], detail: "none_visible" })))
+      .toBe("This photo may show a hand, but I can't make out an injury. Try a closer photo or tell me what you see.");
+    expect(parseVisibleObservation(JSON.stringify({ setting: "indoors", people: "unclear", objects: ["hand"], detail: "unclear" })))
+      .toBe("This photo may show a hand, but I can't make out an injury. Try a closer photo or tell me what you see.");
+  });
   it("requests constrained JSON for one frame and uses no model prose", async () => {
     let request: Record<string, unknown> | null = null;
     const fake = { beta: { messages: { create: async (input: Record<string, unknown>) => {

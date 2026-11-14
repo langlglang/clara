@@ -76,3 +76,10 @@ export function minorCutVisualAllowed(words: string): boolean {
   if (/\b(heavy|heavily|severe|deep|gaping|spurting|uncontrolled|bite|bitten|not sure|unsure|uncertain)\b/.test(text)) return false;
   return /\b(small|minor|superficial|shallow)\b/.test(text) && /\b(cut|scrape)\b/.test(text);
 }
+
+/** An unspecified finger cut needs a severity question before a bleeding protocol is shown. */
+export function fingerCutNeedsClarification(words: string): boolean {
+  const text = words.toLowerCase();
+  const fingerCut = /\b(?:cut|scrape|gash)\b.{0,35}\b(?:finger|thumb)\b|\b(?:finger|thumb)\b.{0,35}\b(?:cut|scrape|gash)\b/.test(text);
+  return fingerCut && !/\b(?:small|minor|superficial|shallow|deep|heavy|heavily|severe|spurting|gushing|uncontrolled|won't stop|cannot stop)\b/.test(text);
+}

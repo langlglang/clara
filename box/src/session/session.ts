@@ -815,6 +815,12 @@ export class BoxSession {
         if (push.from_box_id === this.o.boxId) return;
         const known = this.nearby.has(push.incident_id);
         this.nearby.set(push.incident_id, { incident_id: push.incident_id, from_box_name: push.from_box_name, directions: push.directions, bringing: known ? this.nearby.get(push.incident_id)!.bringing : false });
+        if (!known && !this.active) {
+          // Said even with the lid closed, so someone near this box hears it. A box helping its own patient isn't
+          // interrupted: the card waits on its screen.
+          this.o.cue?.("alert");
+          this.o.speech?.say({ text: LINES.nearbyEmergency(push.from_box_name, push.directions) }).catch(() => {});
+        }
         this.publish();
         return;
       }

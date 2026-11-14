@@ -110,7 +110,18 @@
     if (!view) return;
     const v = view;
     if (v.lid_open) wakeUntil = 0;
-    show($("sleep"), !v.lid_open && !v.sos && !v.countdown && Date.now() >= wakeUntil);
+    // Another box's emergency wakes this screen even with the lid closed ("bring this kit").
+    const near = v.nearby && v.nearby.length ? v.nearby[v.nearby.length - 1] : null;
+    show($("sleep"), !v.lid_open && !v.sos && !v.countdown && !near && Date.now() >= wakeUntil);
+    // Full-screen until someone takes it; then a banner so the box can still be used on the way.
+    show($("nearby"), Boolean(near && !near.bringing) && !v.sos && !v.countdown);
+    show($("nearby-banner"), Boolean(near && near.bringing));
+    if (near) {
+      text($("nearby-title"), `EMERGENCY AT ${upper(near.from_box_name)} · BRING THIS KIT`);
+      text($("nearby-directions"), near.directions);
+      text($("nearby-banner-text"), `BRING THIS KIT TO ${upper(near.from_box_name)}${near.directions ? ` · ${near.directions}` : ""}`);
+      for (const id of ["nearby-dismiss", "nearby-bring", "nearby-done"]) $(id).dataset.incident = near.incident_id;
+    }
     const voiceState = !v.lid_open ? "off" : voiceLabels[v.voice_state] ? v.voice_state : "unavailable";
     text($("voice-state"), voiceLabels[voiceState]);
     $("voice-state").className = `tag ${voiceState}`;

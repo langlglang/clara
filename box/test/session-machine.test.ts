@@ -504,11 +504,12 @@ describe("BoxSession pushes", () => {
     expect(session.view().coming).toBeNull();
   });
 
-  it("records another box's emergency without interrupting this box", () => {
+  it("records another box's emergency without interrupting this box's own session", () => {
     const { session, cloud, board, speech } = setup();
+    session.lidOpened();
+    speech.said.length = 0;
     cloud.push({ type: "nearby.emergency", incident_id: "i9", from_box_id: "box-a", from_box_name: "Room 101", directions: "Ground floor" });
     expect(session.view().nearby).toHaveLength(1);
-    expect(session.view().phase).toBe("idle");
     expect(board.calls).not.toContain("buzz alert");
     expect(speech.said).toEqual([]);
     session.press({ action: "bringing_kit", incident_id: "i9" });
@@ -727,5 +728,23 @@ describe("BoxSession actions", () => {
     clock.advance(60_000);
     expect(cloud.types().filter((t) => t === "box.heartbeat")).toHaveLength(3);
     session.close();
+  });
+});
+
+describe("nearby box alert", () => {
+  it("announces another box's emergency once, even with the lid closed, and tracks who is bringing the kit", () => {
+    const { cloud, speech, session } = setup();
+    const push = { type: "nearby.emergency" as const, incident_id: "inc-9", from_box_id: "box-other", from_box_name: "Room 101", directions: "Next to the main stairs." };
+    cloud.push(push);
+    cloud.push(push); // repeated delivery must not speak twice
+    expect(speech.said.filter((l) => l.startsWith("Emergency at Room 101. Please bring this kit."))).toHaveLength(1);
+    expect(session.view().nearby).toEqual([{ incident_id: "inc-9", from_box_name: "Room 101", directions: "Next to the main stairs.", bringing: false }]);
+    session.press({ action: "bringing_kit", incident_id: "inc-9" });
+    expect(session.view().nearby[0]?.bringing).toBe(true);
+    cloud.push({ type: "nearby.clear", incident_id: "inc-9" });
+    expect(session.view().nearby).toEqual([]);
+    // Its own emergency is never announced back to itself.
+    cloud.push({ ...push, incident_id: "inc-10", from_box_id: "box-test" });
+    expect(session.view().nearby).toEqual([]);
   });
 });

@@ -19,6 +19,7 @@
 
   <div id="banners">
     <div id="coming" class="banner coming" hidden><i class="dot"></i><span id="coming-text"></span></div>
+    <div id="nearby-banner" class="banner coming" hidden><i class="dot"></i><span id="nearby-banner-text"></span><button data-action="dismiss_nearby" id="nearby-done" class="small">DONE</button></div>
     <div id="notice" class="banner notice" hidden><span id="notice-text"></span></div>
     <div id="paramedics" class="banner paramedics" hidden><span id="paramedics-text"></span><button data-action="read_summary" class="small">SHOW / READ SUMMARY</button></div>
   </div>
@@ -82,6 +83,15 @@
       <h2>NO PULSE DETECTED BY THE SENSOR</h2>
       <p>Is the person responding? Are they breathing normally?</p>
       <div class="row"><button data-action="pulse_not_breathing" class="big cancel">NOT BREATHING</button><button data-action="pulse_breathing" class="big">BREATHING</button></div>
+    </div>
+  </div>
+
+  <div id="nearby" class="overlay danger" hidden>
+    <div class="card center">
+      <div class="lbl">NEARBY EMERGENCY</div>
+      <h2 id="nearby-title"></h2>
+      <p id="nearby-directions"></p>
+      <div class="row"><button data-action="dismiss_nearby" id="nearby-dismiss" class="big">DISMISS</button><button data-action="bringing_kit" id="nearby-bring" class="big primary">I'M BRINGING IT</button></div>
     </div>
   </div>
 

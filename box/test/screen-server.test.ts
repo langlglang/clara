@@ -134,7 +134,7 @@ describe("screen server", () => {
       req.end();
     });
     expect(chunks.join("")).toContain("event: view");
-    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.4"');
+    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.5"');
     expect(chunks.join("")).toContain('"speech_muted":false');
     expect(chunks.join("")).toContain('"presentation":null');
     expect(chunks.join("")).toContain('"step":null');
@@ -151,6 +151,25 @@ describe("screen server", () => {
     expect((await call(s.port, "/content/secret.json")).status).toBe(404);
     expect((await call(s.port, "/content/..%2f..%2fetc%2fpasswd.png")).status).toBe(404);
     expect(contentPath(dir, "/../x.png")).toBeNull();
+  });
+
+  it("serves step clips whole or by byte range, with media allowed by the page policy", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "clara-content-"));
+    dirs.push(dir);
+    mkdirSync(join(dir, "videos"));
+    writeFileSync(join(dir, "videos", "clip.webm"), "0123456789");
+    const s = await start(undefined, dir);
+    const whole = await call(s.port, "/content/videos/clip.webm");
+    expect(whole.status).toBe(200);
+    expect(whole.headers["content-type"]).toBe("video/webm");
+    expect(String(whole.headers["content-security-policy"])).toContain("media-src 'self'");
+    const part = await call(s.port, "/content/videos/clip.webm", { headers: { range: "bytes=2-5" } });
+    expect(part.status).toBe(206);
+    expect(part.body).toBe("2345");
+    expect(part.headers["content-range"]).toBe("bytes 2-5/10");
+    expect((await call(s.port, "/content/videos/clip.webm", { headers: { range: "bytes=7-" } })).body).toBe("789");
+    expect((await call(s.port, "/content/videos/clip.webm", { headers: { range: "bytes=-3" } })).body).toBe("789");
+    expect((await call(s.port, "/content/videos/clip.webm", { headers: { range: "bytes=20-" } })).status).toBe(416);
   });
 
   it("returns null when the port is taken", async () => {

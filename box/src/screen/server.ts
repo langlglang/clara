@@ -54,6 +54,9 @@ const IMAGE_TYPES: Record<string, string> = {
   ".webp": "image/webp",
   ".svg": "image/svg+xml",
   ".gif": "image/gif",
+  // Short silent step clips.
+  ".webm": "video/webm",
+  ".mp4": "video/mp4",
 };
 const MAX_BODY_BYTES = 4096;
 const MAX_STREAMS = 8;
@@ -66,7 +69,7 @@ const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
   "Content-Security-Policy":
-    "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self'; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
 };
 
 export function isLoopback(address: string | undefined): boolean {
@@ -161,7 +164,22 @@ export async function startScreenServer(options: ScreenServerOptions): Promise<S
       if (!file) return send(res, 404, "Not found.");
       try {
         const body = await readFile(file);
-        return send(res, 200, body, IMAGE_TYPES[extname(file).toLowerCase()]!);
+        const type = IMAGE_TYPES[extname(file).toLowerCase()]!;
+        // Video players ask for byte ranges; answer one simple range, else the whole file.
+        const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ""));
+        if (range && type.startsWith("video/") && (range[1] || range[2])) {
+          const size = body.length;
+          const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+          const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+          if (start >= size || start > end) {
+            res.writeHead(416, { ...SECURITY_HEADERS, "Content-Range": `bytes */${size}` });
+            return res.end();
+          }
+          const part = body.subarray(start, end + 1);
+          res.writeHead(206, { ...SECURITY_HEADERS, "Content-Type": type, "Content-Length": part.length, "Content-Range": `bytes ${start}-${end}/${size}`, "Accept-Ranges": "bytes" });
+          return res.end(part);
+        }
+        return send(res, 200, body, type);
       } catch {
         return send(res, 404, "Not found.");
       }

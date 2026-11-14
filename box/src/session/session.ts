@@ -964,6 +964,7 @@ export class BoxSession {
             label: step.label,
             text: step.text,
             image_url: step.image ? `/content/${step.image.split("/").map(encodeURIComponent).join("/")}` : null,
+            video_url: step.video ? contentUrl(step.video) : null,
             item: step.item
               ? {
                   sku: step.item,
@@ -1040,6 +1041,7 @@ export class BoxSession {
           if (!intent.replay) this.notice = null;
           this.presentation = {
             kind: "guidance", title: intent.step.label, body: intent.step.text,
+            video_url: intent.step.video ? contentUrl(intent.step.video) : null,
             image_url: intent.step.image ? `/content/${intent.step.image.split("/").map(encodeURIComponent).join("/")}`
               : this.o.kit.layoutRevision === "3slot-v1" && intent.step.item
                 ? SLOT_IMAGES[this.o.kit.get(intent.step.item)?.slot ?? ""] ?? null : null,
@@ -1302,6 +1304,11 @@ const PULSE_RECORD_EVERY_MS = 10_000;
 /** Checked only after NOT_BREATHING fails, and only while the no-pulse prompt is open. */
 const BREATHING_YES = /\b(?:yes|breathing|sí|si|respira)\b/i;
 const NOT_BREATHING = /\b(?:not|isn'?t|no|stopped|can'?t (?:see|hear|feel) (?:him |her |them )?)\s*breath|\bcpr\b|\bno (?:respira|está respirando)|dej[óo] de respirar|\brcp\b/i;
+
+/** A content file's URL on the screen server ("/content/videos/cpr.webm"). */
+function contentUrl(path: string): string {
+  return `/content/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
 
 /** "clara.living/r/AB12CD": the short report link as shown on screen (no scheme), or the full link without a code. */
 export function shortLink(url: string, code: string): string {

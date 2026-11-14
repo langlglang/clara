@@ -19,6 +19,8 @@ export const ScenarioStepSchema = z.strictObject({
   item: Id.optional(),
   /** Picture shown with the step (path under content/). */
   image: z.string().max(200).optional(),
+  /** Short silent clip that loops while the step is shown (path under content/, .webm or .mp4). Spoken words stay the step's text. */
+  video: z.string().max(200).regex(/\.(webm|mp4)$/i).optional(),
   /** Recorded audio per language, for example { "en": "audio/en/pressure.wav" }. */
   audio: z.record(z.string(), z.string().max(200)).optional(),
   /** Showing this step opens the SOS countdown (for example "not breathing"). */

@@ -1,0 +1,200 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>CPR hand position clip</title>
+<style>html,body{margin:0;background:#111;color:#ddd;font:14px sans-serif}canvas{display:block;margin:10px auto;border:1px solid #333}</style>
+</head><body>
+<canvas id="c" width="640" height="360"></canvas>
+<script>
+// CPR hand position, side view. 110 compressions per minute, full recoil. No words, so it works in any language.
+const c = document.getElementById("c");
+const g = c.getContext("2d");
+const BPM = 110;
+const PERIOD = 60000 / BPM;
+const C = { bg: "#18181B", floor: "#3F3F46", skin: "#D6A27A", skinDark: "#B9845E", shirt: "#38BDF8", shirtDark: "#2A8DB8", pants: "#52525B", rescuer: "#F97316", rescuerDark: "#C2570F", line: "#FAFAFA", accent: "#FDE047" };
+
+// 0 at rest, 1 at the bottom of a push. Quick down, a short hold, then full recoil.
+function depth(t) {
+  const p = (t % PERIOD) / PERIOD;
+  if (p < 0.4) return Math.sin((p / 0.4) * Math.PI / 2);
+  if (p < 0.5) return 1;
+  if (p < 0.95) return Math.cos(((p - 0.5) / 0.45) * Math.PI / 2);
+  return 0;
+}
+
+function rr(x, y, w, h, r, fill) {
+  g.beginPath();
+  g.roundRect(x, y, w, h, r);
+  g.fillStyle = fill;
+  g.fill();
+}
+
+function limb(x1, y1, x2, y2, w, color) {
+  g.strokeStyle = color;
+  g.lineWidth = w;
+  g.lineCap = "round";
+  g.beginPath();
+  g.moveTo(x1, y1);
+  g.lineTo(x2, y2);
+  g.stroke();
+}
+
+function frame(t) {
+  const d = depth(t);
+  const push = 14 * d; // chest moves down about 5 cm in the drawing's scale
+  g.fillStyle = C.bg;
+  g.fillRect(0, 0, c.width, c.height);
+
+  // Floor (a firm, flat surface).
+  const floorY = 300;
+  g.fillStyle = C.floor;
+  g.fillRect(0, floorY, c.width, 4);
+
+  const chestX = 250; // center of the chest (lower half of the breastbone)
+  const bodyTop = 252;
+  // Rescuer kneeling on the far side, shoulders straight above the hands, arms locked.
+  const handY = bodyTop - 6 + push;
+  const shoulderY = 120 + push;
+  const hipY = 205 + push * 0.6;
+  // thighs and knees on the floor
+  limb(chestX + 30, hipY, chestX + 70, floorY - 30, 30, C.rescuerDark);
+  limb(chestX + 70, floorY - 30, chestX + 130, floorY - 8, 26, C.rescuerDark);
+  // torso leaning forward from the hips to the shoulders
+  limb(chestX + 30, hipY, chestX + 6, shoulderY + 14, 44, C.rescuer);
+  // head
+  g.fillStyle = C.skin;
+  g.beginPath();
+  g.ellipse(chestX + 4, shoulderY - 34, 22, 25, 0, 0, Math.PI * 2);
+  g.fill();
+  // Patient lying on their back, head to the left.
+  // legs
+  rr(330, 266, 230, 30, 14, C.pants);
+  // torso: the top edge dips under the hands while pushing
+  g.fillStyle = C.shirt;
+  g.beginPath();
+  g.moveTo(150, floorY - 2);
+  g.lineTo(150, bodyTop + 10);
+  g.quadraticCurveTo(170, bodyTop, 200, bodyTop);
+  g.quadraticCurveTo(chestX, bodyTop + push, 300, bodyTop + 2);
+  g.quadraticCurveTo(330, bodyTop + 6, 340, bodyTop + 14);
+  g.lineTo(340, floorY - 2);
+  g.closePath();
+  g.fill();
+  // neck and head
+  rr(118, 266, 36, 22, 8, C.skin);
+  g.fillStyle = C.skin;
+  g.beginPath();
+  g.ellipse(96, 272, 30, 26, 0, 0, Math.PI * 2);
+  g.fill();
+  // tilted chin, nose
+  g.fillStyle = C.skinDark;
+  g.beginPath();
+  g.ellipse(92, 248, 7, 5, 0, 0, Math.PI * 2);
+  g.fill();
+
+  // straight arms, shoulders over hands
+  limb(chestX + 4, shoulderY + 4, chestX, handY - 10, 16, C.skinDark);
+  limb(chestX - 6, shoulderY + 6, chestX - 4, handY - 10, 16, C.skin);
+  // hands: heel of one hand on the chest, the other on top, fingers lifted
+  rr(chestX - 26, handY - 12, 50, 13, 6, C.skinDark);
+  rr(chestX - 24, handY - 21, 46, 12, 6, C.skin);
+  g.strokeStyle = C.accent;
+  g.lineWidth = 3;
+  g.beginPath();
+  g.roundRect(chestX - 30, handY - 25, 58, 30, 8);
+  g.stroke();
+
+  // "Shoulders over hands" guide.
+  g.setLineDash([6, 6]);
+  g.strokeStyle = C.line;
+  g.globalAlpha = 0.55;
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(chestX, shoulderY - 4);
+  g.lineTo(chestX, handY - 26);
+  g.stroke();
+  g.setLineDash([]);
+  g.globalAlpha = 1;
+
+  // Push arrow, bright on the way down.
+  g.globalAlpha = 0.35 + 0.65 * (t % PERIOD < PERIOD * 0.45 ? 1 : 0.2);
+  g.fillStyle = C.accent;
+  g.beginPath();
+  g.moveTo(chestX + 62, 160 + push);
+  g.lineTo(chestX + 82, 160 + push);
+  g.lineTo(chestX + 82, 196 + push);
+  g.lineTo(chestX + 94, 196 + push);
+  g.lineTo(chestX + 72, 222 + push);
+  g.lineTo(chestX + 50, 196 + push);
+  g.lineTo(chestX + 62, 196 + push);
+  g.closePath();
+  g.fill();
+  g.globalAlpha = 1;
+
+  // Inset: seen from above, hands stacked on the center of the chest.
+  const ix = 470, iy = 24, iw = 150, ih = 150;
+  rr(ix, iy, iw, ih, 10, "#27272A");
+  g.strokeStyle = C.floor;
+  g.lineWidth = 1;
+  g.beginPath();
+  g.roundRect(ix, iy, iw, ih, 10);
+  g.stroke();
+  // shoulders and chest outline
+  rr(ix + 22, iy + 30, iw - 44, ih - 40, 30, C.shirt);
+  rr(ix + 58, iy + 8, 34, 30, 14, C.skin); // head at the top
+  // breastbone
+  g.strokeStyle = C.shirtDark;
+  g.lineWidth = 4;
+  g.beginPath();
+  g.moveTo(ix + iw / 2, iy + 46);
+  g.lineTo(ix + iw / 2, iy + 118);
+  g.stroke();
+  // hands on the lower half of the breastbone, center of the chest
+  const hx = ix + iw / 2, hy = iy + 96;
+  g.fillStyle = C.skinDark;
+  g.beginPath();
+  g.ellipse(hx, hy + 3, 20, 14, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = C.skin;
+  g.beginPath();
+  g.ellipse(hx, hy - 2, 17, 12, 0, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = C.accent;
+  g.lineWidth = 3;
+  g.beginPath();
+  g.ellipse(hx, hy, 26 - 3 * d, 20 - 3 * d, 0, 0, Math.PI * 2);
+  g.stroke();
+}
+
+let start = performance.now();
+function loop(now) {
+  frame(now - start);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// Records exactly `beats` compressions from the top of a push, so the clip loops cleanly.
+window.record = async (beats = 8, bitrate = 700_000) => {
+  start = performance.now();
+  const stream = c.captureStream(30);
+  const type = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t));
+  const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: bitrate });
+  const chunks = [];
+  rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  const done = new Promise((r) => (rec.onstop = r));
+  rec.start();
+  await new Promise((r) => setTimeout(r, beats * PERIOD));
+  rec.stop();
+  await done;
+  const blob = new Blob(chunks, { type: "video/webm" });
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  window.clip = btoa(bin);
+  return { type, bytes: buf.length };
+};
+// A still frame at the bottom of a push, for the picture fallback.
+window.poster = () => {
+  frame(PERIOD * 0.45);
+  return c.toDataURL("image/png").split(",")[1];
+};
+</script>
+</body></html>

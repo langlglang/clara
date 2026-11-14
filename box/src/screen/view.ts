@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Id } from "@clara/contracts";
 
 export type ScreenPhase = "idle" | "guiding" | "countdown" | "sos";
-export const SCREEN_VIEW_VERSION = "screen-view/1.4" as const;
+export const SCREEN_VIEW_VERSION = "screen-view/1.5" as const;
 export type ScreenVoiceState = "off" | "starting" | "ready" | "listening" | "processing" | "speaking" | "unavailable";
 
 export interface ScreenStep {
@@ -14,6 +14,8 @@ export interface ScreenStep {
   text: string;
   /** URL on the screen server (`/content/...`), or null. */
   image_url: string | null;
+  /** Additive in 1.5: a short silent looping clip (`/content/...`), shown instead of the picture. */
+  video_url: string | null;
   /** The kit item for this step: lit only when the manifest has it on hand. */
   item: { sku: string; name: string | null; slot: string | null; lit: boolean; missing: boolean } | null;
   can_back: boolean;
@@ -30,6 +32,8 @@ export interface ScreenPresentation {
   body: string;
   /** Only local, allowlisted `/content/...` assets may be provided by a producer. */
   image_url: string | null;
+  /** Additive in 1.5: a short silent looping clip (local `/content/...` only), shown instead of the picture. */
+  video_url?: string | null;
   item: ScreenStep["item"];
   source_label: string | null;
 }

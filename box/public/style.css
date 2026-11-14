@@ -175,3 +175,5 @@ button.small { min-height: 40px; font-size: 13px; padding: 0 10px; }
 /* Nearby emergency card on the orange overlay: dark primary button, readable label. */
 #nearby .lbl { color: var(--on-accent); }
 #nearby button.primary { background: var(--bg); border-color: var(--bg); color: var(--text); }
+/* Step clips fill the picture area like a picture does. */
+#visual-video { max-width: 100%; max-height: 100%; object-fit: contain; background: #000; }

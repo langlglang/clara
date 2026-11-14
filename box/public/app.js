@@ -194,7 +194,7 @@
     text($("notice-text"), v.notice);
 
     const p = v.presentation || (v.step ? {
-      title: v.step.label, body: v.step.text, image_url: v.step.image_url, item: v.step.item, source_label: null,
+      title: v.step.label, body: v.step.text, image_url: v.step.image_url, video_url: v.step.video_url, item: v.step.item, source_label: null,
     } : null);
     show($("idle"), !p);
     show($("presentation"), Boolean(p));
@@ -206,7 +206,27 @@
       text($("visual-source"), p.source_label);
       $("visual-body").classList.toggle("long", p.body.length > 110);
       const img = $("visual-image");
-      if (p.image_url) {
+      // A step clip (silent, looping) takes the picture's place; if it can't play, the picture shows instead.
+      const video = $("visual-video");
+      const clip = p.video_url && !videoFailed.has(p.video_url) ? p.video_url : null;
+      if (clip) {
+        if (video.getAttribute("src") !== clip) {
+          video.setAttribute("src", clip);
+          video.play().catch(() => {});
+        }
+        video.setAttribute("aria-label", p.body);
+        show(video, true);
+      } else if (video.hasAttribute("src")) {
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+        show(video, false);
+      }
+      if (clip) {
+        img.removeAttribute("src");
+        show(img, false);
+        show($("no-image"), false);
+      } else if (p.image_url) {
         if (img.getAttribute("src") !== p.image_url) img.setAttribute("src", p.image_url);
         img.alt = p.kind === "diagram" || p.kind === "guidance" ? p.body : p.title;
         show(img, true);
@@ -217,8 +237,8 @@
         show(img, false);
         show($("no-image"), true);
       }
-      $("presentation").classList.toggle("no-pic", !p.image_url);
-      $("presentation").classList.toggle("hero-visual", Boolean(p.image_url && (p.kind === "diagram" || (p.kind === "guidance" && p.image_url.startsWith("/content/visuals/")) || (p.item && p.image_url.startsWith("/content/kits/layout-3slot-v1-")))));
+      $("presentation").classList.toggle("no-pic", !p.image_url && !clip);
+      $("presentation").classList.toggle("hero-visual", Boolean(clip) || Boolean(p.image_url && (p.kind === "diagram" || (p.kind === "guidance" && p.image_url.startsWith("/content/visuals/")) || (p.item && p.image_url.startsWith("/content/kits/layout-3slot-v1-")))));
       // Compartment callout only when the presentation names an item.
       const item = $("item");
       show(item, Boolean(p.item));
@@ -311,6 +331,14 @@
         .catch(() => setTimeout(connect, 2000));
     });
   }
+
+  // A clip that can't play falls back to the step's picture (or the placeholder).
+  const videoFailed = new Set();
+  $("visual-video").addEventListener("error", () => {
+    const src = $("visual-video").getAttribute("src");
+    if (src) videoFailed.add(src);
+    draw();
+  });
 
   // A picture that fails to load shows the placeholder instead of a broken image.
   $("visual-image").addEventListener("error", () => {

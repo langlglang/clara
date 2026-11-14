@@ -164,3 +164,38 @@ describe("demo 911 call in Clara's Cartesia voice", () => {
     expect(new URLSearchParams(sent[0]!).get("Twiml")).toContain("simulated 911 call");
   });
 });
+
+describe("dispatcher talks back", () => {
+  it("listens after the briefing, answers from the scene and passes messages to the box", async () => {
+    const network = createNetwork();
+    network.seedDemo();
+    const sent: string[] = [];
+    const fetchFake = async (_url: string, init: { body?: unknown }) => (sent.push(String(init.body)), new Response(JSON.stringify({ sid: "CA9" }), { status: 201 }));
+    const relayed: string[] = [];
+    const asked: string[] = [];
+    const talk = {
+      answer: async (_id: string, history: readonly { text: string }[], words: string) => {
+        asked.push(`${history.length}:${words}`);
+        return words.includes("bye")
+          ? { reply: "Goodbye.", relay: null, end: true }
+          : { reply: "The bystander reported heavy bleeding.", relay: words.includes("tell") ? "Keep pressing on the wound." : null, end: false };
+      },
+      relay: (boxId: string, _incidentId: string, text: string) => relayed.push(`${boxId}:${text}`),
+    };
+    const d = createDemo911({ network, twilio, number: "+17372583742", fetch: fetchFake, timers: false, log: () => {}, baseUrl: "https://clara.living", talk });
+    sos(network);
+    await d.fire("box-clinic");
+    const twiml = new URLSearchParams(sent[0]!).get("Twiml")!;
+    expect(twiml).toContain('<Gather input="speech"');
+    const token = /\/api\/demo911\/([\w-]{20,})\/reply/.exec(twiml)?.[1];
+    expect(token).toBeTruthy();
+    const first = await d.reply(token!, "How bad is the bleeding? Please tell them to keep pressing.");
+    expect(first).toContain("The bystander reported heavy bleeding.");
+    expect(first).toContain('<Gather input="speech"'); // listens again
+    expect(relayed).toEqual(["box-clinic:Keep pressing on the wound."]);
+    const last = await d.reply(token!, "Okay, bye.");
+    expect(last).toContain("<Hangup/>");
+    expect(asked).toEqual(["0:How bad is the bleeding? Please tell them to keep pressing.", "2:Okay, bye."]);
+    expect(await d.reply("not-a-token", "hello")).toContain("<Hangup/>");
+  });
+});

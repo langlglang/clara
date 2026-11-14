@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { EVENTS_VERSION, ScenarioTranslationSchema, type BoxEvent } from "@clara/contracts";
-import { createClaraAgent, type ClaraAgent, type ClaraAgentEnv } from "@clara/agent";
+import { createClaraAgent, createClaudeModel, type ClaraAgent, type ClaraAgentEnv } from "@clara/agent";
+import { answerDispatcher, sceneFacts } from "./dispatchTalk";
 import { DEFAULT_CARE, createCoordinator, type CareThreshold, type Coordinator, type CoordinatorChange, type CoordinatorEnv, type Need, type RidesAdapter } from "@clara/coordinator";
 import { DEMO_BOXES, createNetwork, randomIds, type MaintainerAlert, type Network, type NetworkOptions, type ReportOptions } from "@clara/network";
 import { createRideBook, type Ride, type RideBook, type RideChange, type VehicleKind } from "./rides";
@@ -221,7 +222,18 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const calls = createCallBook({ network, rides, twilio, baseUrl: publicBaseUrl(env), ...(options.fetch ? { fetch: options.fetch } : {}) });
   if (snap) calls.importState(snap.calls);
   const speech = createSpeech(env, options.fetch ? { fetch: options.fetch as typeof fetch } : {});
-  const demo911 = createDemo911({ network, twilio, number: env.CLARA_DEMO_911_NUMBER, timers: options.timers !== false, speech, baseUrl: publicBaseUrl(env), ...(options.fetch ? { fetch: options.fetch } : {}) });
+  // The demo dispatcher can talk back to Clara on the call (Claude answers from the scene; messages reach the box).
+  const dispatchModel = env.ANTHROPIC_API_KEY?.trim() ? createClaudeModel({ apiKey: env.ANTHROPIC_API_KEY.trim() }) : null;
+  const talk = dispatchModel
+    ? {
+        answer: async (incidentId: string, history: Parameters<typeof answerDispatcher>[2], words: string) => {
+          const scene = sceneFacts(network, incidentId, REPORT_OPTIONS.timeZone);
+          return scene ? answerDispatcher(dispatchModel, scene, history, words) : { reply: "I no longer have this scene's details.", relay: null, end: false };
+        },
+        relay: (boxId: string, incidentId: string, text: string) => emit({ kind: "push", box_id: boxId, push: { type: "responder.message", incident_id: incidentId, from: "the 911 dispatcher", text } }),
+      }
+    : null;
+  const demo911 = createDemo911({ network, twilio, number: env.CLARA_DEMO_911_NUMBER, timers: options.timers !== false, speech, baseUrl: publicBaseUrl(env), talk, ...(options.fetch ? { fetch: options.fetch } : {}) });
   // Demo assumption: a guided step that uses a kit item counts as one used (see lib/autoSupply.ts).
   const autoSupply = createAutoSupply({ network, scenarios });
   const photon = photonConfig(env);

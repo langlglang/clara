@@ -16,6 +16,7 @@ import { createCoreSessionBook, type CoreSessionBook } from "./core-session";
 import { PERSISTENCE_OFF, parseSnapshot, type PersistenceStatus, type RuntimeState, type Snapshot } from "./snapshot";
 import bleeding from "../../../content/scenarios/severe-bleeding.json";
 import minorCut from "../../../content/scenarios/minor-cut.json";
+import notBreathing from "../../../content/scenarios/not-breathing.json";
 
 /**
  * One response network and one Clara agent per server process. Kept on globalThis so `next dev` hot reloads
@@ -107,7 +108,7 @@ export interface RuntimeOptions extends NetworkOptions {
   coordinator?: (deps: { network: Network; rides: RidesAdapter; careFor: (need: Need) => CareThreshold; ambulanceEtaMin: number | null }) => Coordinator;
 }
 
-const scenarios = [bleeding, minorCut];
+const scenarios = [bleeding, minorCut, notBreathing];
 const stepLabels: Record<string, string> = Object.fromEntries(scenarios.flatMap((scenario) => scenario.steps.map((s: { step_id: string; label: string }) => [s.step_id, s.label])));
 const guidanceText = new Map(scenarios.map((scenario) => [scenario.scenario_id, new Map(scenario.steps.map((s) => [s.step_id, s.text] as const))] as const));
 /** Resolve guidance from the server's versioned demo bundle, never from model or device text. */
@@ -140,7 +141,7 @@ const SIM_BATTERY: Record<string, number> = { "box-clinic": 86, "box-room-101": 
 export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const env: WebEnv = { CLARA_TURN_BUDGET_MS: "6500", ...(options.env ?? (process.env as WebEnv)) };
   const snap = options.snapshot ?? null;
-  const network = createNetwork(options);
+  const network = createNetwork({ publicBaseUrl: publicBaseUrl(env), ...options });
   // The demo seed only for a fresh start: a restored snapshot already holds the boxes and volunteers.
   if (snap) network.store.importState(snap.store);
   else network.seedDemo();

@@ -85,7 +85,7 @@ export interface Board {
   lightCompartment(channel: number, ms: number, mode?: "solid" | "blink" | "pulse"): Promise<boolean>;
   clearLights(): Promise<boolean>;
   /** CPR rhythm or SOS flash on all LEDs; 0 stops it. */
-  rhythm(bpm: number): Promise<boolean>;
+  rhythm(bpm: number, pattern?: "beat" | "sos"): Promise<boolean>;
   buzz(pattern: "chime" | "alert" | "off"): Promise<boolean>;
   startPulse(): Promise<boolean>;
   stopPulse(): Promise<boolean>;

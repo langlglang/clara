@@ -153,3 +153,17 @@ button.cancel { background: var(--bg); border: 0; color: var(--text); min-width:
 #call-network { color: var(--muted); font-size: 15px; }
 #call-coming { margin-top: 6px; font: 700 16px var(--font-head); letter-spacing: 0.06em; text-transform: uppercase; color: var(--info); }
 #call-coming.none { color: var(--muted); }
+
+/* Paramedic link strip, handoff card, scenario picker, CPR coach ring, no-pulse prompt. */
+.banner.paramedics { display: flex; align-items: center; justify-content: space-between; gap: 12px; font: 700 16px/1.2 var(--font-head); letter-spacing: var(--track); }
+button.small { min-height: 40px; font-size: 13px; padding: 0 10px; }
+#presentation.handoff #visual-body { white-space: pre-line; font-size: 16px; }
+#picker { display: flex; gap: 12px; margin-top: 12px; }
+#picker button { flex: 1; min-height: 72px; }
+#picture { position: relative; }
+#coach { position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+#coach-ring { width: 170px; height: 170px; border: 10px solid var(--accent); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; animation: coach-beat 0.545s ease-out infinite; }
+#coach-count { font: 700 56px/1 var(--font-head); }
+#coach-ring small { font: 700 12px/1 var(--font-head); letter-spacing: var(--track); color: var(--muted); }
+@keyframes coach-beat { 0% { transform: scale(1.12); } 40% { transform: scale(0.94); } 100% { transform: scale(1); } }
+#pulse-prompt p { font-size: 22px; }

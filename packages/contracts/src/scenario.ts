@@ -25,6 +25,8 @@ export const ScenarioStepSchema = z.strictObject({
   sos: z.boolean().optional(),
   /** Showing this step starts a timer the scene report keeps (for example the tourniquet). */
   timer: z.enum(["tourniquet", "pressure"]).optional(),
+  /** While this step is shown the box coaches a rhythm (CPR: LED beat, metronome tick, compression counter). */
+  coach: z.strictObject({ kind: z.literal("cpr"), bpm: z.number().int().min(60).max(160) }).optional(),
 });
 export type ScenarioStep = z.infer<typeof ScenarioStepSchema>;
 

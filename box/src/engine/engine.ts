@@ -73,6 +73,18 @@ export class ScenarioEngine {
     return this.enter(this.scenario.start, source);
   }
 
+  /**
+   * Starts the scenario directly at one of its steps (the bystander answered NOT BREATHING to the no-pulse prompt).
+   */
+  startAt(stepId: string, source: Source): StepIntent[] {
+    this.step(stepId);
+    this.history = [];
+    this.timers.clear();
+    this.currentId = null;
+    this.emit("scenario.started", { scenario_id: this.scenario.scenario_id, source });
+    return this.enter(stepId, source);
+  }
+
   /** The default next step (the first of `next`). Null at the end of the scenario or before it started. */
   next(source: Source): StepIntent[] | null {
     const current = this.current;

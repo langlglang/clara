@@ -8,11 +8,13 @@ import type { Kit } from "../engine/kit.js";
 import type { LocationProvider } from "../location/gps.js";
 import type { CameraCapture } from "../camera/capture.js";
 import type { PulseReader, PulseObservation } from "../sensors/pulse-reader.js";
-import type { Board, CloudLink, CueName, SpeechQueue } from "../ports.js";
+import type { Board, CloudLink, CueName, SpeechQueue, Utterance } from "../ports.js";
 import { SCREEN_VIEW_VERSION, type ScreenPresentation, type ScreenPress, type ScreenView, type ScreenVoiceState } from "../screen/view.js";
 import type { VoiceStatus } from "../voice/voice-loop.js";
 import { systemClock, type Cancel, type Clock } from "./clock.js";
 import { LINES, coachingLines } from "./lines.js";
+import { RhythmCoach } from "./coach.js";
+import { buildHandoffSummary } from "./summary.js";
 
 const SCREEN_VOICE_STATES: Record<VoiceStatus, ScreenVoiceState> = {
   off: "starting",
@@ -55,6 +57,10 @@ export interface BoxSessionOptions {
   configuredAddress?: string | null;
   location?: Pick<LocationProvider, "current"> | null;
   scenario: Scenario;
+  /** Other scenarios the box may switch to (start-screen picker, or a bystander saying "not breathing"). */
+  scenarios?: Scenario[];
+  /** Plays a generated WAV straight to the speaker: the CPR metronome tick. */
+  tick?: ((wav: Buffer) => Utterance) | null;
   kit: Kit;
   cloud: CloudLink;
   board?: Board | null;
@@ -100,14 +106,26 @@ const SLOT_IMAGES: Record<string, string> = {
 };
 
 export class BoxSession {
-  readonly engine: ScenarioEngine;
+  /** The current scenario's engine; replaced when the box switches scenario (picker or "not breathing"). */
+  engine: ScenarioEngine;
   readonly events: EventFactory;
   readonly language: string;
   private readonly clock: Clock;
   private readonly newId: () => string;
   private readonly log: (line: string) => void;
   private readonly boxName: string;
-  private readonly need: Need;
+  private readonly fixedNeed: Need | null;
+  private readonly scenarios: Scenario[];
+  private readonly coach: RhythmCoach;
+  /** This lid session's own events, for the offline handoff summary. */
+  private sessionEvents: BoxEvent[] = [];
+  private report: { url: string; code: string } | null = null;
+  /** The no-pulse prompt (a question to the bystander, never a decision). */
+  private pulsePrompt = false;
+  private pulsePromptAt: number | null = null;
+  private fingerSeenAt: number | null = null;
+  private validPulseSeen = false;
+  private lastPulseRecord: { at: number; bpm: number | null; quality: string } | null = null;
   private readonly countdownSeconds: number;
 
   private voice: VoiceControl | null = null;
@@ -140,7 +158,7 @@ export class BoxSession {
   private missing: { sku: string; name: string | null } | null = null;
   private online: boolean;
   private revision = 0;
-  private reportUrl: string | null = null;
+
   private heartbeatCancel: Cancel | null = null;
   private readonly viewListeners = new Set<(view: ScreenView) => void>();
   private readonly eventListeners = new Set<(event: BoxEvent) => void>();
@@ -152,9 +170,11 @@ export class BoxSession {
     this.language = o.language ?? "en";
     this.boxName = o.boxName ?? o.boxId;
     this.countdownSeconds = o.countdownSeconds ?? 5;
-    this.need = o.need ?? guessNeed(o.scenario.scenario_id);
+    this.fixedNeed = o.need ?? null;
+    this.scenarios = [o.scenario, ...(o.scenarios ?? []).filter((s) => s.scenario_id !== o.scenario.scenario_id)];
+    this.coach = new RhythmCoach({ clock: this.clock, board: o.board ?? null, speech: o.speech ?? null, play: o.tick ?? null, log: this.log });
     this.events = new EventFactory(o.boxId, () => this.clock.now(), this.newId, this.log);
-    this.engine = new ScenarioEngine(o.scenario, o.kit, { events: this.events, emit: (e) => this.record(e), now: () => this.clock.now() });
+    this.engine = this.makeEngine(o.scenario);
     this.online = o.cloud.online;
     o.speech?.onIdle(() => { this.presentEmergencyQuestion(); this.presentCompletedTask(); });
     o.cloud.onPush((push) => this.onPush(push));
@@ -166,7 +186,9 @@ export class BoxSession {
       if ("t" in event && event.t === "lid") {
         if (event.open) this.lidOpened();
         else this.lidClosed();
-      }
+      } else if ("t" in event && event.t === "sensor.raw") {
+        if (event.ir !== null && event.ir >= FINGER_IR_MIN) this.fingerSeenAt = this.clock.monotonic();
+      } else if ("t" in event && event.t === "pulse") this.onPulse(event.bpm, event.quality);
     });
   }
 
@@ -260,7 +282,15 @@ export class BoxSession {
     this.pendingUsage = null;
     this.recent = [];
     this.missing = null;
-    this.reportUrl = null;
+    this.report = null;
+    this.pulsePrompt = false;
+    this.pulsePromptAt = null;
+    this.fingerSeenAt = null;
+    this.validPulseSeen = false;
+    this.lastPulseRecord = null;
+    this.coach.stop();
+    this.sessionEvents = [];
+    if (this.engine.scenario.scenario_id !== this.o.scenario.scenario_id) this.engine = this.makeEngine(this.o.scenario);
     this.publish();
   }
 
@@ -355,8 +385,8 @@ export class BoxSession {
 
   private openSos(source: Source): void {
     this.countdown = null;
-    this.sos = { need: this.need, openedAt: this.clock.now(), overlay: true };
-    const opened = this.emit("sos.opened", { need: this.need, source });
+    this.sos = { need: this.currentNeed(), openedAt: this.clock.now(), overlay: true };
+    const opened = this.emit("sos.opened", { need: this.currentNeed(), source });
     this.emergencyTaskId = opened?.event_id ?? null;
     if (opened) {
       // No per-session consent exists for cloud GPS sharing. The measured fix stays on this box.
@@ -436,6 +466,21 @@ export class BoxSession {
         this.pendingUsage = null;
         this.publish();
         return;
+      case "pulse_not_breathing":
+      case "pulse_breathing":
+        this.answerPulsePrompt(press.action === "pulse_breathing", "touch");
+        return;
+      case "stop_coach":
+        this.coach.stop();
+        this.publish();
+        return;
+      case "read_summary":
+        if (!this.active) return;
+        this.readSummary();
+        return;
+      case "pick_scenario":
+        this.switchScenario(press.scenario_id, "touch");
+        return;
       case "dismiss_notice":
         this.notice = null;
         this.publish();
@@ -492,6 +537,13 @@ export class BoxSession {
       this.heardByTurn.set(clientTurnId, { eventId: event.event_id, sessionId: this.sessionId, text: words });
       if (this.heardByTurn.size > MAX_RECENT) this.heardByTurn.delete(this.heardByTurn.keys().next().value!);
     }
+    if (this.pulsePrompt) {
+      if (NOT_BREATHING.test(text)) return void this.answerPulsePrompt(false, "voice");
+      if (BREATHING_YES.test(text)) return void this.answerPulsePrompt(true, "voice");
+    }
+    // A fixed keyword rule, not the model: "not breathing" switches to the CPR scenario when the box has it.
+    const cpr = this.scenarios.find((s) => /breath|cpr/i.test(s.scenario_id));
+    if (cpr && cpr.scenario_id !== this.engine.scenario.scenario_id && NOT_BREATHING.test(text)) this.switchScenario(cpr.scenario_id, "voice");
   }
 
   /**
@@ -516,7 +568,7 @@ export class BoxSession {
         return this.goTo(action.step_id, source, wav);
       }
       case "ask_clarifying": {
-        const question = this.o.scenario.questions.find((q) => q.question_id === action.question_id);
+        const question = this.engine.scenario.questions.find((q) => q.question_id === action.question_id);
         this.notice = question?.text ?? null;
         if (question) {
           this.caption = question.text;
@@ -623,9 +675,102 @@ export class BoxSession {
   }
 
   /** The scene report link, when the server sends one. */
-  setReportUrl(url: string | null): void {
-    this.reportUrl = url;
+  setReportUrl(url: string | null, code?: string): void {
+    this.report = url ? { url, code: code ?? "" } : null;
     this.publish();
+  }
+
+  /**
+   * The handoff summary from this session's own events (fixed templates, no model, no network): shown on the
+   * handoff card and spoken through the speech queue.
+   */
+  readSummary(): string[] {
+    const summary = buildHandoffSummary(this.sessionEvents, {
+      stepLabel: (scenarioId, stepId) => this.scenarios.find((s) => s.scenario_id === scenarioId)?.steps.find((s) => s.step_id === stepId)?.label ?? null,
+    });
+    this.presentation = { kind: "handoff", title: "Handoff summary", body: summary.lines.join("\n"), image_url: null, item: null, source_label: "From this box's own record" };
+    this.caption = null;
+    this.o.speech?.stopAll();
+    this.o.speech?.say({ text: summary.speech }).catch(() => {});
+    this.publish();
+    return summary.lines;
+  }
+
+  /** Switches to another loaded scenario and starts it at its first step. False when unknown or already current. */
+  switchScenario(scenarioId: string, source: Source): boolean {
+    const next = this.scenarios.find((s) => s.scenario_id === scenarioId);
+    if (!next) return false;
+    this.ensureSession();
+    if (next.scenario_id !== this.engine.scenario.scenario_id) {
+      this.coach.stop();
+      this.engine = this.makeEngine(next);
+    } else if (this.engine.started) return false;
+    this.log(`scenario: ${next.scenario_id} (${source})`);
+    this.apply(this.engine.start(source));
+    return true;
+  }
+
+  /**
+   * A pulse reading from the board. It is recorded as a device reading. A reading with no usable pulse while the finger
+   * clip is in use only asks the bystander (prompt + fixed line); it never starts compressions or picks a step.
+   */
+  private onPulse(rawBpm: number | null, quality: "valid" | "suspect" | "unavailable"): void {
+    if (!this.active) return;
+    const bpm = rawBpm !== null && rawBpm >= 20 ? rawBpm : null;
+    const now = this.clock.monotonic();
+    const last = this.lastPulseRecord;
+    if (!last || last.bpm !== bpm || last.quality !== quality || now - last.at >= PULSE_RECORD_EVERY_MS) {
+      this.lastPulseRecord = { at: now, bpm, quality };
+      this.emit("sensor.pulse", { bpm, quality });
+    }
+    if (quality === "valid" && bpm !== null) {
+      this.validPulseSeen = true;
+      return;
+    }
+    if (bpm !== null || quality === "suspect") return;
+    // "Clip in use": a finger seen on the raw sensor in the last few seconds, or a valid reading earlier this session.
+    const clipInUse = this.validPulseSeen || (this.fingerSeenAt !== null && now - this.fingerSeenAt <= FINGER_RECENT_MS);
+    if (!clipInUse || this.pulsePrompt || this.coach.active) return;
+    if (this.pulsePromptAt !== null && now - this.pulsePromptAt < PULSE_REPROMPT_MS) return;
+    this.pulsePrompt = true;
+    this.pulsePromptAt = now;
+    this.o.cue?.("alert");
+    this.say(LINES.noPulse);
+  }
+
+  /** The bystander's answer to the no-pulse prompt: NOT BREATHING goes straight to the CPR coach step and SOS. */
+  answerPulsePrompt(breathing: boolean, source: Source): void {
+    if (!this.pulsePrompt) return;
+    this.pulsePrompt = false;
+    if (breathing) {
+      this.publish();
+      return;
+    }
+    this.startCpr(source);
+  }
+
+  /** Jumps to the CPR scenario's first coached step and opens the SOS countdown if it is not open. */
+  startCpr(source: Source): boolean {
+    const cpr = this.scenarios.find((s) => s.steps.some((st) => st.coach));
+    const step = cpr?.steps.find((st) => st.coach);
+    if (!cpr || !step) return false;
+    this.ensureSession();
+    if (!this.sos && !this.countdown) this.requestSos(source);
+    if (cpr.scenario_id !== this.engine.scenario.scenario_id) {
+      this.coach.stop();
+      this.engine = this.makeEngine(cpr);
+    }
+    if (this.engine.current?.coach) return true;
+    this.apply(this.engine.startAt(step.step_id, source));
+    return true;
+  }
+
+  private makeEngine(scenario: Scenario): ScenarioEngine {
+    return new ScenarioEngine(scenario, this.o.kit, { events: this.events, emit: (e) => this.record(e), now: () => this.clock.now() });
+  }
+
+  private currentNeed(): Need {
+    return this.fixedNeed ?? guessNeed(this.engine.scenario.scenario_id);
   }
 
   // ---------- Heartbeat ----------
@@ -648,6 +793,7 @@ export class BoxSession {
     this.countdown?.cancelTick();
     this.countdown = null;
     this.voice?.stop();
+    this.coach.stop();
     this.o.speech?.stopAll();
     this.clearLightCue();
     this.clearEmergencyQuestion();
@@ -720,6 +866,10 @@ export class BoxSession {
         if (push.state === "cancelled") this.emergencyTaskId = null;
         this.publish();
         return;
+      case "incident.opened":
+        if (!this.active) return;
+        this.setReportUrl(push.report_url, push.report_code);
+        return;
     }
   }
 
@@ -738,7 +888,7 @@ export class BoxSession {
       box_name: this.boxName,
       online: this.online,
       simulated: this.o.simulated ?? false,
-      scenario_title: this.o.scenario.title,
+      scenario_title: this.engine.scenario.title,
       step: step
         ? {
             step_id: step.step_id,
@@ -786,13 +936,19 @@ export class BoxSession {
       voice_available: this.lidOpen && this.voice?.handsFree === true,
       speech_muted: this.speechMuted,
       voice_state: voiceState,
-      report_url: this.reportUrl,
+      report_url: this.report?.url ?? null,
+      report_link: this.report ? shortLink(this.report.url, this.report.code) : null,
+      scenario_id: this.engine.scenario.scenario_id,
+      scenarios: this.scenarios.map((s) => ({ scenario_id: s.scenario_id, title: s.title })),
+      pulse_prompt: this.pulsePrompt,
+      coach: this.coach.active ? { kind: "cpr", bpm: this.coach.active.bpm, started_at: this.coach.active.started_at } : null,
     };
   }
 
   // ---------- Internals ----------
 
   private beginSession(): void {
+    this.sessionEvents = [];
     this.events.sessionId = this.newId();
     this.emit("box.opened", {});
   }
@@ -822,6 +978,8 @@ export class BoxSession {
             source_label: null,
           };
           if (speakStep) this.speakStep(intent.step, wav);
+          if (intent.step.coach?.kind === "cpr") this.coach.start(intent.step.step_id, intent.step.coach.bpm);
+          else this.coach.stop();
           break;
         case "light":
           this.clearLightCue();
@@ -1020,6 +1178,7 @@ export class BoxSession {
   }
 
   private record(event: BoxEvent): void {
+    if (event.session_id !== null && event.session_id === this.events.sessionId && this.sessionEvents.length < 500) this.sessionEvents.push(event);
     try {
       this.o.cloud.record(event);
     } catch (error) {
@@ -1050,6 +1209,25 @@ export class BoxSession {
         this.log(`view listener failed: ${(error as Error).message}`);
       }
     }
+  }
+}
+
+/** Raw IR at or above this means a finger is on the clip (MAX30102 ambient readings sit far below). Bench-check. */
+const FINGER_IR_MIN = 50_000;
+const FINGER_RECENT_MS = 5_000;
+const PULSE_REPROMPT_MS = 60_000;
+const PULSE_RECORD_EVERY_MS = 10_000;
+/** Checked only after NOT_BREATHING fails, and only while the no-pulse prompt is open. */
+const BREATHING_YES = /\b(?:yes|breathing)\b/i;
+const NOT_BREATHING = /\b(?:not|isn'?t|no|stopped|can'?t (?:see|hear|feel) (?:him |her |them )?)\s*breath|\bcpr\b/i;
+
+/** "clara.living/r/AB12CD": the short report link as shown on screen (no scheme), or the full link without a code. */
+export function shortLink(url: string, code: string): string {
+  try {
+    const u = new URL(url);
+    return code ? `${u.host}/r/${code}` : `${u.host}${u.pathname}`;
+  } catch {
+    return url;
   }
 }
 

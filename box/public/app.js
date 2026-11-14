@@ -22,6 +22,7 @@
     const body = { action: button.dataset.action };
     if (button.dataset.step) body.step_id = button.dataset.step;
     if (button.dataset.incident) body.incident_id = button.dataset.incident;
+    if (button.dataset.scenario) body.scenario_id = button.dataset.scenario;
     press(body);
   });
 
@@ -181,7 +182,20 @@
     mute.textContent = v.speech_muted ? "UNMUTE CLARA" : "MUTE CLARA";
     mute.setAttribute("aria-pressed", String(v.speech_muted));
     mute.classList.toggle("active", v.speech_muted);
-    // report_url stays in the view model but is not drawn: the team dropped QR codes.
+    // The report link is drawn as text only (QR codes were dropped by design).
+    show($("paramedics"), Boolean(v.sos));
+    text($("paramedics-text"), v.report_link ? `PARAMEDICS: ${upper(v.report_link)}` : "PARAMEDICS: HANDOFF SUMMARY");
+    $("presentation").classList.toggle("handoff", Boolean(v.presentation && v.presentation.kind === "handoff"));
+    const scenarios = v.scenarios || [];
+    show($("picker"), v.lid_open && !v.step && scenarios.length > 1);
+    for (const b of $("picker").querySelectorAll("button")) show(b, scenarios.some((s) => s.scenario_id === b.dataset.scenario));
+    show($("coach"), Boolean(v.coach));
+    if (v.coach) {
+      text($("coach-bpm"), `${v.coach.bpm} PER MINUTE · PUSH WITH THE BEAT`);
+      $("coach-ring").style.animationDuration = `${60 / v.coach.bpm}s`;
+    }
+    show($("pulse-prompt"), Boolean(v.pulse_prompt));
+    drawCoach();
 
     show($("countdown"), v.phase === "countdown");
     if (v.countdown) text($("countdown-number"), v.countdown.seconds_left);
@@ -254,6 +268,12 @@
     }
   });
 
+  function drawCoach() {
+    if (!view || !view.coach) return;
+    const beats = Math.floor((Date.now() - view.coach.started_at) / (60000 / view.coach.bpm)) + 1;
+    text($("coach-count"), Math.max(0, beats));
+  }
+  setInterval(drawCoach, 100);
   setInterval(drawTimers, 1000);
   connect();
 })();

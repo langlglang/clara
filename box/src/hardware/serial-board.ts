@@ -237,8 +237,8 @@ export class SerialBoard implements Board {
     return this.send({ t: "led", ch: -1, ms: 0, mode: "solid" });
   }
 
-  rhythm(bpm: number): Promise<boolean> {
-    return this.send({ t: "rhythm", bpm: Math.round(bpm) });
+  rhythm(bpm: number, pattern?: "beat" | "sos"): Promise<boolean> {
+    return this.send({ t: "rhythm", bpm: Math.round(bpm), ...(pattern && bpm > 0 ? { pattern } : {}) });
   }
 
   buzz(pattern: "chime" | "alert" | "off"): Promise<boolean> {

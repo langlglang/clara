@@ -154,6 +154,27 @@ describe("background sensor tasks", () => {
     expect(enabled.session.view().presentation).toMatchObject({ kind: "answer", title: "Camera observation" });
     expect(enabled.session.applyAction(captureAction, "voice", { ...captureResponse, heard: "Yes, send the photo" })).toBe(false);
   });
+
+  it("reports a failed local capture as a camera problem, without uploading", async () => {
+    let session!: BoxSession;
+    const camera = new CameraCapture(() => session.sessionId, async () => null);
+    const setupResult = setup(undefined, { camera, cameraCloudEnabled: true });
+    session = setupResult.session;
+    let uploads = 0;
+    Object.assign(setupResult.cloud, { inspectCamera: async () => { uploads++; throw new Error("unexpected upload"); } });
+    session.lidOpened();
+    const prompt = "May I take one photo and send it to Clara's cloud to help describe what it shows? Say 'Yes, send the photo' if you agree.";
+    const requestAction = { name: "request_camera" as const };
+    const request: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: uuid(), heard: "Use the camera", reply: prompt,
+      action: requestAction, answered_by: "model", reason: null, speech: null };
+    expect(session.applyAction(requestAction, "voice", request)).toBe(true);
+    const turnId = uuid();
+    session.heard("Yes, send the photo", turnId);
+    expect(session.applyAction({ name: "capture_camera" }, "voice", { ...request, client_turn_id: turnId, heard: "Yes, send the photo", action: { name: "capture_camera" } })).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(uploads).toBe(0);
+    expect(session.view().presentation?.body).toContain("couldn't capture a photo");
+  });
 });
 
 const alert = (state: Alert["state"], name = "Amina", eta: number | null = 6): Alert => ({

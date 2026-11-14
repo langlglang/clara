@@ -186,9 +186,6 @@
     show($("paramedics"), Boolean(v.sos));
     text($("paramedics-text"), v.report_link ? `PARAMEDICS: ${upper(v.report_link)}` : "PARAMEDICS: HANDOFF SUMMARY");
     $("presentation").classList.toggle("handoff", Boolean(v.presentation && v.presentation.kind === "handoff"));
-    const scenarios = v.scenarios || [];
-    show($("picker"), v.lid_open && !v.step && scenarios.length > 1);
-    for (const b of $("picker").querySelectorAll("button")) show(b, scenarios.some((s) => s.scenario_id === b.dataset.scenario));
     show($("coach"), Boolean(v.coach));
     if (v.coach) {
       text($("coach-bpm"), `${v.coach.bpm} PER MINUTE · PUSH WITH THE BEAT`);

@@ -159,7 +159,6 @@ button.cancel { background: var(--bg); border: 0; color: var(--text); min-width:
 button.small { min-height: 40px; font-size: 13px; padding: 0 10px; }
 #presentation.handoff #visual-body { white-space: pre-line; font-size: 16px; }
 #picker { display: flex; gap: 12px; margin-top: 12px; }
-#picker button { flex: 1; min-height: 72px; }
 #picture { position: relative; }
 #coach { position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 #coach-ring { width: 170px; height: 170px; border: 10px solid var(--accent); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; animation: coach-beat 0.545s ease-out infinite; }

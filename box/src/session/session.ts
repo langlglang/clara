@@ -15,6 +15,7 @@ import { systemClock, type Cancel, type Clock } from "./clock.js";
 import { LINES, coachingLines } from "./lines.js";
 import { RhythmCoach } from "./coach.js";
 import { buildHandoffSummary } from "./summary.js";
+import { CloudError } from "../cloud/http.js";
 
 const SCREEN_VOICE_STATES: Record<VoiceStatus, ScreenVoiceState> = {
   off: "starting",
@@ -1127,12 +1128,17 @@ export class BoxSession {
     })().then((result) => {
       if (controller.signal.aborted || !this.lidOpen || this.sessionId !== sessionId) return;
       this.log(`camera: cloud status ${result?.status ?? "not_sent"}`);
+      if (!result) {
+        this.queueCompletedTask({ kind: "status", title: "Camera unavailable", body: "I couldn't capture a photo. Please check the camera and try again.", image_url: null, item: null, source_label: "USB camera" });
+        return;
+      }
       const text = result?.status === "observed" && result.observation
         ? `${result.observation} ${result.limitation}`
-        : "I couldn't make out enough from that photo. Please tell me what you see.";
+        : "I couldn't analyze that photo. Please tell me what you see.";
       this.queueCompletedTask({ kind: result?.status === "observed" ? "answer" : "status", title: "Camera observation", body: text,
         image_url: null, item: null, source_label: result?.status === "observed" ? `Single frame captured ${result.captured_at}` : "USB camera" });
-    }).catch(() => {
+    }).catch((error: unknown) => {
+      this.log(`camera: cloud request failed (${error instanceof CloudError ? error.kind : "unknown"})`);
       if (this.lidOpen && this.sessionId === sessionId) this.queueCompletedTask({ kind: "status", title: "Camera unavailable", body: "I couldn't inspect that photo. Please describe what you see.", image_url: null, item: null, source_label: "USB camera" });
     }).finally(() => { if (this.background.get("camera") === controller) this.background.delete("camera"); });
   }

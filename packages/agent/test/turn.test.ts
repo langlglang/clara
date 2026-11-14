@@ -265,6 +265,13 @@ describe("createClaraAgent", () => {
     expect(response).toMatchObject({ answered_by: "model", action: { name: "suggest_sos" } });
   });
 
+  it("recognizes a spoken request to start SOS after an arm-wound offer", async () => {
+    const request = textRequest("Yeah, call 911", { state: { ...state, scenario_id: "arm_gash", step_id: "arm_gauze" } });
+    const response = await handleTurn(request, { assistant: createAssistant(createKeywordStubModel()), ears: null, voice: null });
+    expect(response).toMatchObject({ answered_by: "model", action: { name: "suggest_sos" } });
+    expect(response.reply).not.toMatch(/called 911|simulat/i);
+  });
+
   it("a greeting does not start the scenario or ask an injury-specific question", async () => {
     const request = textRequest("hello", { state: { ...state, step_id: null, allowed_steps: [state.allowed_steps[0]!] } });
     const response = await handleTurn(request, { assistant: createAssistant(createKeywordStubModel()), ears: null, voice: null });

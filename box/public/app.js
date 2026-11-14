@@ -45,14 +45,7 @@
 
   // Screen words in Spanish (draft: to be checked by a fluent speaker). Clara's own words come translated from the box.
   const ES = {
-    "SIMULATION · NO REAL CALL IS MADE": "SIMULACIÓN · NO SE HACE NINGUNA LLAMADA REAL",
-    "OPENING MOCK 911 CALL IN": "ABRIENDO LLAMADA 911 SIMULADA EN",
-    CANCEL: "CANCELAR",
-    "MOCK 911 CALL": "LLAMADA 911 SIMULADA",
-    "WHAT TO SAY": "QUÉ DECIR",
-    "SHOW / READ SUMMARY": "VER / LEER RESUMEN",
-    "BACK TO CLARA": "VOLVER A CLARA",
-    "911 GUIDE": "GUÍA 911",
+    "CALL FOR HELP": "PEDIR AYUDA",
     "NEARBY EMERGENCY": "EMERGENCIA CERCANA",
     DISMISS: "DESCARTAR",
     "I'M BRINGING IT": "YO LO LLEVO",
@@ -136,7 +129,6 @@
       else if (t.timer === "pressure") tiles.push(tile(tr("PRESSURE", "PRESIÓN"), clock(now - t.started_at), tr("HOLDING", "MANTENIENDO"), "hot"));
       else tiles.push(tile(upper(t.timer), clock(now - t.started_at), null, null));
     }
-    if (view.sos) tiles.push(tile(tr("911 SIM", "911 SIMULADO"), clock(now - view.sos.opened_at), tr("MOCK CALL OPEN", "LLAMADA ABIERTA"), null));
     if (view.coming) {
       const strip = comingStrip(view.coming);
       const min = /\b(\d+) MIN\b/.exec(strip.text);
@@ -145,7 +137,6 @@
     }
     if (view.multiple_injured) tiles.push(tile("INJURED", "2+", "MULTIPLE", "hot"));
     $("tiles").replaceChildren(...tiles.slice(0, 4));
-    if (view.sos) text($("call-time"), `${tr("OPEN", "ABIERTA")} ${clock(now - view.sos.opened_at)}`);
   }
 
   function draw() {
@@ -264,9 +255,6 @@
     mute.textContent = v.speech_muted ? tr("UNMUTE CLARA", "ACTIVAR VOZ") : tr("MUTE CLARA", "SILENCIAR CLARA");
     mute.setAttribute("aria-pressed", String(v.speech_muted));
     mute.classList.toggle("active", v.speech_muted);
-    // The report link is drawn as text only (QR codes were dropped by design).
-    show($("paramedics"), Boolean(v.sos));
-    text($("paramedics-text"), v.report_link ? `${tr("PARAMEDICS", "PARAMÉDICOS")}: ${upper(v.report_link)}` : tr("PARAMEDICS: HANDOFF SUMMARY", "PARAMÉDICOS: RESUMEN DE ENTREGA"));
     $("presentation").classList.toggle("handoff", Boolean(v.presentation && v.presentation.kind === "handoff"));
     show($("coach"), Boolean(v.coach));
     if (v.coach) {
@@ -275,27 +263,6 @@
     }
     show($("pulse-prompt"), Boolean(v.pulse_prompt));
     drawCoach();
-
-    show($("countdown"), v.phase === "countdown");
-    if (v.countdown) text($("countdown-number"), v.countdown.seconds_left);
-
-    show($("call"), v.phase === "sos");
-    if (v.sos) {
-      $("coaching").replaceChildren(
-        ...v.sos.coaching.map((line) => {
-          const li = document.createElement("li");
-          li.textContent = line;
-          return li;
-        }),
-      );
-      text($("call-network"), v.online ? tr("Alert queued for the response network.", "Alerta en cola para la red de respuesta.") : tr("Offline: the response network is not notified yet. It is sent when the link returns.", "Sin conexión: la red de respuesta aún no está avisada. Se enviará cuando vuelva la conexión."));
-      text($("call-coming"), v.coming ? comingStrip(v.coming).text : tr("NOBODY HAS ACCEPTED YET", "NADIE HA ACEPTADO TODAVÍA"));
-      // Other boxes are only asked when the person here taps this (or asks Clara); never by default.
-      const ask = $("ask-nearby");
-      ask.disabled = Boolean(v.sos.nearby_asked);
-      text(ask, v.sos.nearby_asked ? tr("NEARBY BOXES ASKED", "CAJAS CERCANAS AVISADAS") : tr("ASK NEARBY BOXES FOR KITS", "PEDIR KITS A CAJAS CERCANAS"));
-      $("call-coming").classList.toggle("none", !v.coming);
-    }
 
     drawTimers();
   }

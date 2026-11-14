@@ -11,7 +11,7 @@ export const TURN_DEADLINE_MS = 10_000;
 
 export const TURN_LINES = {
   noSession: "Open the box first.",
-  unreachable: "I can't reach the assistant right now. The simulated SOS button is available.",
+  unreachable: "I can't reach the assistant right now. The SOS button is available.",
 } as const;
 
 export type TextTurnResult =

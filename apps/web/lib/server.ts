@@ -230,10 +230,15 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
           const scene = sceneFacts(network, incidentId, REPORT_OPTIONS.timeZone);
           return scene ? answerDispatcher(dispatchModel, scene, history, words) : { reply: "I no longer have this scene's details.", relay: null, end: false };
         },
-        relay: (boxId: string, incidentId: string, text: string) => emit({ kind: "push", box_id: boxId, push: { type: "responder.message", incident_id: incidentId, from: "the 911 dispatcher", text } }),
+        relay: (boxId: string, incidentId: string, text: string) => emit({ kind: "push", box_id: boxId, push: { type: "responder.message", incident_id: incidentId, from: "the team dispatcher", text } }),
       }
     : null;
-  const demo911 = createDemo911({ network, twilio, number: env.CLARA_DEMO_911_NUMBER, timers: options.timers !== false, speech, baseUrl: publicBaseUrl(env), talk, ...(options.fetch ? { fetch: options.fetch } : {}) });
+  const demo911 = createDemo911({ network, twilio, number: env.CLARA_DEMO_911_NUMBER, timers: options.timers !== false, speech, baseUrl: publicBaseUrl(env), talk,
+    onCall: (call) => {
+      const incident = network.store.getIncident(call.incident_id)?.incident;
+      if (incident) emit({ kind: "push", box_id: call.box_id, push: { type: "dispatcher.call_status", incident_id: call.incident_id, session_id: incident.session_id, state: call.status } });
+    },
+    ...(options.fetch ? { fetch: options.fetch } : {}) });
   // Demo assumption: a guided step that uses a kit item counts as one used (see lib/autoSupply.ts).
   const autoSupply = createAutoSupply({ network, scenarios });
   const photon = photonConfig(env);

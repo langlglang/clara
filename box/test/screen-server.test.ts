@@ -81,7 +81,9 @@ describe("screen server", () => {
     expect(page.body).not.toContain("CLARA DEMO");
     expect(page.body).not.toContain("EMERGENCY NEARBY");
     expect(page.body).not.toContain('id="box-name"');
-    expect(page.body).toContain("911 GUIDE");
+    expect(page.body).toContain("CALL FOR HELP");
+    expect(page.body).not.toContain('id="call"');
+    expect(page.body).not.toContain('id="countdown"');
     for (const action of ["next", "back", "repeat", "talk", "goto", "start"]) {
       expect(page.body).not.toContain(`data-action="${action}"`);
     }
@@ -134,7 +136,7 @@ describe("screen server", () => {
       req.end();
     });
     expect(chunks.join("")).toContain("event: view");
-    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.5"');
+    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.6"');
     expect(chunks.join("")).toContain('"speech_muted":false');
     expect(chunks.join("")).toContain('"presentation":null');
     expect(chunks.join("")).toContain('"step":null');

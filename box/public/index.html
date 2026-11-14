@@ -22,7 +22,6 @@
     <div id="coming" class="banner coming" hidden><i class="dot"></i><span id="coming-text"></span></div>
     <div id="nearby-banner" class="banner coming" hidden><i class="dot"></i><span id="nearby-banner-text"></span><button data-action="dismiss_nearby" id="nearby-done" class="small" data-i18n>DONE</button></div>
     <div id="notice" class="banner notice" hidden><span id="notice-text"></span></div>
-    <div id="paramedics" class="banner paramedics" hidden><span id="paramedics-text"></span><button data-action="read_summary" class="small" data-i18n>SHOW / READ SUMMARY</button></div>
   </div>
 
   <main id="main">
@@ -53,31 +52,10 @@
   </main>
 
   <aside id="rail">
-    <button data-action="sos" id="sos-button" class="sos">SOS<small data-i18n>911 GUIDE</small></button>
+    <button data-action="sos" id="sos-button" class="sos">SOS<small data-i18n>CALL FOR HELP</small></button>
     <button data-action="mute" id="mute-button" class="mute" aria-pressed="false">MUTE CLARA</button>
     <div id="tiles"></div>
   </aside>
-
-  <div id="countdown" class="overlay danger" hidden>
-    <div class="card center">
-      <div class="sim-strip" data-i18n>SIMULATION · NO REAL CALL IS MADE</div>
-      <h2 data-i18n>OPENING MOCK 911 CALL IN</h2>
-      <div id="countdown-number">5</div>
-      <button data-action="cancel_sos" class="big cancel" data-i18n>CANCEL</button>
-    </div>
-  </div>
-
-  <div id="call" class="overlay call" hidden>
-    <div class="card">
-      <div class="sim-strip" data-i18n>SIMULATION · NO REAL CALL IS MADE</div>
-      <div class="call-head"><h2 data-i18n>MOCK 911 CALL</h2><span id="call-time"></span></div>
-      <div class="lbl" data-i18n>WHAT TO SAY</div>
-      <ol id="coaching"></ol>
-      <div id="call-network"></div>
-      <div id="call-coming"></div>
-      <div class="row"><button data-action="ask_nearby" id="ask-nearby">ASK NEARBY BOXES FOR KITS</button><button data-action="read_summary" data-i18n>SHOW / READ SUMMARY</button><button data-action="hide_911" class="strong" data-i18n>BACK TO CLARA</button></div>
-    </div>
-  </div>
 
   <div id="pulse-prompt" class="overlay danger" hidden>
     <div class="card center">

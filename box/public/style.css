@@ -138,24 +138,11 @@ button.mute.active { background: var(--text); color: var(--bg); }
 .card h2 { margin: 4px 0 8px; font: 700 26px/1.15 var(--font-head); letter-spacing: 0.04em; text-transform: uppercase; }
 .row { display: flex; gap: 12px; margin-top: 12px; }
 
-/* SOS countdown: the whole working area turns orange; Cancel is the only button. */
 .overlay.danger { background: var(--accent); color: var(--on-accent); }
 .overlay.danger h2 { font-size: 22px; }
-.overlay.danger .sim-strip { border-color: var(--on-accent); color: var(--on-accent); }
-#countdown-number { font: 700 128px/1 var(--font-head); font-variant-numeric: tabular-nums; margin: 0 0 14px; }
 button.cancel { background: var(--bg); border: 0; color: var(--text); min-width: 300px; min-height: 80px; font-size: 26px; }
 
-/* Mock 911: never mistaken for a real call. */
-.sim-strip { display: inline-block; border: 2px dashed var(--accent); color: var(--accent); padding: 6px 12px; font: 700 15px var(--font-head); letter-spacing: var(--track); margin-bottom: 8px; }
-.call-head { display: flex; align-items: baseline; gap: 16px; }
-#call-time { margin-left: auto; font: 700 22px var(--font-head); color: var(--accent); font-variant-numeric: tabular-nums; }
-#coaching { margin: 4px 0 6px; padding-left: 26px; font-size: 18px; line-height: 1.35; }
-#call-network { color: var(--muted); font-size: 15px; }
-#call-coming { margin-top: 6px; font: 700 16px var(--font-head); letter-spacing: 0.06em; text-transform: uppercase; color: var(--info); }
-#call-coming.none { color: var(--muted); }
-
-/* Paramedic link strip, handoff card, scenario picker, CPR coach ring, no-pulse prompt. */
-.banner.paramedics { display: flex; align-items: center; justify-content: space-between; gap: 12px; font: 700 16px/1.2 var(--font-head); letter-spacing: var(--track); }
+/* Handoff card, scenario picker, CPR coach ring, no-pulse prompt. */
 button.small { min-height: 40px; font-size: 13px; padding: 0 10px; }
 #presentation.handoff #visual-body { white-space: pre-line; font-size: 16px; }
 #picker { display: flex; gap: 12px; margin-top: 12px; }

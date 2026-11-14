@@ -391,8 +391,6 @@ export class BoxSession {
   requestSos(source: Source): void {
     this.ensureSession();
     if (this.sos) {
-      this.sos.overlay = true;
-      this.publish();
       return;
     }
     if (this.countdown) return;
@@ -401,7 +399,7 @@ export class BoxSession {
     this.emit("sos.countdown", { seconds: total, source });
     // A step that opens SOS has just started speaking: the countdown line follows it instead of cutting it off.
     if (source !== "system") this.o.speech?.stopAll();
-    this.say(this.L.countdown(total));
+    this.say(this.L.countdown(total), undefined, false);
     this.scheduleTick();
     this.publish();
   }
@@ -434,7 +432,7 @@ export class BoxSession {
 
   private openSos(source: Source): void {
     this.countdown = null;
-    this.sos = { need: this.currentNeed(), openedAt: this.clock.now(), overlay: true, nearbyAsked: false };
+    this.sos = { need: this.currentNeed(), openedAt: this.clock.now(), overlay: false, nearbyAsked: false };
     const opened = this.emit("sos.opened", { need: this.currentNeed(), source });
     this.emergencyTaskId = opened?.event_id ?? null;
     if (opened) {
@@ -454,7 +452,7 @@ export class BoxSession {
     this.board((b) => b.buzz("alert"));
     this.o.cue?.("sos");
     this.o.speech?.stopAll();
-    this.say(this.L.sosOpened);
+    this.say(this.L.sosOpened, undefined, false);
     this.publish();
   }
 
@@ -521,8 +519,6 @@ export class BoxSession {
         return;
       case "show_911":
       case "hide_911":
-        if (this.sos) this.sos.overlay = press.action === "show_911";
-        this.publish();
         return;
       case "multiple_injured":
         this.ensureSession();
@@ -969,6 +965,10 @@ export class BoxSession {
         if (push.state === "cancelled") this.emergencyTaskId = null;
         this.publish();
         return;
+      case "dispatcher.call_status":
+        if (!this.sos || push.session_id !== this.sessionId) return;
+        this.say(push.state === "placed" ? this.L.callPlaced : this.L.callFailed, undefined, false);
+        return;
       case "incident.opened":
         if (!this.active) return;
         this.setReportUrl(push.report_url, push.report_code);
@@ -986,7 +986,7 @@ export class BoxSession {
     return {
       schema_version: SCREEN_VIEW_VERSION,
       revision: this.revision,
-      phase: !this.active ? "idle" : countdown ? "countdown" : this.sos?.overlay ? "sos" : "guiding",
+      phase: !this.active ? "idle" : "guiding",
       lid_open: this.lidOpen,
       box_name: this.boxName,
       online: this.online,

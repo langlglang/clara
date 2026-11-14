@@ -77,12 +77,12 @@ export function briefingLines(network: Network, incidentId: string, timeZone = "
   const alerted = incident.alerts.length;
   const coming = incident.alerts.filter((a) => a.state === "coming" || a.state === "arrived").map((a) => a.volunteer_name);
   const lines: Array<BriefingLine | null> = [
-    { kind: "intro", text: "This is Clara, an automated first-aid box. This is a simulated 911 call for a hackathon demo." },
+    { kind: "intro", text: "This is Clara, an automated first-aid box. A bystander opened SOS." },
     { kind: "location", text: context?.type === "emergency.context" && context.location.kind === "gps_fix"
       ? `The box's GPS position is latitude ${context.location.latitude.toFixed(5)}, longitude ${context.location.longitude.toFixed(5)}, from a fix at ${time(context.location.observed_at)}.${context.location.address ? ` The box's address is ${context.location.address}.` : ""}`
       : context?.type === "emergency.context" && context.location.kind === "configured_address"
-      ? `The box's address is ${context.location.address}. It has no GPS fix right now.`
-      : "The box has no configured address available; ask the bystander for their location." },
+      ? `The box's address is ${context.location.address}.`
+      : "The location is not available; please ask the bystander." },
     { kind: "need", text: `${NEED_WORDS[incident.need] ?? "First aid"}.` },
     heard?.text ? { kind: "reported", text: `The bystander reported: ${heard.text}` } : null,
     tq ? { kind: "timer", text: `The box started a tourniquet guidance timer at ${time(tq.occurred_at)}; application is unconfirmed.` } : null,
@@ -105,13 +105,12 @@ export function briefing(network: Network, boxId: string, _now?: Date, timeZone 
   if (!open) return null;
   const lines = briefingLines(network, open.incident_id, timeZone)?.lines;
   if (!lines) return null;
-  const time = (_now ?? new Date()).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
-  return `${lines.map((l) => l.text).join(" ")} This one-time briefing was assembled at ${time}; later updates are not included.`;
+  return lines.filter((line) => line.kind !== "location").map((line) => line.text).join(" ");
 }
 
 export function demo911Twiml(spoken: string): string {
   const say = `<Say>${xml(spoken)}</Say>`;
-  return `<?xml version="1.0" encoding="UTF-8"?><Response>${say}<Pause length="1"/><Say>Repeating.</Say>${say}<Say>End of simulated call. Goodbye.</Say><Hangup/></Response>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><Response>${say}<Pause length="1"/><Say>Repeating.</Say>${say}<Say>Goodbye.</Say><Hangup/></Response>`;
 }
 
 export interface Demo911 {
@@ -122,6 +121,8 @@ export interface Demo911 {
   readonly configured: boolean;
   readonly target: string | null; // masked
   log(): Demo911Call[];
+  /** Explicit one-incident attempt, also used by the event timer. */
+  fire(boxId: string): Promise<Demo911Call | null>;
   stop(): void;
 }
 
@@ -152,7 +153,7 @@ export function createDemo911({
   delayMs?: number;
   timers?: boolean;
   onCall?: (call: Demo911Call) => void;
-}): Demo911 & { fire(boxId: string): Promise<Demo911Call | null> } {
+}): Demo911 {
   const to = demo911Target(number);
   const calls: Demo911Call[] = [];
   const called = new Set<string>();
@@ -272,7 +273,7 @@ export function createDemo911({
     target: to ? maskPhone(to) : null,
     log: () => calls.map((c) => ({ ...c })),
     async reply(token, words) {
-      const hangup = `<?xml version="1.0" encoding="UTF-8"?><Response><Say>This simulated call has ended. Goodbye.</Say><Hangup/></Response>`;
+      const hangup = `<?xml version="1.0" encoding="UTF-8"?><Response><Say>Goodbye.</Say><Hangup/></Response>`;
       const c = conversations.get(token);
       if (!c || c.expires < Date.now() || !talk) return hangup;
       const said = words.trim().slice(0, 500);
@@ -291,12 +292,12 @@ export function createDemo911({
           return `<?xml version="1.0" encoding="UTF-8"?><Response>${relayed}${listen(token, null)}</Response>`;
         }
         c.idle += 1;
-        if (c.idle >= IDLE_END_POLLS) return `<?xml version="1.0" encoding="UTF-8"?><Response><Say>No more questions heard. End of simulated call. Goodbye.</Say><Hangup/></Response>`;
+        if (c.idle >= IDLE_END_POLLS) return `<?xml version="1.0" encoding="UTF-8"?><Response><Say>No more questions heard. Goodbye.</Say><Hangup/></Response>`;
         return `<?xml version="1.0" encoding="UTF-8"?><Response>${listen(token, c.idle === IDLE_PROMPT_POLLS ? "Are you still there? You can ask me about the scene." : null)}</Response>`;
       }
       c.idle = 0;
       const turns = c.history.filter((t) => t.from === "dispatcher").length;
-      if (turns >= MAX_DISPATCH_TURNS) return `<?xml version="1.0" encoding="UTF-8"?><Response><Say>That's all I can take on this simulated call. Goodbye.</Say><Hangup/></Response>`;
+      if (turns >= MAX_DISPATCH_TURNS) return `<?xml version="1.0" encoding="UTF-8"?><Response><Say>That's all the information I can provide right now. Goodbye.</Say><Hangup/></Response>`;
       const answer = await talk.answer(c.incident_id, c.history, said);
       c.history.push({ from: "dispatcher", text: said }, { from: "clara", text: answer.reply });
       if (answer.relay) {
@@ -309,7 +310,7 @@ export function createDemo911({
       log(`[demo-911] dispatcher turn ${turns + 1} on ${c.incident_id}${answer.relay ? " (relayed to the box)" : ""}${answer.end ? " (end)" : ""}`);
       const spokenReply = (await voiced(answer.reply)) + (answer.end ? "" : await fromBystander());
       return answer.end
-        ? `<?xml version="1.0" encoding="UTF-8"?><Response>${spokenReply}<Say>End of simulated call. Goodbye.</Say><Hangup/></Response>`
+        ? `<?xml version="1.0" encoding="UTF-8"?><Response>${spokenReply}<Say>Goodbye.</Say><Hangup/></Response>`
         : `<?xml version="1.0" encoding="UTF-8"?><Response>${spokenReply}${listen(token, null)}</Response>`;
     },
     recording(token) {

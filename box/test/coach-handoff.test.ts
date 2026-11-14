@@ -279,7 +279,7 @@ describe("pulse sensor as a prompt, never the decision", () => {
     expect(v.scenario_id).toBe("not_breathing");
     expect(v.step?.step_id).toBe("compressions");
     expect(v.coach).toMatchObject({ bpm: 110 });
-    expect(v.phase).toBe("countdown");
+    expect(v.phase).toBe("guiding");
     expect(s.board.calls).toContain("rhythm 110 beat");
     expect(v.pulse_prompt).toBe(false);
   });

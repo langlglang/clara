@@ -124,9 +124,9 @@ describe("optional voice-paced guides", () => {
     expect(session.view().presentation?.image_url).toBe("/content/visuals/minor-cut-sequence-v1.svg");
   });
 
-  it("offers an arm wound guide with pressure art, and rejects a mismatched cloud panel", () => {
+  it("lights gauze first, then shows pressure art only after a spoken completion", () => {
     const guide = loadScenario(content("scenarios/arm-gash.json"));
-    const { session } = setup(content(""), { scenarios: [guide] }, content("kits/clara-3slot-v1.json"));
+    const { session, board } = setup(content(""), { scenarios: [guide] }, content("kits/clara-3slot-v1.json"));
     session.lidOpened();
     const id = uuid();
     session.heard("There is a gash on his arm", id);
@@ -134,6 +134,16 @@ describe("optional voice-paced guides", () => {
       action: { name: "start_guidance", scenario_id: "arm_gash" }, answered_by: "model", reason: null, speech: null };
     expect(session.applyAction(response.action!, "voice", response)).toBe(false);
     expect(session.applyAction(response.action!, "voice", { ...response, reply: guide.steps[0]!.text })).toBe(true);
+    expect(session.view().presentation?.image_url).toBe("/content/kits/layout-3slot-v1-bottom.svg");
+    expect(board.calls).toContain("light 2");
+    const pressure = guide.steps[1]!;
+    const premature: TurnResponse = { ...response, client_turn_id: uuid(), heard: "What should I do?", reply: pressure.text,
+      action: { name: "select_step", step_id: "arm_pressure" } };
+    session.heard(premature.heard!, premature.client_turn_id);
+    expect(session.applyAction(premature.action!, "voice", premature)).toBe(false);
+    const ready = { ...premature, client_turn_id: uuid(), heard: "Got it" };
+    session.heard(ready.heard, ready.client_turn_id);
+    expect(session.applyAction(ready.action!, "voice", ready)).toBe(true);
     expect(session.view().presentation?.image_url).toBe("/content/visuals/arm-pressure-v1.svg");
   });
 });
@@ -285,7 +295,7 @@ describe("BoxSession lid", () => {
     expect(speech.said).toEqual([]);
     session.press({ action: "sos" });
     clock.advance(5_000);
-    expect(session.view().phase).toBe("sos");
+    expect(session.view().phase).toBe("guiding");
     session.press({ action: "unmute" });
     session.say("Audible again");
     expect(speech.said).toContain("Audible again");
@@ -498,28 +508,41 @@ describe("BoxSession SOS", () => {
     expect(speech.played.find((line) => line.text === "Can you briefly tell me what happened?")?.wav).toEqual(wav);
   });
 
-  it("counts down 5 s, then opens the mock 911 screen", () => {
+  it("starts SOS in the background without covering Clara's screen", () => {
     const { session, cloud, clock, speech } = setup();
     session.lidOpened();
     session.press({ action: "sos" });
-    expect(session.view().phase).toBe("countdown");
+    expect(session.view().phase).toBe("guiding");
     expect(session.view().countdown?.seconds_left).toBe(5);
     clock.advance(2_000);
     expect(session.view().countdown?.seconds_left).toBe(3);
     clock.advance(3_000);
     const view = session.view();
-    expect(view.phase).toBe("sos");
+    expect(view.phase).toBe("guiding");
+    expect(view.sos?.overlay).toBe(false);
     expect(view.sos?.coaching.join(" ")).toContain("Tell the dispatcher your location");
     expect(cloud.types()).toContain("sos.countdown");
     expect(cloud.events.find((e) => e.type === "sos.opened")).toMatchObject({ need: "general", source: "touch" });
-    expect(speech.said.join(" ")).toMatch(/simulated 911 call\. No real call/i);
+    expect(speech.said.join(" ")).toContain("SOS is active");
     // Nothing may promise help before an accept.
     expect(speech.said.join(" ").toLowerCase()).not.toContain("is coming");
-    session.press({ action: "hide_911" });
-    expect(session.view().phase).toBe("guiding");
     session.press({ action: "sos" });
-    expect(session.view().phase).toBe("sos");
+    expect(session.view().phase).toBe("guiding");
     expect(cloud.types().filter((t) => t === "sos.opened")).toHaveLength(1);
+  });
+
+  it("announces only a same-session dispatcher call result while leaving the visual in place", () => {
+    const { session, cloud, clock, speech } = setup();
+    session.lidOpened();
+    session.say("Current visual");
+    session.press({ action: "sos" });
+    clock.advance(5_000);
+    const sessionId = session.sessionId!;
+    cloud.push({ type: "dispatcher.call_status", incident_id: "inc-1", session_id: uuid(), state: "placed" });
+    expect(speech.said.join(" ")).not.toContain("call request to the team dispatcher");
+    cloud.push({ type: "dispatcher.call_status", incident_id: "inc-1", session_id: sessionId, state: "placed" });
+    expect(speech.said.join(" ")).toContain("call request to the team dispatcher was accepted");
+    expect(session.view().presentation?.body).toBe("Current visual");
   });
 
   it("cancels the countdown", () => {
@@ -539,7 +562,7 @@ describe("BoxSession SOS", () => {
     cloud.setOnline(false);
     session.press({ action: "sos" });
     clock.advance(5_000);
-    expect(session.view().phase).toBe("sos");
+    expect(session.view().phase).toBe("guiding");
     expect(session.view().online).toBe(false);
     expect(cloud.types()).toEqual(["box.opened", "sos.countdown", "sos.opened", "emergency.context"]);
   });
@@ -549,7 +572,7 @@ describe("BoxSession SOS", () => {
     session.lidOpened();
     session.applyAction({ name: "select_step", step_id: "s1" });
     session.press({ action: "goto", step_id: "s3" });
-    expect(session.view().phase).toBe("countdown");
+    expect(session.view().phase).toBe("guiding");
   });
 
   it("closing the lid during the countdown cancels it", () => {
@@ -846,7 +869,7 @@ describe("asking nearby boxes", () => {
     expect(cloud.types()).not.toContain("nearby.requested");
     session.press({ action: "sos" });
     clock.advance(5_000);
-    expect(session.view().phase).toBe("sos");
+    expect(session.view().phase).toBe("guiding");
     expect(cloud.types()).not.toContain("nearby.requested");
     expect(session.view().sos?.nearby_asked).toBe(false);
     expect(session.turnState()?.nearby_kits_available).toBe(true);
@@ -883,7 +906,7 @@ describe("second language", () => {
     expect(session.turnState()?.available_visuals).toEqual([]);
     expect(speech.said.at(-1)).toBe("MARCADOR 1."); // the current step again, in Spanish
     session.press({ action: "sos" });
-    expect(speech.said.at(-1)).toMatch(/^Abriendo la llamada de emergencia simulada/);
+    expect(speech.said.at(-1)).toMatch(/^Iniciando SOS/);
     // A language without translations is refused.
     session.press({ action: "set_language", language: "fr" });
     expect(session.view().language).toBe("es");

@@ -1,6 +1,6 @@
 {
   "scenario_id": "arm_gash",
-  "version": "arm-gash-demo-v1",
+  "version": "arm-gash-demo-v2",
   "title": "Arm wound with bleeding",
   "status": "draft",
   "guided": true,
@@ -9,21 +9,21 @@
     "https://cpr.heart.org/en/resuscitation-science/2024-first-aid-guidelines",
     "https://medlineplus.gov/ency/article/000043.htm"
   ],
-  "start": "arm_pressure",
+  "start": "arm_gauze",
   "steps": [
-    {
-      "step_id": "arm_pressure",
-      "label": "Apply direct pressure",
-      "text": "Put firm, steady pressure directly on the arm wound now with a clean cloth or gauze. If blood is spurting, flowing continuously, or the person feels faint, call 911 now. Tell me when pressure is on.",
-      "image": "visuals/arm-pressure-v1.svg",
-      "next": ["arm_gauze"]
-    },
     {
       "step_id": "arm_gauze",
       "label": "Find sterile gauze",
-      "text": "Keep firm pressure on the wound. If someone else can help, ask them to take sterile gauze from the bottom compartment; its light may turn on. If alone, keep pressing rather than reaching for the box. Tell me when you have the gauze or if bleeding is worsening.",
+      "text": "Get sterile gauze from the bottom compartment. Look for its light, and tell me when you have it. If blood is spurting or flowing continuously, press on the wound with a clean cloth right now instead of waiting for gauze, and call 911. Would you like me to contact the team dispatcher?",
       "item": "GAUZE",
       "image": "kits/layout-3slot-v1-bottom.svg",
+      "next": ["arm_pressure"]
+    },
+    {
+      "step_id": "arm_pressure",
+      "label": "Apply direct pressure",
+      "text": "Put the gauze directly on the arm wound and hold firm, steady pressure. Tell me when pressure is on. If bleeding is heavy or does not stop, call 911 now.",
+      "image": "visuals/arm-pressure-v1.svg",
       "next": ["arm_check"]
     },
     {

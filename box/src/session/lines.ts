@@ -5,12 +5,14 @@ import type { GpsFix } from "../location/gps.js";
  * only from the checked scenario, and who is coming only from comingLine().
  */
 export const LINES = {
-  countdown: (seconds: number) => `Opening the simulated emergency call in ${seconds} seconds. Tap Cancel to stop.`,
-  cancelled: "Simulated call cancelled.",
-  sosOpened: "This is a simulated 911 call. No real call is being made. The screen shows what to tell a dispatcher.",
-  noVoice: "Voice is not available right now. The simulated SOS button remains on screen.",
+  countdown: (_seconds: number) => "Starting SOS. I can keep helping while the call is prepared.",
+  cancelled: "SOS cancelled.",
+  sosOpened: "SOS is active. I'll keep helping here and ask if the dispatcher needs anything from you.",
+  callPlaced: "The call request to the team dispatcher was accepted. I'll keep helping you here.",
+  callFailed: "I couldn't place a call to the team dispatcher. Please call emergency services directly from a phone.",
+  noVoice: "Voice is not available right now. The SOS button remains on screen.",
   itemMissing: (name: string | null) => `${name ?? "That item"} is not in this box.`,
-  endOfSteps: "That was the last step. The simulated SOS button stays on screen.",
+  endOfSteps: "That was the last step. The SOS button stays on screen.",
   helperWithdrew: "The person who accepted can no longer come. The SOS stays open.",
   responderMessage: (from: string, text: string) => `Message from ${from}: ${text}`,
   usageConfirmed: "Supply count updated.",
@@ -22,12 +24,14 @@ export const LINES = {
 
 /** Spanish versions of LINES (draft: to be checked by a fluent speaker). */
 export const LINES_ES: { [K in keyof typeof LINES]: (typeof LINES)[K] extends (...a: infer A) => string ? (...a: A) => string : string } = {
-  countdown: (seconds: number) => `Abriendo la llamada de emergencia simulada en ${seconds} segundos. Toca Cancelar para detenerla.`,
-  cancelled: "Llamada simulada cancelada.",
-  sosOpened: "Esta es una llamada al 911 simulada. No se está haciendo ninguna llamada real. La pantalla muestra qué decirle al operador.",
-  noVoice: "La voz no está disponible ahora. El botón de SOS simulado sigue en pantalla.",
+  countdown: (_seconds: number) => "Iniciando SOS. Puedo seguir ayudándote mientras se prepara la llamada.",
+  cancelled: "SOS cancelado.",
+  sosOpened: "El SOS está activo. Seguiré ayudándote y preguntaré si el operador necesita algún dato.",
+  callPlaced: "Se aceptó la solicitud de llamada al operador del equipo. Seguiré ayudándote aquí.",
+  callFailed: "No pude llamar al operador del equipo. Llama directamente a los servicios de emergencia desde un teléfono.",
+  noVoice: "La voz no está disponible ahora. El botón SOS sigue en pantalla.",
   itemMissing: (name: string | null) => `${name ?? "Ese material"} no está en esta caja.`,
-  endOfSteps: "Ese era el último paso. El botón de SOS simulado sigue en pantalla.",
+  endOfSteps: "Ese era el último paso. El botón SOS sigue en pantalla.",
   helperWithdrew: "La persona que aceptó ya no puede venir. El SOS sigue abierto.",
   responderMessage: (from: string, text: string) => `Mensaje de ${from}: ${text}`,
   usageConfirmed: "Recuento de material actualizado.",

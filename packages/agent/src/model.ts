@@ -89,7 +89,8 @@ export function createKeywordStubModel(): ReplyModel {
       const heard = tokens(said);
       const step = turn.allowed_steps.find((s) => [...tokens(s.label)].some((w) => heard.has(w)));
       const entry = !turn.current_step && /\b(blood|bleed|bleeding|wound)\b/i.test(said) ? turn.allowed_steps[0] : undefined;
-      const sos = /\b(911|sos|emergency|dying|not breathing|unconscious|unresponsive)\b/i.test(said);
+      const sos = /\b(911|sos|emergency|dying|not breathing|unconscious|unresponsive)\b/i.test(said) ||
+        (turn.current_step === "arm_gauze" && /\b(yes|yeah|please|do it)\b/i.test(said) && /\b(call|contact|dispatcher)\b/i.test(said));
       const item = /\b(where|find|locate|grab|get)\b/i.test(said)
         ? turn.manifest.find((m) => m.on_hand > 0 && [...tokens(m.name)].some((w) => heard.has(w)))
         : undefined;
@@ -122,7 +123,7 @@ export function createKeywordStubModel(): ReplyModel {
             ? { name: "ask_clarifying", question_id: turn.questions[0].question_id }
             : null;
       const reply = action?.name === "suggest_sos"
-        ? "Starting the simulated SOS countdown. No real call is made."
+        ? "Starting SOS. I'll keep helping while the call is prepared."
         : action?.name === "locate_item"
           ? "I'm showing the recorded kit location."
           : action

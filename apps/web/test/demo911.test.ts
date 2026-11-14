@@ -45,16 +45,15 @@ describe("demo 911 call", () => {
     const params = new URLSearchParams(sent[0]!.body);
     expect(params.get("To")).toBe("+17372583742");
     const twiml = params.get("Twiml")!;
-    expect(twiml).toContain("simulated 911 call");
-    expect(twiml).toContain("1455 California Ave");
-    expect(twiml).toContain("It has no GPS fix right now.");
+    expect(twiml).toContain("A bystander opened SOS.");
+    expect(twiml).not.toMatch(/simulat|hackathon|demo|fallback/i);
+    expect(twiml).not.toContain("1455 California Ave");
     expect(twiml).not.toMatch(/Room 101|Clinic tent/);
     expect(twiml).toContain("his leg is bleeding a lot");
     expect(twiml).toContain("tourniquet guidance timer");
     expect(twiml).toContain("application is unconfirmed");
     expect(twiml).not.toMatch(/tourniquet (?:was )?applied|tourniquet on/i);
-    expect(twiml).toContain("one-time briefing was assembled");
-    expect(twiml).toContain("later updates are not included");
+    expect(twiml).not.toContain("one-time briefing was assembled");
     expect(twiml).not.toMatch(/help is on the way|ambulance is coming/i);
   });
 
@@ -68,7 +67,7 @@ describe("demo 911 call", () => {
     ] });
     const text = briefing(network, "box-clinic", new Date())!;
     const page = briefingLines(network, open.incident.incident_id)!;
-    expect(text).toContain("1455 California Ave");
+    expect(text).not.toContain("1455 California Ave");
     expect(page.lines.find((line) => line.kind === "location")?.text).toContain("1455 California Ave");
     expect(page.lines.find((line) => line.kind === "timer")?.text).toContain("application is unconfirmed");
     expect(text).not.toContain("Wrong address");
@@ -85,7 +84,7 @@ describe("demo 911 call", () => {
       { event_id: randomUUID(), box_id: "box-clinic", session_id: session, occurred_at: at, type: "sos.opened", need: "general", source: "touch" },
     ] });
     const text = briefing(network, "box-clinic", new Date())!;
-    expect(text).toContain("no configured address available");
+    expect(text).not.toContain("location");
     expect(text).not.toMatch(/Room 101|Clinic tent|1455 California Ave/);
   });
 
@@ -161,7 +160,7 @@ describe("demo 911 call in Clara's Cartesia voice", () => {
     const d = createDemo911({ network, twilio, number: "+17372583742", fetch: fetchFake, timers: false, log: () => {}, speech: { available: true, speak: async () => null }, baseUrl: "https://clara.living" });
     sos(network);
     expect(await d.fire("box-clinic")).toMatchObject({ status: "placed", voice: "twilio" });
-    expect(new URLSearchParams(sent[0]!).get("Twiml")).toContain("simulated 911 call");
+    expect(new URLSearchParams(sent[0]!).get("Twiml")).not.toMatch(/simulat|hackathon|demo/i);
   });
 });
 
@@ -238,7 +237,7 @@ describe("bystander talks to the dispatcher", () => {
 });
 
 describe("location on the call", () => {
-  it("reads the GPS position and the address when the SOS carried a fix", () => {
+  it("holds the GPS position and address for a dispatcher question, omitting both from the opening", async () => {
     const network = createNetwork();
     network.seedDemo();
     const session = randomUUID();
@@ -246,7 +245,16 @@ describe("location on the call", () => {
     const opened = { event_id: randomUUID(), box_id: "box-clinic", session_id: session, occurred_at: at, type: "sos.opened" as const, need: "bleeding" as const, source: "touch" as const };
     network.ingest({ schema_version: EVENTS_VERSION, events: [opened, { event_id: randomUUID(), box_id: "box-clinic", session_id: session, occurred_at: at, type: "emergency.context", task_id: opened.event_id, location: { kind: "gps_fix", latitude: 40.350123, longitude: -74.659876, observed_at: at, address: "1455 California Ave" } }] });
     const text = briefing(network, "box-clinic")!;
-    expect(text).toContain("latitude 40.35012, longitude -74.65988");
-    expect(text).toContain("The box's address is 1455 California Ave.");
+    expect(text).not.toMatch(/latitude|longitude|1455 California Ave/);
+    const { sceneFacts, answerDispatcher } = await import("../lib/dispatchTalk");
+    const incidentId = network.openIncidentForBox("box-clinic")!.incident.incident_id;
+    const scene = sceneFacts(network, incidentId)!;
+    expect(scene.briefing).toEqual(expect.arrayContaining([expect.stringContaining("latitude 40.35012, longitude -74.65988")]));
+    const fakeModel = { name: "test", generate: async ({ context }: { context: string }) => {
+      expect(JSON.parse(context)).toMatchObject({ dispatcher_says: "Where is the box?" });
+      return { text: JSON.stringify({ reply: "The box's GPS position is latitude 40.35012, longitude -74.65988.", relay: null, end: false }), stopReason: "end_turn" };
+    } };
+    const answer = await answerDispatcher(fakeModel, scene, [], "Where is the box?");
+    expect(answer.reply).toContain("latitude 40.35012");
   });
 });

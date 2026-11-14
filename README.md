@@ -6,7 +6,7 @@ Where professional help is far away (conflict zones, refugee camps, remote and h
 
 > Clara is a hackathon proof of concept. It is never used on a patient, the demo scenarios are fictional, and the 911 call is simulated.
 
-When configured, mock SOS can also place a **real Twilio call to a team-owned demo dispatcher phone**. It plays a one-time briefing about the fictional incident. Clara does not dial 911 or another emergency service; without a configured demo number and Twilio credentials, it only records that no demo phone call was placed. The independent mock emergency fact worker may collect answers afterward, but those later answers are not added to the one-time phone briefing.
+When configured, SOS can place a **Twilio call to a team-owned dispatcher phone** in the background. The opening briefing gives the recorded incident facts but holds the box's address or GPS position until the dispatcher asks. Core Clara keeps talking to the box user and can relay a dispatcher question when needed. The kiosk has no call overlay; a short voice status reports when Twilio accepts the call request or when it fails. API acceptance does not prove a person answered. Clara does not dial 911 or another emergency service; without a configured team number and Twilio credentials, no phone call is placed.
 
 ## Live demo
 
@@ -31,7 +31,7 @@ A real box connects by setting `CLARA_SERVER_URL=https://clara.living` in `/etc/
 | `packages/network` | Incidents, volunteer matching, alerts (sent → shown → coming → arrived), escalation, the EMS scene report, box status, supply ledger |
 | `packages/coordinator` | The response coordinator: a LangChain **deepagents** agent that plans the human response per incident (write_todos plan, `responder-scout`, `logistics` and `time-to-care` subagents, notes in its virtual filesystem) through bounded tools; a no-key rules planner for demos |
 | `apps/web` | Next.js: box API, companion app (`/app`), dispatch dashboard, EMS scene report, kit map, maintainer backend |
-| `box` | Raspberry Pi service: hands-free audio, voice loop, scenario engine, kiosk screen, SOS and mock-911 flow, cloud link, ESP32 link, simulator, self-test |
+| `box` | Raspberry Pi service: hands-free audio, voice loop, scenario engine, kiosk screen, background SOS flow, cloud link, ESP32 link, simulator, self-test |
 | `firmware` | ESP32 (PlatformIO): lid and mount switches, compartment LEDs, CPR rhythm, buzzer, MAX30102 pulse sensor |
 | `content` | Draft source-linked scenarios, including optional voice-paced superficial-cut and arm-wound guides; visual assets and the verified three-slot kit layout |
 | `docs` | Design docs; start with [feature list](docs/feature-list.md) and [conversation runtime](docs/conversation-runtime.md) |
@@ -77,7 +77,7 @@ Volunteers join at [clara.living/join](https://clara.living/join): first aid nea
 - **iPhone:** push alerts only work after **Share → Add to Home Screen** and opening Clara from there (iOS 16.4+). In a Safari tab, alerts show only while the page is open.
 - **Push keys:** set `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` (`npx web-push generate-vapid-keys`); without them the server generates a pair and keeps it in the database snapshot with the subscriptions (with no database, phones re-subscribe after each restart).
 - **Calls:** set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (and `PUBLIC_BASE_URL`, default `https://clara.living`). Without them calls are only logged and the maintainer console says "Calls: not configured". **A Twilio trial account can only call numbers verified in the Twilio console.** Clara never calls emergency services.
-- **Demo dispatcher phone:** also set `CLARA_DEMO_911_NUMBER` to a team-owned E.164 number to ring it once per mock SOS. The call starts about four seconds after SOS opens, reads a briefing assembled from the events known at that moment, and never dials an emergency number. A Twilio API acceptance means the call was placed, not that a person answered.
+- **Team dispatcher phone:** also set `CLARA_DEMO_911_NUMBER` to a team-owned E.164 number to ring it once per SOS. The call starts about four seconds after SOS opens and reads a briefing from the events known then; location is held for a dispatcher question. It never dials an emergency number. A Twilio API acceptance means the call request was accepted, not that a person answered.
 - **Texts:** volunteers can tick **Also text me (iMessage/WhatsApp/SMS)** and answer alerts by replying 1 / 2, via [Photon](https://photon.codes) (Beta API). Set `PHOTON_API_KEY`, `PHOTON_PROJECT_ID`, `PHOTON_WEBHOOK_SECRET`; setup steps in [docs/companion-pwa.md](docs/companion-pwa.md#text-alerts-photon-imessage-whatsapp-sms). Without them texts are only logged.
 
 Details: [docs/companion-pwa.md](docs/companion-pwa.md).

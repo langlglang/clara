@@ -34,13 +34,16 @@ describe("scenario loading", () => {
     expect(kit.get("WATER")).toBeNull();
     expect(existsSync(content(rinse!.image!))).toBe(true);
   });
-  it("binds the arm-wound pressure visual and gauze to the actual box", () => {
+  it("shows the stocked gauze slot before pressure art without delaying urgent pressure", () => {
     const scenario = loadScenario(content("scenarios/arm-gash.json"));
     const kit = loadKit(content("kits/clara-3slot-v1.json"));
-    expect(scenario).toMatchObject({ version: "arm-gash-demo-v1", guided: true, start: "arm_pressure" });
-    expect(scenario.steps.map((step) => step.step_id)).toEqual(["arm_pressure", "arm_gauze", "arm_check"]);
-    expect(scenario.steps[0]?.text).toMatch(/call 911 now/i);
-    expect(kit.get(scenario.steps[1]!.item!)?.slot).toBe("bottom");
+    expect(scenario).toMatchObject({ version: "arm-gash-demo-v2", guided: true, start: "arm_gauze" });
+    expect(scenario.steps.map((step) => step.step_id)).toEqual(["arm_gauze", "arm_pressure", "arm_check"]);
+    expect(scenario.steps[0]).toMatchObject({ item: "GAUZE", image: "kits/layout-3slot-v1-bottom.svg", next: ["arm_pressure"] });
+    expect(scenario.steps[0]?.text).toMatch(/press on the wound.*right now instead of waiting for gauze/i);
+    expect(scenario.steps[0]?.text).toMatch(/call 911/i);
+    expect(scenario.steps[1]).toMatchObject({ image: "visuals/arm-pressure-v1.svg", next: ["arm_check"] });
+    expect(kit.get(scenario.steps[0]!.item!)?.slot).toBe("bottom");
     for (const step of scenario.steps) expect(existsSync(content(step.image!))).toBe(true);
   });
   it("maps every stocked item to one of the three physically verified compartments", () => {

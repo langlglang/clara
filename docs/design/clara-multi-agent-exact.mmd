@@ -1,0 +1,18 @@
+flowchart LR
+    Person["Person speaking"] <--> Box["Clara box<br/>microphone · speaker · screen"]
+    Box <--> Core["Core Clara<br/>one continuous conversation"]
+    Core --> Tasks["Task launcher"]
+
+    Tasks --> Guide["Kit guidance<br/>visuals · compartment LEDs"]
+    Tasks --> Tools["Camera and sensor tools"]
+    Tasks --> Dispatch["Background dispatch task"]
+
+    Dispatch --> Coordinator["LangChain response coordinator"]
+    Coordinator --> Scout["Responder scout"]
+    Coordinator --> Logistics["Kit and transport logistics"]
+    Coordinator --> Care["Time-to-care planner"]
+
+    Guide --> Core
+    Tools --> Core
+    Dispatch --> Core
+    Core --> Box

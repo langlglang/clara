@@ -154,6 +154,43 @@ describe("optional voice-paced guides", () => {
     expect(session.applyAction(ready.action!, "voice", ready)).toBe(true);
     expect(session.view().presentation?.image_url).toBe("/content/visuals/arm-pressure-v1.svg");
   });
+  it("accepts a matching fixed gauze how-to turn and shows the pressure visual", () => {
+    const guide = loadScenario(content("scenarios/arm-gash.json"));
+    const { session } = setup(content(""), { scenarios: [guide] }, content("kits/clara-3slot-v1.json"));
+    session.lidOpened();
+    const startId = uuid();
+    session.heard("I have an arm gash", startId);
+    const start: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: startId, heard: "I have an arm gash",
+      reply: guide.steps[0]!.text, action: { name: "start_guidance", scenario_id: "arm_gash" }, answered_by: "model", reason: null, speech: null };
+    expect(session.applyAction(start.action!, "voice", start)).toBe(true);
+    const words = "How do I apply the gauze?";
+    const id = uuid();
+    session.heard(words, id);
+    const response: TurnResponse = { ...start, client_turn_id: id, heard: words, reply: guide.steps[1]!.text,
+      action: { name: "select_step", step_id: "arm_pressure" }, answered_by: "fixed" };
+    expect(session.applyAction(response.action!, "voice", response)).toBe(true);
+    expect(session.view().presentation?.image_url).toBe("/content/visuals/arm-pressure-v1.svg");
+  });
+  it("starts dispatch and opens pressure art from one fixed gauze follow-up", () => {
+    const guide = loadScenario(content("scenarios/arm-gash.json"));
+    const { session, speech } = setup(content(""), { scenarios: [guide] }, content("kits/clara-3slot-v1.json"));
+    session.lidOpened();
+    const startId = uuid();
+    session.heard("I have an arm gash", startId);
+    const start: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: startId, heard: "I have an arm gash",
+      reply: guide.steps[0]!.text, action: { name: "start_guidance", scenario_id: "arm_gash" }, answered_by: "model", reason: null, speech: null };
+    expect(session.applyAction(start.action!, "voice", start)).toBe(true);
+    const words = "Start dispatch and show me how to apply the gauze";
+    const id = uuid();
+    session.heard(words, id);
+    const action: Action = { name: "launch_tasks", background: [{ name: "suggest_sos" }],
+      presentation: { name: "select_step", step_id: "arm_pressure" } };
+    const response: TurnResponse = { ...start, client_turn_id: id, heard: words, reply: guide.steps[1]!.text,
+      action, answered_by: "fixed" };
+    expect(session.applyAction(action, "voice", response)).toBe(true);
+    expect(session.view().presentation?.image_url).toBe("/content/visuals/arm-pressure-v1.svg");
+    expect(speech.said).toContainEqual(expect.stringContaining("starting the dispatch request"));
+  });
   it("starts dispatch and presents the gauze guide from the same turn without cutting off its speech", () => {
     const guide = loadScenario(content("scenarios/arm-gash.json"));
     const { session, board, cloud, clock, speech } = setup(content(""), { scenarios: [guide] }, content("kits/clara-3slot-v1.json"));

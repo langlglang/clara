@@ -80,6 +80,23 @@ describe("handleTurn", () => {
       answered_by: "fixed", reason: "model_error", action: null,
     });
   });
+  it("shows arm pressure art for a gauze how-to question while preserving a simultaneous dispatch request", async () => {
+    const active = { ...state, scenario_id: "arm_gash", step_id: "arm_gauze", guided_active: true,
+      allowed_steps: [{ step_id: "arm_gauze", label: "Find gauze" }, { step_id: "arm_pressure", label: "Apply pressure" }] };
+    const assistant: Assistant = { reply: async () => { throw new Error("the approved next panel should not need the model"); } };
+    const deps = { assistant, ears: null, voice: null,
+      guidance: (_scenarioId: string, stepId: string) => stepId === "arm_pressure" ? "Place gauze on the wound and press firmly." : null };
+    expect(await handleTurn(textRequest("How do I apply the gauze?", { state: active }), deps)).toMatchObject({
+      action: { name: "select_step", step_id: "arm_pressure" }, reply: "Place gauze on the wound and press firmly.", answered_by: "fixed",
+    });
+    expect(await handleTurn(textRequest("Start dispatch and show me how to apply the gauze", { state: active }), deps)).toMatchObject({
+      action: { name: "launch_tasks", background: [{ name: "suggest_sos" }], presentation: { name: "select_step", step_id: "arm_pressure" } },
+      reply: "Place gauze on the wound and press firmly.", answered_by: "fixed",
+    });
+    expect(await handleTurn(textRequest("I don't have gauze; how do I apply it?", { state: active }), deps)).toMatchObject({
+      action: null, reason: "model_error",
+    });
+  });
   it("voices a catalog caption instead of model-authored visual instructions", async () => {
     const v = voice();
     const offered = { ...state, available_visuals: [{ visual_id: "kit_overview", label: "Clara kit layout" }] };

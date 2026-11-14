@@ -1,6 +1,6 @@
 {
   "scenario_id": "arm_gash",
-  "version": "arm-gash-demo-v3",
+  "version": "arm-gash-demo-v4",
   "title": "Arm wound with bleeding",
   "status": "draft",
   "guided": true,
@@ -14,7 +14,7 @@
     {
       "step_id": "arm_gauze",
       "label": "Find sterile gauze",
-      "text": "Get sterile gauze from the bottom compartment. Look for its light, and tell me when you have it. If blood is spurting or flowing continuously, press on the wound with a clean cloth right now instead of waiting for gauze, and call 911.",
+      "text": "Get gauze from the bottom compartment; look for its light. Tell me when you have it. If blood spurts or flows continuously, press with a clean cloth and call 911 now.",
       "item": "GAUZE",
       "image": "kits/layout-3slot-v1-bottom.svg",
       "next": ["arm_pressure"]
@@ -22,7 +22,7 @@
     {
       "step_id": "arm_pressure",
       "label": "Apply direct pressure",
-      "text": "Put the gauze directly on the arm wound and hold firm, steady pressure. Tell me when pressure is on. If bleeding is heavy or does not stop, call 911 now.",
+      "text": "Place gauze on the wound and press firmly. Tell me when pressure is on. If bleeding is heavy or does not stop, call 911 now.",
       "image": "visuals/arm-pressure-v1.svg",
       "next": ["arm_check"]
     },

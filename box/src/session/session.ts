@@ -624,9 +624,10 @@ export class BoxSession {
     if (cpr && cpr.scenario_id !== this.engine.scenario.scenario_id && NOT_BREATHING.test(text)) this.switchScenario(cpr.scenario_id, "voice");
   }
 
-  private sameHeardReport(response: TurnResponse): boolean {
+  private sameHeardReport(response: TurnResponse, allowFixed = false): boolean {
     const report = this.heardByTurn.get(response.client_turn_id);
-    return Boolean(report && response.answered_by === "model" && report.sessionId === this.sessionId && report.text === response.heard);
+    return Boolean(report && (response.answered_by === "model" || (allowFixed && response.answered_by === "fixed" && response.reason === null)) &&
+      report.sessionId === this.sessionId && report.text === response.heard);
   }
 
   /**
@@ -643,7 +644,7 @@ export class BoxSession {
       case "select_step": {
         const step = this.engine.step(action.step_id);
         if (state.guided_active && action.step_id !== state.step_id && (!response ||
-          !guidedAdvanceAllowed(response.heard ?? "") || !this.sameHeardReport(response))) return false;
+          !guidedAdvanceAllowed(response.heard ?? "", state.step_id) || !this.sameHeardReport(response, true))) return false;
         if (response && response.reply !== step.text) {
           this.log("selected guidance refused: cloud text differs from local content");
           this.say("I couldn't verify that guidance. Please tell me again.");

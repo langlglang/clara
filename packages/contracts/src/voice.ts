@@ -120,9 +120,19 @@ export function guidedStartAllowed(words: string): boolean {
   return !/\b(heavy|severe|spurting|gushing|uncontrolled|unresponsive|unconscious|fainting|not breathing|won't stop|cannot stop)\b/i.test(words);
 }
 
-export function guidedAdvanceAllowed(words: string): boolean {
-  if (/\b(not|can't|cannot|couldn't|haven't|didn't|still bleeding|worse|worsening)\b/i.test(words)) return false;
-  return /\b(done|finished|ready|got it|found it|have it|i am pressing|i'm pressing|pressure is on|bleeding stopped)\b/i.test(words);
+/** A question about applying gauze requests the next arm-guide panel, which contains the pressure illustration. */
+export function armGauzeNextRequested(words: string): boolean {
+  return /\b(?:i have|i've got|i got|we have|we got)\s+(?:the\s+)?(?:sterile\s+)?gauze\b/i.test(words) ||
+    (/\b(?:how|show|explain|tell|what)\b/i.test(words) &&
+      /\b(?:apply|use|put|place|hold|press|do with)\b/i.test(words) &&
+      /\b(?:gauze|it)\b/i.test(words));
+}
+
+export function guidedAdvanceAllowed(words: string, currentStep?: string | null): boolean {
+  if (/\b(not|don't|doesn't|can't|cannot|couldn't|haven't|didn't|without|no gauze|still bleeding|worse|worsening)\b/i.test(words)) return false;
+  if (!guidedStartAllowed(words)) return false;
+  return /\b(done|finished|ready|got it|found it|have it|i am pressing|i'm pressing|pressure is on|bleeding stopped)\b/i.test(words) ||
+    (currentStep === "arm_gauze" && armGauzeNextRequested(words));
 }
 
 export const FixedReasonSchema = z.enum(["not_heard", "no_model", "timeout", "model_error", "invalid_reply", "refusal"]);

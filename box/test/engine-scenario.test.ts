@@ -37,10 +37,10 @@ describe("scenario loading", () => {
   it("shows the stocked gauze slot before pressure art without delaying urgent pressure", () => {
     const scenario = loadScenario(content("scenarios/arm-gash.json"));
     const kit = loadKit(content("kits/clara-3slot-v1.json"));
-    expect(scenario).toMatchObject({ version: "arm-gash-demo-v3", guided: true, start: "arm_gauze" });
+    expect(scenario).toMatchObject({ version: "arm-gash-demo-v4", guided: true, start: "arm_gauze" });
     expect(scenario.steps.map((step) => step.step_id)).toEqual(["arm_gauze", "arm_pressure", "arm_check"]);
     expect(scenario.steps[0]).toMatchObject({ item: "GAUZE", image: "kits/layout-3slot-v1-bottom.svg", next: ["arm_pressure"] });
-    expect(scenario.steps[0]?.text).toMatch(/press on the wound.*right now instead of waiting for gauze/i);
+    expect(scenario.steps[0]?.text).toMatch(/spurts or flows continuously, press with a clean cloth/i);
     expect(scenario.steps[0]?.text).toMatch(/call 911/i);
     expect(scenario.steps[1]).toMatchObject({ image: "visuals/arm-pressure-v1.svg", next: ["arm_check"] });
     expect(kit.get(scenario.steps[0]!.item!)?.slot).toBe("bottom");

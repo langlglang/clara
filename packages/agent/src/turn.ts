@@ -1,5 +1,5 @@
 // Adapted from Sophi (github.com/mzhao1599/sophi), services/cloud-api/src/walker/service.ts (turn(): transcribe, model, fixed lines, voice, time budget).
-import { VOICE_TURN_VERSION, actionAllowed, fingerCutNeedsClarification, guidedAdvanceAllowed, guidedStartAllowed, minorCutVisualAllowed, visualById, type FixedReason, type TurnRequest, type TurnResponse } from "@clara/contracts";
+import { VOICE_TURN_VERSION, actionAllowed, armGauzeNextRequested, fingerCutNeedsClarification, guidedAdvanceAllowed, guidedStartAllowed, minorCutVisualAllowed, visualById, type Action, type FixedReason, type TurnRequest, type TurnResponse } from "@clara/contracts";
 import { startTriage, TRIAGE_QUESTIONS, type TriageObservations } from "@clara/contracts";
 
 const TAG_WORDS = { red: "red, urgent", yellow: "yellow, can wait a little", green: "green, walking wounded", black: "black" } as const;
@@ -142,15 +142,19 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
       : "I couldn't inspect that photo. Please tell me what you see.");
   }
 
-  // A short acknowledgement in a guide with exactly one offered next panel needs no model decision.
-  // This avoids spending the model deadline on "Got it" while preserving model judgement for questions,
-  // interruptions, and branching guides. Both the server and Pi still validate the action and text.
+  // A clear guide acknowledgement or request for the arm-gauze application panel needs no model decision.
+  // The next panel already owns the pressure visual and exact words. Both sides validate the action and text.
   const nextSteps = request.state.allowed_steps.filter((step) => step.step_id !== request.state.step_id);
-  if (request.state.guided_active && request.state.scenario_id && nextSteps.length === 1 &&
-    /^(?:got it|done|finished|ready|found it|have it|i have it)[.! ]*$/i.test(words)) {
-    const action = { name: "select_step", step_id: nextSteps[0]!.step_id } as const;
-    const reply = deps.guidance?.(request.state.scenario_id, action.step_id, request.language);
-    if (reply && actionAllowed(action, request.state) && guidedAdvanceAllowed(words)) {
+  const armGauzeHelp = request.state.scenario_id === "arm_gash" && request.state.step_id === "arm_gauze" && armGauzeNextRequested(words);
+  const shortAck = /^(?:got it|done|finished|ready|found it|have it|i have it)[.! ]*$/i.test(words);
+  if (request.state.guided_active && request.state.scenario_id && nextSteps.length === 1 && (shortAck || armGauzeHelp)) {
+    const presentation = { name: "select_step", step_id: nextSteps[0]!.step_id } as const;
+    const dispatchRequested = armGauzeHelp && /\b(?:call\s+(?:911|the dispatcher)|start\s+(?:the\s+)?dispatch|launch\s+(?:the\s+)?dispatch|send\s+(?:an?\s+)?sos)\b/i.test(words);
+    const action: Action = dispatchRequested
+      ? { name: "launch_tasks", background: [{ name: "suggest_sos" }], presentation }
+      : presentation;
+    const reply = deps.guidance?.(request.state.scenario_id, presentation.step_id, request.language);
+    if (reply && actionAllowed(action, request.state) && guidedAdvanceAllowed(words, request.state.step_id)) {
       const response: TurnResponse = { ...base, heard: words, reply, action, answered_by: "fixed", reason: null, speech: await say(reply) };
       log(response);
       return response;
@@ -185,7 +189,7 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   }
   if (presentation?.name === "start_guidance" && (!request.language.startsWith("en") || !guidedStartAllowed(words))) return rejectPresentation();
   if (presentation?.name === "start_guidance" && presentation.scenario_id === "minor_cut" && !minorCutVisualAllowed(words)) return rejectPresentation();
-  if (presentation?.name === "select_step" && request.state.guided_active && presentation.step_id !== request.state.step_id && !guidedAdvanceAllowed(words)) return rejectPresentation();
+  if (presentation?.name === "select_step" && request.state.guided_active && presentation.step_id !== request.state.step_id && !guidedAdvanceAllowed(words, request.state.step_id)) return rejectPresentation();
 
   // 3. Resolve selected guidance against server-owned content, then voice that exact text. The model's
   // selected-step wording is discarded by parseReply; the box also checks this against its local bundle.

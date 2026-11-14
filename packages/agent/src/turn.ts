@@ -2,6 +2,7 @@
 import { VOICE_TURN_VERSION, actionAllowed, type FixedReason, type TurnRequest, type TurnResponse } from "@clara/contracts";
 import { deadline, type Assistant } from "./assistant.js";
 import type { Ears, Voice } from "./cartesia.js";
+import { isObviousNonRequestTranscript } from "./utterance-filter.js";
 
 /**
  * One voice turn: words (transcribed when the box sent audio) → the assistant's reply → speech for any reply
@@ -66,13 +67,18 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
     log(response);
     return response;
   };
+  const silentNotHeard = (): TurnResponse => {
+    const response: TurnResponse = { ...base, heard: null, reply: "", action: null, answered_by: "fixed", reason: "not_heard", speech: null };
+    log(response);
+    return response;
+  };
 
   // 1. Words.
   let words: string | null;
   if (request.input.type === "text") {
     words = request.input.text.trim();
   } else {
-    if (!deps.ears) return fixed("not_heard", null);
+    if (!deps.ears) return silentNotHeard();
     const clip = Buffer.from(request.input.data_base64, "base64");
     const started = Date.now();
     const limit = deadline(Math.min(STT_MAX_MS, left()));
@@ -87,7 +93,9 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
     }
     words = words?.trim() ?? null;
   }
-  if (!words) return fixed("not_heard", null);
+  if (!words || (request.input.type === "audio" && isObviousNonRequestTranscript(words))) {
+    return request.input.type === "audio" ? silentNotHeard() : fixed("not_heard", null);
+  }
 
   // 2. The reply.
   if (!deps.assistant) return fixed("no_model", words);
@@ -108,6 +116,11 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   if (action?.name === "select_step") {
     reply = (request.state.scenario_id && deps.guidance?.(request.state.scenario_id, action.step_id)) || "";
     if (!reply) return fixed("invalid_reply", words);
+  }
+  if (action?.name === "locate_item" && request.language.toLowerCase().startsWith("en")) {
+    const item = request.state.manifest.find((entry) => entry.sku === action.sku);
+    if (!item) return fixed("invalid_reply", words);
+    reply = `The screen shows where to find ${item.name}. Look for the compartment light in the box.`;
   }
   if (!reply && action?.name === "ask_clarifying") {
     reply = request.state.questions.find((q) => q.question_id === action.question_id)?.text ?? "";

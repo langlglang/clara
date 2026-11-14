@@ -192,6 +192,29 @@ describe("voice loop", () => {
     expect(t.listener.last).toBe("resume");
   });
 
+  it("silently resumes listening after the server rejects noise or filler", async () => {
+    const t = setup(async () => ({
+      ...answer(null), heard: null, reply: "", answered_by: "fixed", reason: "not_heard", speech: null,
+    }));
+    t.loop.start();
+    await flush();
+    t.listener.clip();
+    await flush();
+    expect(t.speaker.lines).toHaveLength(0);
+    expect(t.actions).toHaveLength(0);
+    expect(t.listener.last).toBe("resume");
+    expect(t.loop.status).toBe("listening");
+  });
+
+  it("keeps the fallback for an empty model reply", async () => {
+    const t = setup(async () => answer(null));
+    t.loop.start();
+    await flush();
+    t.listener.clip();
+    await flush();
+    expect(t.speaker.lines.map((line) => line.value)).toEqual([LOCAL_LINES.notCaught]);
+  });
+
   it("ignores an action that was not offered and speaks the reply with the local voice", async () => {
     const t = setup(async () => answer({ name: "select_step", step_id: "tourniquet" }, "Okay."));
     t.loop.start();

@@ -259,7 +259,11 @@ class VoiceLoopImpl implements VoiceLoop {
       if (this.turn !== turn) return;
     }
     if (action?.name !== "select_step") {
-      const text = reply.reply.trim() || (action ? "" : this.lines.notCaught);
+      // The server can silently reject an obvious noise/filler transcript. Do not turn that
+      // deliberate empty reply into the local "didn't catch that" fallback.
+      const silentNotHeard = reply.answered_by === "fixed" && reply.reason === "not_heard" && reply.heard === null
+        && !action && reply.speech === null && !reply.reply.trim();
+      const text = reply.reply.trim() || (action || silentNotHeard ? "" : this.lines.notCaught);
       if (text) {
         this.setStatus("speaking");
         const wav = reply.speech ? Buffer.from(reply.speech.data_base64, "base64") : undefined;

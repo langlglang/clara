@@ -80,8 +80,8 @@ interface Countdown {
 
 const MAX_MESSAGES = 5;
 const MAX_RECENT = 12;
-const GREETING = "I'm Clara. I'm here to help.";
-const GREETING_AUDIO = "audio/clara-greeting-v1.wav";
+const GREETING = "I'm Clara. I'm here to help. Tell me what happened, and I can guide you through first aid, help you find supplies, or open the SOS guide.";
+const GREETING_AUDIO = "audio/clara-greeting-v2.wav";
 const SLOT_IMAGES: Record<string, string> = {
   "top-left": "/content/kits/layout-3slot-v1-top-left.svg",
   "top-right": "/content/kits/layout-3slot-v1-top-right.svg",
@@ -192,7 +192,7 @@ export class BoxSession {
     this.presentation = { kind: "answer", title: "Clara", body: GREETING, image_url: null, item: null, source_label: null };
     const audio = this.o.contentDir ? join(this.o.contentDir, GREETING_AUDIO) : null;
     if (audio && (this.o.fileExists ?? existsSync)(audio)) {
-      // No local-voice fallback if the short recorded greeting cannot play.
+      // No local-voice fallback if the recorded greeting cannot play.
       this.o.speech?.say({ text: "", file: audio }).catch(() => {});
     }
     this.voice?.start();
@@ -461,7 +461,7 @@ export class BoxSession {
         this.notice = question?.text ?? null;
         if (question) {
           this.caption = question.text;
-          this.presentation = { kind: "question", title: "Clara asks", body: question.text, image_url: null, item: null, source_label: "Scenario question" };
+          this.presentation = { kind: "question", title: "Clara asks", body: question.text, image_url: null, item: null, source_label: null };
           this.o.speech?.say({ text: question.text }).catch(() => {});
         }
         this.publish();
@@ -671,7 +671,7 @@ export class BoxSession {
               sku: intent.step.item, name: this.o.kit.get(intent.step.item)?.name ?? null,
               slot: this.o.kit.get(intent.step.item)?.slot ?? null, lit: false, missing: false,
             } : null,
-            source_label: `Scenario ${this.o.scenario.version}`,
+            source_label: null,
           };
           if (speakStep) this.speakStep(intent.step, wav);
           break;

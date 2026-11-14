@@ -111,9 +111,9 @@ describe("BoxSession lid", () => {
     const { session, speech, cloud } = setup(contentDir);
     session.lidOpened();
     session.lidOpened();
-    expect(session.view().presentation).toMatchObject({ kind: "answer", body: "I'm Clara. I'm here to help." });
+    expect(session.view().presentation).toMatchObject({ kind: "answer", body: "I'm Clara. I'm here to help. Tell me what happened, and I can guide you through first aid, help you find supplies, or open the SOS guide." });
     expect(speech.played).toHaveLength(1);
-    expect(speech.played[0]).toMatchObject({ text: "", file: join(contentDir, "audio/clara-greeting-v1.wav") });
+    expect(speech.played[0]).toMatchObject({ text: "", file: join(contentDir, "audio/clara-greeting-v2.wav") });
     expect(cloud.types()).toEqual(["box.opened"]);
     expect(cloud.turns).toHaveLength(0);
     session.lidClosed();
@@ -153,7 +153,7 @@ describe("BoxSession lid", () => {
     const view = session.view();
     expect(view.phase).toBe("guiding");
     expect(view.step).toBeNull();
-    expect(view.presentation).toMatchObject({ kind: "answer", body: "I'm Clara. I'm here to help." });
+    expect(view.presentation).toMatchObject({ kind: "answer", body: "I'm Clara. I'm here to help. Tell me what happened, and I can guide you through first aid, help you find supplies, or open the SOS guide." });
     expect(session.turnState()?.allowed_steps.map((s) => s.step_id)).toEqual(["s1"]);
     expect(session.applyAction({ name: "select_step", step_id: "s1" })).toBe(true);
     await Promise.resolve();

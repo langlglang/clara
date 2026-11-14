@@ -68,6 +68,18 @@ describe("handleTurn", () => {
     expect(v.said).toEqual(["Look for the lit slot."]);
   });
 
+  it("voices a fixed light cue for an English item lookup", async () => {
+    const v = voice();
+    const response = await handleTurn(textRequest("Where are the gauze packs?"), {
+      assistant: assistantFor(json({ transcript: "x", reply: "Maybe in the top drawer.", action: { name: "locate_item", sku: "GAUZE-01" } })),
+      ears: null,
+      voice: v,
+    });
+    const cue = "The screen shows where to find gauze roll. Look for the compartment light in the box.";
+    expect(response).toMatchObject({ action: { name: "locate_item", sku: "GAUZE-01" }, reply: cue });
+    expect(v.said).toEqual([cue]);
+  });
+
   it("speaks the question text when ask_clarifying has no reply", async () => {
     const v = voice();
     const response = await handleTurn(textRequest("help"), { assistant: assistantFor(json({ transcript: "help", reply: "", action: { name: "ask_clarifying", question_id: "where" } })), ears: null, voice: v });
@@ -75,11 +87,20 @@ describe("handleTurn", () => {
     expect(v.said).toEqual([state.questions[0]!.text]);
   });
 
-  it("gives the fixed 'didn't catch that' line for an empty transcript, with no model call", async () => {
+  it("silently ignores an empty audio transcript, with no model call", async () => {
     const model = scriptedModel([json({ transcript: "", reply: "Hi.", action: null })]);
     const response = await handleTurn(textRequest("", { input: audioInput }), { assistant: createAssistant(model), ears: ears("   "), voice: null });
-    expect(response).toMatchObject({ answered_by: "fixed", reason: "not_heard", reply: FIXED_LINES.not_heard, heard: null, action: null });
+    expect(response).toMatchObject({ answered_by: "fixed", reason: "not_heard", reply: "", speech: null, heard: null, action: null });
     expect(model.notes).toHaveLength(0);
+  });
+
+  it("ignores filler-only audio but still sends a short request to the model", async () => {
+    const model = scriptedModel([json({ transcript: "help", reply: "Tell me what happened.", action: null })]);
+    const request = textRequest("", { input: audioInput });
+    expect(await handleTurn(request, { assistant: createAssistant(model), ears: ears("um uh"), voice: null })).toMatchObject({ reply: "", reason: "not_heard", action: null });
+    expect(model.notes).toHaveLength(0);
+    expect(await handleTurn(request, { assistant: createAssistant(model), ears: ears("help"), voice: null })).toMatchObject({ reply: "Tell me what happened.", answered_by: "model" });
+    expect(model.notes).toHaveLength(1);
   });
 
   it("gives not_heard when speech-to-text fails or is missing, and no_model without a model", async () => {

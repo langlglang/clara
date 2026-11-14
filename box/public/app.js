@@ -155,6 +155,7 @@
         show($("no-image"), true);
       }
       $("presentation").classList.toggle("no-pic", !p.image_url);
+      $("presentation").classList.toggle("kit-visual", Boolean(p.item && p.image_url?.startsWith("/content/kits/layout-3slot-v1-")));
       // Compartment callout only when the presentation names an item.
       const item = $("item");
       show(item, Boolean(p.item));

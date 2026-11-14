@@ -29,6 +29,8 @@ export interface BoxConfig {
   directions: string | null;
   configuredAddress: string | null;
   gpsPort: string | null;
+  /** CLARA_SHARE_GPS=1 lets the map follow the box GPS; by default the box keeps its configured location. */
+  shareGps: boolean;
   token: string | null;
   scenarioPath: string | null;
   /** Scenarios the box may switch to (start-screen picker, "not breathing"). Missing files are skipped. */
@@ -69,6 +71,7 @@ export function readConfig(env: NodeJS.ProcessEnv, argv: readonly string[]): Box
     directions: env.CLARA_BOX_DIRECTIONS ?? null,
     configuredAddress: env.CLARA_BOX_ADDRESS ?? null,
     gpsPort: sim ? null : env.CLARA_GPS_PORT ?? null,
+    shareGps: env.CLARA_SHARE_GPS === "1",
     token: env.CLARA_BOX_TOKEN ?? null,
     scenarioPath: flag(argv, "scenario") ?? env.CLARA_SCENARIO ?? resolve(REPO_ROOT, "content/scenarios/severe-bleeding.json"),
     extraScenarioPaths: (env.CLARA_EXTRA_SCENARIOS ?? ["not-breathing.json", "minor-cut.json", "arm-gash.json"].map((file) => resolve(REPO_ROOT, "content/scenarios", file)).join(","))
@@ -153,6 +156,7 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
     directions: config.directions,
     configuredAddress: config.configuredAddress,
     location,
+    shareGps: config.shareGps,
     scenario,
     scenarios: extras,
     translations,

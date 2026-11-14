@@ -76,7 +76,7 @@ class FakeSpeech implements SpeechQueue {
 let n = 0;
 const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
 
-function setup(contentDir?: string, extra: Partial<Pick<BoxSessionOptions, "configuredAddress" | "location" | "pulseReader" | "camera" | "cameraCloudEnabled" | "scenarios">> = {}, kitPath = fixture("test-kit.json")) {
+function setup(contentDir?: string, extra: Partial<Pick<BoxSessionOptions, "configuredAddress" | "location" | "shareGps" | "pulseReader" | "camera" | "cameraCloudEnabled" | "scenarios">> = {}, kitPath = fixture("test-kit.json")) {
   const clock = new ManualClock();
   const cloud = new FakeCloudLink();
   const board = new FakeBoard();
@@ -957,7 +957,7 @@ describe("BoxSession actions", () => {
 
   it("sends its GPS position with the heartbeat only when the fix is recent and accurate", () => {
     let fix: { latitude: number; longitude: number; observedAt: number; accuracyM: number | null } | null = null;
-    const { session, cloud, clock } = setup(undefined, { location: { current: () => fix } });
+    const { session, cloud, clock } = setup(undefined, { location: { current: () => fix }, shareGps: true });
     const beats = () => cloud.events.filter((e) => e.type === "box.heartbeat") as Array<{ gps?: unknown }>;
     session.startHeartbeat(30_000, () => ["gps"]);
     expect(beats().at(-1)!.gps).toBeUndefined(); // no fix yet
@@ -970,6 +970,14 @@ describe("BoxSession actions", () => {
     fix = { ...fix, accuracyM: null, observedAt: clock.now() - 6 * 60_000 }; // stale
     clock.advance(30_000);
     expect(beats().at(-1)!.gps).toBeUndefined();
+    session.close();
+  });
+
+  it("keeps its configured location (no GPS in heartbeats) unless sharing is turned on", () => {
+    const { session, cloud, clock } = setup(undefined, { location: { current: () => ({ latitude: 40.3431, longitude: -74.6551, observedAt: clock.now(), accuracyM: 8 }) } });
+    session.startHeartbeat(30_000, () => ["gps"]);
+    const beat = cloud.events.find((e) => e.type === "box.heartbeat") as { gps?: unknown };
+    expect(beat.gps).toBeUndefined();
     session.close();
   });
 

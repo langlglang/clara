@@ -57,6 +57,8 @@ export interface BoxSessionOptions {
   /** Site address shown as a fallback when USB GPS has no fresh fix. */
   configuredAddress?: string | null;
   location?: Pick<LocationProvider, "current"> | null;
+  /** Send the GPS fix with heartbeats so the network map follows the box. Off: the box stays at its configured spot. */
+  shareGps?: boolean;
   scenario: Scenario;
   /** Other scenarios the box may switch to (start-screen picker, or a bystander saying "not breathing"). */
   scenarios?: Scenario[];
@@ -902,6 +904,7 @@ export class BoxSession {
 
   /** The GPS fix to send with a heartbeat: recent (5 min) and, when the receiver says, accurate to 100 m. */
   private heartbeatFix(): { latitude: number; longitude: number; observed_at: string; accuracy_m: number | null } | null {
+    if (!this.o.shareGps) return null;
     const fix = this.o.location?.current() ?? null;
     if (!fix || this.clock.now() - fix.observedAt > 5 * 60_000) return null;
     if (fix.accuracyM !== null && fix.accuracyM > 100) return null;

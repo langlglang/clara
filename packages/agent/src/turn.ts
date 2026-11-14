@@ -167,38 +167,47 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   timings.model_ms = result.ms;
   if (!result.ok) return fixed(result.reason, words);
   const { action } = result.reply;
+  const presentation = action?.name === "launch_tasks" ? action.presentation : action;
+  const rejectPresentation = async (override?: string): Promise<TurnResponse> => {
+    if (action?.name === "launch_tasks" && action.background.some((task) => task.name === "suggest_sos")) {
+      const response: TurnResponse = { ...base, heard: words, reply: "", action: { name: "suggest_sos" }, answered_by: "fixed", reason: "invalid_reply", speech: null };
+      log(response);
+      return response;
+    }
+    return fixed("invalid_reply", words, override);
+  };
   // The assistant already checked this; checked again here because acting on an unoffered ID is the one thing that must never happen.
-  if (action && !actionAllowed(action, request.state)) return fixed("invalid_reply", words);
-  if (action?.name === "select_step" && request.state.scenario_id === "severe_bleeding" && fingerCutNeedsClarification(words)) {
-    return fixed("invalid_reply", words, spanish
+  if (action && !actionAllowed(action, request.state)) return rejectPresentation();
+  if (presentation?.name === "select_step" && request.state.scenario_id === "severe_bleeding" && fingerCutNeedsClarification(words)) {
+    return rejectPresentation(spanish
       ? "¿Es un corte pequeño y superficial, o sangra mucho?"
       : "Is it a small, shallow cut, or is it bleeding heavily?");
   }
-  if (action?.name === "start_guidance" && (!request.language.startsWith("en") || !guidedStartAllowed(words))) return fixed("invalid_reply", words);
-  if (action?.name === "start_guidance" && action.scenario_id === "minor_cut" && !minorCutVisualAllowed(words)) return fixed("invalid_reply", words);
-  if (action?.name === "select_step" && request.state.guided_active && action.step_id !== request.state.step_id && !guidedAdvanceAllowed(words)) return fixed("invalid_reply", words);
+  if (presentation?.name === "start_guidance" && (!request.language.startsWith("en") || !guidedStartAllowed(words))) return rejectPresentation();
+  if (presentation?.name === "start_guidance" && presentation.scenario_id === "minor_cut" && !minorCutVisualAllowed(words)) return rejectPresentation();
+  if (presentation?.name === "select_step" && request.state.guided_active && presentation.step_id !== request.state.step_id && !guidedAdvanceAllowed(words)) return rejectPresentation();
 
   // 3. Resolve selected guidance against server-owned content, then voice that exact text. The model's
   // selected-step wording is discarded by parseReply; the box also checks this against its local bundle.
-  let reply = result.reply.reply;
-  if (action?.name === "select_step") {
-    reply = (request.state.scenario_id && deps.guidance?.(request.state.scenario_id, action.step_id, request.language)) || "";
-    if (!reply) return fixed("invalid_reply", words);
+  let reply = action?.name === "launch_tasks" || action?.name === "suggest_sos" ? "" : result.reply.reply;
+  if (presentation?.name === "select_step") {
+    reply = (request.state.scenario_id && deps.guidance?.(request.state.scenario_id, presentation.step_id, request.language)) || "";
+    if (!reply) return rejectPresentation();
   }
-  if (action?.name === "start_guidance") {
-    const guide = request.state.guided_scenarios?.find((s) => s.scenario_id === action.scenario_id);
+  if (presentation?.name === "start_guidance") {
+    const guide = request.state.guided_scenarios?.find((s) => s.scenario_id === presentation.scenario_id);
     reply = guide ? deps.guidance?.(guide.scenario_id, guide.start_step_id, request.language) ?? "" : "";
-    if (!reply) return fixed("invalid_reply", words);
+    if (!reply) return rejectPresentation();
   }
-  if (action?.name === "locate_item" && (spanish || request.language.toLowerCase().startsWith("en"))) {
-    const item = request.state.manifest.find((entry) => entry.sku === action.sku);
-    if (!item) return fixed("invalid_reply", words);
+  if (presentation?.name === "locate_item" && (spanish || request.language.toLowerCase().startsWith("en"))) {
+    const item = request.state.manifest.find((entry) => entry.sku === presentation.sku);
+    if (!item) return rejectPresentation();
     reply = lines.locate(item.name);
   }
-  if (action?.name === "show_visual") {
-    const visual = visualById(action.visual_id);
-    if (!visual) return fixed("invalid_reply", words);
-    if (visual.id === "minor_cut_rinse_cover" && !minorCutVisualAllowed(words)) return fixed("invalid_reply", words);
+  if (presentation?.name === "show_visual") {
+    const visual = visualById(presentation.visual_id);
+    if (!visual) return rejectPresentation();
+    if (visual.id === "minor_cut_rinse_cover" && !minorCutVisualAllowed(words)) return rejectPresentation();
     reply = visual.line;
   }
   if (action?.name === "ask_clarifying") {

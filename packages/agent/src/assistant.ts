@@ -47,6 +47,7 @@ export function parseReply(text: string, state: TurnState): ModelReply {
   }
   // select_step plays the step's own recorded audio, so the model's words are not used.
   if (reply.action?.name === "select_step" || reply.action?.name === "start_guidance") return { ...reply, reply: "" };
+  if (reply.action?.name === "launch_tasks") return { ...reply, reply: "" };
   if (reply.action?.name === "show_visual") return { ...reply, reply: "" };
   if (reply.action?.name === "assess_patient") return { ...reply, reply: "" };
   if (reply.action?.name === "read_pulse" || reply.action?.name === "request_camera" || reply.action?.name === "capture_camera") return { ...reply, reply: "" };

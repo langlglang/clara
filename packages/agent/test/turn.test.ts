@@ -53,6 +53,20 @@ describe("handleTurn", () => {
     expect(await handleTurn(textRequest("Where is the water?", { state: active }), nextDeps)).toMatchObject({ action: null, reason: "invalid_reply" });
     expect(await handleTurn(textRequest("Got it", { state: active }), nextDeps)).toMatchObject({ action: { name: "select_step", step_id: "rinse" }, reply: "Rinse with water." });
   });
+  it("starts dispatch and returns the canonical gauze guide from one voice turn", async () => {
+    const offered = { ...state, guided_scenarios: [{ scenario_id: "arm_gash", label: "Arm wound", start_step_id: "arm_gauze" }] };
+    const action = { name: "launch_tasks", background: [{ name: "suggest_sos" }], presentation: { name: "start_guidance", scenario_id: "arm_gash" } };
+    const response = await handleTurn(textRequest("Start dispatch and explain how to use gauze for this arm gash", { state: offered }), {
+      assistant: assistantFor(json({ transcript: "x", reply: "My own wording for this panel.", action })), ears: null, voice: null,
+      guidance: (scenario, step) => scenario === "arm_gash" && step === "arm_gauze" ? "Get the gauze from the bottom compartment." : null,
+    });
+    expect(response).toMatchObject({ action, reply: "Get the gauze from the bottom compartment." });
+    const urgent = await handleTurn(textRequest("Start dispatch, blood is gushing from this arm gash", { state: offered }), {
+      assistant: assistantFor(json({ transcript: "x", reply: "", action })), ears: null, voice: null,
+      guidance: () => "Get the gauze from the bottom compartment.",
+    });
+    expect(urgent).toMatchObject({ action: { name: "suggest_sos" }, reply: "", reason: "invalid_reply" });
+  });
   it("advances an unambiguous guide acknowledgement without waiting for the model", async () => {
     const active = { ...state, scenario_id: "arm_gash", step_id: "arm_gauze", guided_active: true,
       allowed_steps: [{ step_id: "arm_gauze", label: "Find gauze" }, { step_id: "arm_pressure", label: "Apply pressure" }] };
@@ -120,6 +134,7 @@ describe("handleTurn", () => {
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.5" }).success).toBe(false);
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.6" }).success).toBe(false);
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.7" }).success).toBe(false);
+    expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.8" }).success).toBe(false);
   });
 
   it("refuses selected guidance missing from the server bundle", async () => {
@@ -283,6 +298,16 @@ describe("createClaraAgent", () => {
     const response = await handleTurn(request, { assistant: createAssistant(createKeywordStubModel()), ears: null, voice: null });
     expect(response).toMatchObject({ answered_by: "model", action: { name: "suggest_sos" } });
     expect(response.reply).not.toMatch(/called 911|simulat/i);
+  });
+
+  it("the keyword stub can launch dispatch and a gauze guide from one request", async () => {
+    const offered = { ...state, guided_scenarios: [{ scenario_id: "arm_gash", label: "Arm wound", start_step_id: "arm_gauze" }] };
+    const response = await handleTurn(textRequest("Start dispatch and help with this arm gash using gauze", { state: offered }), {
+      assistant: createAssistant(createKeywordStubModel()), ears: null, voice: null,
+      guidance: (scenario, step) => scenario === "arm_gash" && step === "arm_gauze" ? "Get sterile gauze from the bottom compartment." : null,
+    });
+    expect(response).toMatchObject({ action: { name: "launch_tasks", background: [{ name: "suggest_sos" }], presentation: { name: "start_guidance", scenario_id: "arm_gash" } },
+      reply: "Get sterile gauze from the bottom compartment." });
   });
 
   it("a greeting does not start the scenario or ask an injury-specific question", async () => {

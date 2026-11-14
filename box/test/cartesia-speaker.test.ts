@@ -88,7 +88,7 @@ describe("Cartesia speaker", () => {
     expect(texts).toContain("es:SOS cancelado.");
     expect(texts).toContain(`en:${scenario.steps[1]!.text}`);
     expect(texts.some((t) => t.startsWith("es:Primero, asegúrate"))).toBe(true);
-    expect(texts).toContain("en:Starting SOS. I can keep helping while the call is prepared.");
+    expect(texts).toContain("en:I'm starting the dispatch request. I'll keep helping you here.");
     expect(new Set(texts).size).toBe(texts.length);
   });
 });

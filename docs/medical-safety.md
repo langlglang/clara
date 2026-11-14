@@ -33,7 +33,7 @@ The original [`minor-cut-sequence-v1.svg`](../content/visuals/minor-cut-sequence
 
 The owner’s “alcohol pad then bandaid” example is **not** the sequence depicted. The manifest confirms antiseptic towelettes, not alcohol pads, and the 2024 guideline favors tap water or saline over antiseptic agents for this superficial-wound cleaning step. Clara may show the towelette as an item illustration but does not instruct its use in this bundle.
 
-## Arm-wound pressure visual bundle — `arm-gash-demo-v2` (draft)
+## Arm-wound pressure visual bundle — `arm-gash-demo-v3` (draft)
 
 [`arm-gash.json`](../content/scenarios/arm-gash.json) is a second optional guided scenario. For an arm wound without a reported severe-bleeding sign, its first panel points to the verified bottom compartment for sterile gauze; only after the user says they have it does the next panel show the original [`arm-pressure-v1.svg`](../content/visuals/arm-pressure-v1.svg) and instruct firm, steady pressure. The first panel says to apply pressure immediately with a clean cloth and call 911 if blood is spurting or flowing continuously, so collecting gauze must not delay care. It offers contact with Clara's configured team dispatcher number and leaves the choice to the user when severe signs have not been reported. A request such as “Yeah, call 911” starts Clara's SOS flow, but the prototype must not claim a public emergency call was placed. The final panel returns to the pressure illustration and states the escalation boundary. No panel depicts suturing, wound packing, a tourniquet, or a claim that bleeding has stopped.
 

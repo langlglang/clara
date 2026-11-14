@@ -3,10 +3,10 @@ import { z } from "zod";
 import { TriageObservationsSchema } from "./triage.js";
 
 /**
- * Voice turn API, `voice-turn/0.8`. The box sends one turn per utterance; the server answers
- * with what it heard, a short reply and at most one action. See docs/contracts.md and docs/voice.md.
+ * Voice turn API, `voice-turn/0.9`. One turn may start independent background tasks and
+ * present one foreground item. See docs/contracts.md and docs/voice.md.
  */
-export const VOICE_TURN_VERSION = "voice-turn/0.8";
+export const VOICE_TURN_VERSION = "voice-turn/0.9";
 
 /** A clip is 16 kHz mono 16-bit PCM WAV: 32 bytes per millisecond. */
 export const CLIP_SAMPLE_RATE = 16_000;
@@ -83,6 +83,18 @@ export type TurnRequest = z.infer<typeof TurnRequestSchema>;
 
 export const UsageItemSchema = z.strictObject({ sku: Id, qty: z.number().int().min(1).max(99) });
 
+export const BackgroundActionSchema = z.discriminatedUnion("name", [
+  z.strictObject({ name: z.literal("suggest_sos") }),
+  z.strictObject({ name: z.literal("read_pulse") }),
+  z.strictObject({ name: z.literal("request_camera") }),
+]);
+export const PresentationActionSchema = z.discriminatedUnion("name", [
+  z.strictObject({ name: z.literal("start_guidance"), scenario_id: Id }),
+  z.strictObject({ name: z.literal("select_step"), step_id: Id }),
+  z.strictObject({ name: z.literal("locate_item"), sku: Id }),
+  z.strictObject({ name: z.literal("show_visual"), visual_id: Id }),
+]);
+
 export const ActionSchema = z.discriminatedUnion("name", [
   z.strictObject({ name: z.literal("start_guidance"), scenario_id: Id }),
   z.strictObject({ name: z.literal("select_step"), step_id: Id }),
@@ -98,6 +110,7 @@ export const ActionSchema = z.discriminatedUnion("name", [
   z.strictObject({ name: z.literal("request_camera") }),
   z.strictObject({ name: z.literal("capture_camera") }),
   z.strictObject({ name: z.literal("answer_emergency_question"), task_id: z.uuid(), question_id: z.enum(["situation", "people_count", "location"]) }),
+  z.strictObject({ name: z.literal("launch_tasks"), background: z.array(BackgroundActionSchema).min(1).max(3).refine((actions) => new Set(actions.map((item) => item.name)).size === actions.length), presentation: PresentationActionSchema.nullable() }),
 ]);
 export type Action = z.infer<typeof ActionSchema>;
 export type ActionName = Action["name"];
@@ -158,6 +171,9 @@ export function actionAllowed(action: Action, state: TurnState): boolean {
       return state.triage_available;
     case "suggest_sos":
       return true;
+    case "launch_tasks":
+      return action.background.every((task) => actionAllowed(task, state)) &&
+        (!action.presentation || actionAllowed(action.presentation, state));
     case "request_nearby_kits":
       return state.nearby_kits_available === true;
     case "show_visual":

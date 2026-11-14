@@ -1,6 +1,6 @@
 {
   "scenario_id": "arm_gash",
-  "version": "arm-gash-demo-v2",
+  "version": "arm-gash-demo-v3",
   "title": "Arm wound with bleeding",
   "status": "draft",
   "guided": true,
@@ -14,7 +14,7 @@
     {
       "step_id": "arm_gauze",
       "label": "Find sterile gauze",
-      "text": "Get sterile gauze from the bottom compartment. Look for its light, and tell me when you have it. If blood is spurting or flowing continuously, press on the wound with a clean cloth right now instead of waiting for gauze, and call 911. Would you like me to contact the team dispatcher?",
+      "text": "Get sterile gauze from the bottom compartment. Look for its light, and tell me when you have it. If blood is spurting or flowing continuously, press on the wound with a clean cloth right now instead of waiting for gauze, and call 911.",
       "item": "GAUZE",
       "image": "kits/layout-3slot-v1-bottom.svg",
       "next": ["arm_pressure"]

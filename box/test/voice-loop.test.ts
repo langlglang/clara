@@ -201,6 +201,17 @@ describe("voice loop", () => {
     await flush();
     expect(t.loop.status).toBe("listening");
   });
+  it("does not speak a multi-task panel twice after the session queues it", async () => {
+    const action: Action = { name: "launch_tasks", background: [{ name: "suggest_sos" }], presentation: { name: "select_step", step_id: "pressure" } };
+    const t = setup(async () => answer(action, "Press now.", true), true,
+      (_action, response, queue) => { void queue.say({ text: response.reply, wav: Buffer.from(response.speech!.data_base64, "base64") }); });
+    t.loop.start();
+    await flush();
+    t.listener.clip();
+    await flush();
+    expect(t.actions).toEqual([action]);
+    expect(t.speaker.lines.map((line) => `${line.kind}:${line.value}`)).toEqual(["wav:server-voice"]);
+  });
 
   it("plays the server's WAV for a clarifying reply and keeps the mic paused until it ends", async () => {
     const t = setup(async () => answer({ name: "locate_item", sku: "gauze" }, "The gauze is lit.", true));

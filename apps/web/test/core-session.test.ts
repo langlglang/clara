@@ -60,4 +60,17 @@ describe("Core Clara session context", () => {
     expect(book.prepare(box_id, request()).state.recent_turns).toEqual([]);
     emergency.stop();
   });
+  it("records each requested background task from one turn separately", () => {
+    const network = createNetwork();
+    network.seedDemo();
+    const emergency = createEmergencyWorker({ network, emit: () => {} });
+    const book = createCoreSessionBook(network, emergency, () => Date.parse(at));
+    const first = request();
+    const prepared = book.prepare(box_id, { ...first, state: { ...first.state, pulse_available: true } });
+    book.finish(box_id, prepared, { schema_version: VOICE_TURN_VERSION, client_turn_id: first.client_turn_id,
+      heard: "Start dispatch and check my pulse while showing scissors", reply: "Scissors location", answered_by: "model", reason: null, speech: null,
+      action: { name: "launch_tasks", background: [{ name: "suggest_sos" }, { name: "read_pulse" }], presentation: { name: "locate_item", sku: "SCISSORS" } } });
+    expect(book.prepare(box_id, request()).state.core_context?.actions.map((action) => action.name)).toEqual(["suggest_sos", "read_pulse", "locate_item"]);
+    emergency.stop();
+  });
 });

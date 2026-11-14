@@ -52,6 +52,16 @@ describe("replyJsonSchema", () => {
     expect(replyJsonSchema(offered)).not.toMatchObject({ minimum: expect.anything() });
     expect(JSON.stringify(replyJsonSchema(offered))).not.toMatch(/"(?:minimum|maximum)"/);
   });
+  it("bounds a multi-task turn to offered, distinct background tools and one offered presentation", () => {
+    const offered = { ...state, pulse_available: true, guided_scenarios: [{ scenario_id: "arm_gash", label: "Arm wound", start_step_id: "arm_gauze" }] };
+    const parse = (background: unknown[], presentation: unknown) => replyZodSchema(offered).safeParse({ transcript: "help", reply: "", action: { name: "launch_tasks", background, presentation } }).success;
+    expect(named("launch_tasks", offered)).toBeDefined();
+    expect(parse([{ name: "suggest_sos" }, { name: "read_pulse" }], { name: "start_guidance", scenario_id: "arm_gash" })).toBe(true);
+    expect(parse([{ name: "suggest_sos" }, { name: "suggest_sos" }], null)).toBe(false);
+    expect(parse([{ name: "request_camera" }], null)).toBe(false);
+    expect(parse([{ name: "suggest_sos" }], { name: "start_guidance", scenario_id: "unoffered" })).toBe(false);
+    expect(parse([{ name: "suggest_sos" }], { name: "read_pulse" })).toBe(false);
+  });
 
   it("is strict at every level", () => {
     const schema = replyJsonSchema(state) as { additionalProperties: boolean; required: string[] };

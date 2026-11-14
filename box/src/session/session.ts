@@ -379,10 +379,10 @@ export class BoxSession {
     return true;
   }
 
-  goTo(stepId: string, source: Source, wav?: Buffer): boolean {
+  goTo(stepId: string, source: Source, wav?: Buffer, preserveSpeech = false): boolean {
     const intents = this.engine.goTo(stepId, source);
     if (!intents) return false;
-    this.apply(intents, true, wav);
+    this.apply(intents, true, wav, preserveSpeech);
     return true;
   }
 
@@ -451,7 +451,6 @@ export class BoxSession {
     }
     this.board((b) => b.buzz("alert"));
     this.o.cue?.("sos");
-    this.o.speech?.stopAll();
     this.say(this.L.sosOpened, undefined, false);
     this.publish();
   }
@@ -634,7 +633,7 @@ export class BoxSession {
    * Carries out a model action, only if `actionAllowed` against the box's own current state. Returns false
    * (and does nothing) otherwise.
    */
-  applyAction(action: Action, source: Source = "voice", response?: TurnResponse): boolean {
+  applyAction(action: Action, source: Source = "voice", response?: TurnResponse, preserveSpeech = false): boolean {
     const state = this.turnState();
     if (!state || !actionAllowed(action, state)) {
       this.log(`action ${action.name} refused: not allowed in the current state`);
@@ -651,7 +650,7 @@ export class BoxSession {
           return false;
         }
         const wav = response?.speech ? Buffer.from(response.speech.data_base64, "base64") : undefined;
-        return this.goTo(action.step_id, source, wav);
+        return this.goTo(action.step_id, source, wav, preserveSpeech);
       }
       case "start_guidance": {
         const guide = this.scenarios.find((scenario) => scenario.scenario_id === action.scenario_id);
@@ -660,7 +659,7 @@ export class BoxSession {
           (guide.scenario_id === "minor_cut" && !minorCutVisualAllowed(response.heard ?? "")) ||
           !this.sameHeardReport(response) || response.reply !== first.text) return false;
         const wav = response.speech ? Buffer.from(response.speech.data_base64, "base64") : undefined;
-        return this.switchScenario(action.scenario_id, source, wav);
+        return this.switchScenario(action.scenario_id, source, wav, preserveSpeech);
       }
       case "ask_clarifying": {
         const question = this.engine.scenario.questions.find((q) => q.question_id === action.question_id);
@@ -728,6 +727,27 @@ export class BoxSession {
       case "suggest_sos":
         this.requestSos(source);
         return true;
+      case "launch_tasks": {
+        // Dispatch starts first. Other tasks stay independent, so one failed device does not block guidance.
+        const tasks = [...action.background].sort((a, b) => Number(b.name === "suggest_sos") - Number(a.name === "suggest_sos"));
+        let started = false;
+        for (const task of tasks) {
+          if (!this.applyAction(task, source, response)) continue;
+          started = true;
+          if (task.name === "read_pulse") this.o.speech?.say({ text: this.L.pulseStarting }).catch(() => {});
+          if (task.name === "request_camera") this.o.speech?.say({ text: this.L.cameraStarting }).catch(() => {});
+        }
+        if (action.presentation) {
+          const shown = this.applyAction(action.presentation, source, response, true);
+          if (shown && (action.presentation.name === "locate_item" || action.presentation.name === "show_visual") && response?.reply) {
+            const wav = response.speech ? Buffer.from(response.speech.data_base64, "base64") : undefined;
+            this.o.speech?.say(wav ? { text: response.reply, wav } : { text: response.reply }).catch(() => {});
+          }
+          if (!shown) this.o.speech?.say({ text: this.L.presentationFailed }).catch(() => {});
+          return started || shown;
+        }
+        return started;
+      }
       case "request_nearby_kits":
         return this.askNearby(source);
       case "answer_emergency_question": {
@@ -788,7 +808,7 @@ export class BoxSession {
   }
 
   /** Switches to another loaded scenario and starts it at its first step. False when unknown or already current. */
-  switchScenario(scenarioId: string, source: Source, wav?: Buffer): boolean {
+  switchScenario(scenarioId: string, source: Source, wav?: Buffer, preserveSpeech = false): boolean {
     const next = this.scenarios.find((s) => s.scenario_id === scenarioId);
     if (!next) return false;
     this.ensureSession();
@@ -797,7 +817,10 @@ export class BoxSession {
       this.engine = this.makeEngine(next);
     } else if (this.engine.started) return false;
     this.log(`scenario: ${next.scenario_id} (${source})`);
-    this.apply(this.engine.start(source), true, wav);
+    this.apply(this.engine.start(source), true, wav, preserveSpeech);
+    if (next.scenario_id === "arm_gash" && !this.sos && !this.countdown) {
+      this.o.speech?.say({ text: this.L.dispatchOffer }).catch(() => {});
+    }
     return true;
   }
 
@@ -1063,7 +1086,7 @@ export class BoxSession {
     if (!this.active) this.beginSession();
   }
 
-  private apply(intents: StepIntent[], speakStep = true, wav?: Buffer): void {
+  private apply(intents: StepIntent[], speakStep = true, wav?: Buffer, preserveSpeech = false): void {
     for (const intent of intents) {
       switch (intent.kind) {
         case "show":
@@ -1084,7 +1107,7 @@ export class BoxSession {
             } : null,
             source_label: null,
           };
-          if (speakStep) this.speakStep(intent.step, wav);
+          if (speakStep) this.speakStep(intent.step, wav, preserveSpeech);
           if (intent.step.coach?.kind === "cpr") this.coach.start(intent.step.step_id, intent.step.coach.bpm);
           else this.coach.stop();
           break;
@@ -1150,8 +1173,8 @@ export class BoxSession {
     }).catch((error: unknown) => this.log(`board: ${(error as Error)?.message ?? "failed"}`));
   }
 
-  private speakStep(step: { text: string; audio?: Record<string, string> | undefined }, wav?: Buffer): void {
-    this.o.speech?.stopAll();
+  private speakStep(step: { text: string; audio?: Record<string, string> | undefined }, wav?: Buffer, preserveSpeech = false): void {
+    if (!preserveSpeech) this.o.speech?.stopAll();
     this.caption = step.text;
     if (wav) {
       this.o.speech?.say({ text: step.text, wav }).catch(() => {});

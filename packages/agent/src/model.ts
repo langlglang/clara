@@ -90,6 +90,7 @@ export function createKeywordStubModel(): ReplyModel {
       const step = turn.allowed_steps.find((s) => [...tokens(s.label)].some((w) => heard.has(w)));
       const entry = !turn.current_step && /\b(blood|bleed|bleeding|wound)\b/i.test(said) ? turn.allowed_steps[0] : undefined;
       const sos = /\b(911|sos|emergency|dying|not breathing|unconscious|unresponsive)\b/i.test(said) ||
+        /\b(call|contact|start|launch|send)\b.{0,25}\b(dispatch|dispatcher)\b/i.test(said) ||
         (turn.current_step === "arm_gauze" && /\b(yes|yeah|please|do it)\b/i.test(said) && /\b(call|contact|dispatcher)\b/i.test(said));
       const item = /\b(where|find|locate|grab|get)\b/i.test(said)
         ? turn.manifest.find((m) => m.on_hand > 0 && [...tokens(m.name)].some((w) => heard.has(w)))
@@ -105,7 +106,18 @@ export function createKeywordStubModel(): ReplyModel {
         ? turn.allowed_steps.find((s) => s.step_id !== turn.current_step)
         : step ?? entry;
       const relevantQuestion = /\b(blood|bleed|bleeding|wound|injured|hurt|pain)\b/i.test(said) && turn.current_step;
-      const action = sos
+      const presentation = !turn.guided_active && guide
+        ? { name: "start_guidance", scenario_id: guide.scenario_id }
+        : item
+          ? { name: "locate_item", sku: item.sku }
+          : visual
+            ? { name: "show_visual", visual_id: visual.visual_id }
+            : step
+              ? { name: "select_step", step_id: step.step_id }
+              : null;
+      const action = sos && presentation
+        ? { name: "launch_tasks", background: [{ name: "suggest_sos" }], presentation }
+        : sos
         ? { name: "suggest_sos" }
         : pulse
           ? { name: "read_pulse" }

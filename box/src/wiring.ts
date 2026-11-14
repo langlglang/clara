@@ -118,7 +118,7 @@ export async function loadVoiceLoop(o: {
       },
       onAction: (action: Action, response: TurnResponse) => {
         const accepted = session.applyAction(action, "voice", response);
-        if (accepted && (action.name === "select_step" || action.name === "start_guidance")) session.remember("clara", response.reply);
+        if (accepted && (action.name === "select_step" || action.name === "start_guidance" || action.name === "launch_tasks")) session.remember("clara", response.reply);
         return accepted;
       },
       ...(o.speaker ? { playCue: (name: CueName) => o.speech.muted ? Promise.resolve() : o.speaker!.playCue(name) } : {}),
@@ -133,8 +133,8 @@ export async function loadVoiceLoop(o: {
           return;
         }
         if (event.type !== "turn") return;
-        if (event.action?.name !== "select_step" && event.action?.name !== "start_guidance") session.remember("clara", event.reply);
-        if (event.action?.name !== "select_step" && event.action?.name !== "start_guidance" && event.reply) session.showCaption(event.reply, !event.action);
+        if (event.action?.name !== "select_step" && event.action?.name !== "start_guidance" && event.action?.name !== "launch_tasks") session.remember("clara", event.reply);
+        if (event.action?.name !== "select_step" && event.action?.name !== "start_guidance" && event.action?.name !== "launch_tasks" && event.reply) session.showCaption(event.reply, !event.action);
       },
       log: logger("voice", o.log),
     });

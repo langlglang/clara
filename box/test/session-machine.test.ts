@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CAMERA_INSPECT_VERSION, VOICE_TURN_VERSION, visualById, type Alert, type TurnResponse } from "@clara/contracts";
+import { CAMERA_INSPECT_VERSION, VOICE_TURN_VERSION, visualById, type Action, type Alert, type TurnResponse } from "@clara/contracts";
 import { FakeCloudLink } from "../src/cloud/fake.js";
 import { loadKit, loadScenario } from "../src/engine/index.js";
 import type { Board, BoardEvent, SpeechQueue } from "../src/ports.js";
@@ -133,7 +133,7 @@ describe("optional voice-paced guides", () => {
 
   it("lights gauze first, then shows pressure art only after a spoken completion", () => {
     const guide = loadScenario(content("scenarios/arm-gash.json"));
-    const { session, board } = setup(content(""), { scenarios: [guide] }, content("kits/clara-3slot-v1.json"));
+    const { session, board, speech } = setup(content(""), { scenarios: [guide] }, content("kits/clara-3slot-v1.json"));
     session.lidOpened();
     const id = uuid();
     session.heard("There is a gash on his arm", id);
@@ -141,6 +141,7 @@ describe("optional voice-paced guides", () => {
       action: { name: "start_guidance", scenario_id: "arm_gash" }, answered_by: "model", reason: null, speech: null };
     expect(session.applyAction(response.action!, "voice", response)).toBe(false);
     expect(session.applyAction(response.action!, "voice", { ...response, reply: guide.steps[0]!.text })).toBe(true);
+    expect(speech.said.at(-1)).toBe("Would you like me to contact the team dispatcher?");
     expect(session.view().presentation?.image_url).toBe("/content/kits/layout-3slot-v1-bottom.svg");
     expect(board.calls).toContain("light 2");
     const pressure = guide.steps[1]!;
@@ -152,6 +153,47 @@ describe("optional voice-paced guides", () => {
     session.heard(ready.heard, ready.client_turn_id);
     expect(session.applyAction(ready.action!, "voice", ready)).toBe(true);
     expect(session.view().presentation?.image_url).toBe("/content/visuals/arm-pressure-v1.svg");
+  });
+  it("starts dispatch and presents the gauze guide from the same turn without cutting off its speech", () => {
+    const guide = loadScenario(content("scenarios/arm-gash.json"));
+    const { session, board, cloud, clock, speech } = setup(content(""), { scenarios: [guide] }, content("kits/clara-3slot-v1.json"));
+    session.lidOpened();
+    const id = uuid();
+    const words = "Start dispatch and help with this arm gash using gauze";
+    session.heard(words, id);
+    const action: Action = { name: "launch_tasks", background: [{ name: "suggest_sos" }], presentation: { name: "start_guidance", scenario_id: "arm_gash" } };
+    const response: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: id, heard: words, reply: guide.steps[0]!.text,
+      action, answered_by: "model", reason: null, speech: null };
+    const stops = speech.stops;
+    expect(session.applyAction(action, "voice", response)).toBe(true);
+    expect(speech.said.slice(-2)).toEqual([expect.stringContaining("starting the dispatch request"), guide.steps[0]!.text]);
+    expect(speech.said.join(" ")).not.toContain("Would you like me to contact the team dispatcher?");
+    expect(speech.stops).toBe(stops + 1);
+    expect(session.view().presentation?.image_url).toBe("/content/kits/layout-3slot-v1-bottom.svg");
+    expect(board.calls).toContain("light 2");
+    clock.advance(5_000);
+    expect(cloud.types().filter((type) => type === "sos.opened")).toHaveLength(1);
+    expect(speech.stops).toBe(stops + 1);
+    cloud.push({ type: "dispatcher.call_status", incident_id: "inc-1", session_id: session.sessionId!, state: "placed" });
+    expect(speech.said.at(-1)).toContain("call request to the team dispatcher was accepted");
+    expect(session.view().presentation?.image_url).toBe("/content/kits/layout-3slot-v1-bottom.svg");
+  });
+  it("starts two independent background tasks while keeping one guide on screen", () => {
+    let reads = 0;
+    const reader = { read: () => { reads++; return new Promise<PulseObservation | null>(() => {}); } } as unknown as PulseReader;
+    const guide = loadScenario(content("scenarios/arm-gash.json"));
+    const { session, speech } = setup(content(""), { scenarios: [guide], pulseReader: reader }, content("kits/clara-3slot-v1.json"));
+    session.lidOpened();
+    const id = uuid();
+    const words = "Start dispatch, check my pulse, and help with this arm gash";
+    session.heard(words, id);
+    const action: Action = { name: "launch_tasks", background: [{ name: "read_pulse" }, { name: "suggest_sos" }], presentation: { name: "start_guidance", scenario_id: "arm_gash" } };
+    const response: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: id, heard: words,
+      reply: guide.steps[0]!.text, action, answered_by: "model", reason: null, speech: null };
+    expect(session.applyAction(action, "voice", response)).toBe(true);
+    expect(reads).toBe(1);
+    expect(speech.said.slice(-3)).toEqual([expect.stringContaining("starting the dispatch request"), "I'm reading the pulse sensor now.", guide.steps[0]!.text]);
+    expect(session.view().presentation?.image_url).toBe("/content/kits/layout-3slot-v1-bottom.svg");
   });
 });
 

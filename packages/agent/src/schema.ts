@@ -51,6 +51,13 @@ export function replyJsonSchema(state: TurnState): Record<string, unknown> {
   if (triage) variants.push(obj("start_triage"), obj("assess_patient", { observations: { type: "object", additionalProperties: false, required: ["patient", "walks", "breathing", "breathes_after_airway", "breathing_over_30", "circulation_ok", "follows_commands"], properties: { patient: { type: "integer" }, walks: { type: ["boolean", "null"] }, breathing: { type: ["boolean", "null"] }, breathes_after_airway: { type: ["boolean", "null"] }, breathing_over_30: { type: ["boolean", "null"] }, circulation_ok: { type: ["boolean", "null"] }, follows_commands: { type: ["boolean", "null"] } } } }));
   if (pendingEmergencyQuestion) variants.push(obj("answer_emergency_question", { task_id: { type: "string", enum: [pendingEmergencyQuestion.task_id] }, question_id: { type: "string", enum: [pendingEmergencyQuestion.question_id] } }));
   if (nearbyKits) variants.push(obj("request_nearby_kits"));
+  const presentationNames = new Set(["select_step", "start_guidance", "locate_item", "show_visual"]);
+  const presentation = variants.filter((variant) => presentationNames.has(String((variant as { properties?: { name?: { enum?: string[] } } }).properties?.name?.enum?.[0])));
+  const background = [obj("suggest_sos"), ...(pulseAvailable ? [obj("read_pulse")] : []), ...(cameraAvailable ? [obj("request_camera")] : [])];
+  if (presentation.length || background.length > 1) variants.push(obj("launch_tasks", {
+    background: { type: "array", items: { anyOf: background }, minItems: 1, maxItems: 3 },
+    presentation: { anyOf: [{ type: "null" }, ...presentation] },
+  }));
   variants.push(obj("suggest_sos"));
   return {
     type: "object",
@@ -62,7 +69,7 @@ export function replyJsonSchema(state: TurnState): Record<string, unknown> {
         type: "string",
         description: `What Clara says aloud: usually one sentence of about twenty words or less, under ${MAX_REPLY - 50} characters. Empty with select_step.`,
       },
-      action: state.camera_answer_pending ? { type: "null" } : { anyOf: variants, description: "At most one action, chosen only from the options offered." },
+      action: state.camera_answer_pending ? { type: "null" } : { anyOf: variants, description: "One offered action or launch_tasks with distinct background tasks and one offered presentation." },
     },
   };
 }
@@ -90,6 +97,19 @@ export function replyZodSchema(state: TurnState) {
   if (triage) variants.push(z.strictObject({ name: z.literal("start_triage") }), z.strictObject({ name: z.literal("assess_patient"), observations: TriageObservationsSchema }));
   if (pendingEmergencyQuestion) variants.push(z.strictObject({ name: z.literal("answer_emergency_question"), task_id: z.literal(pendingEmergencyQuestion.task_id), question_id: z.literal(pendingEmergencyQuestion.question_id) }));
   if (nearbyKits) variants.push(z.strictObject({ name: z.literal("request_nearby_kits") }));
+  const presentation: z.ZodType[] = [];
+  if (stepIds.length) presentation.push(z.strictObject({ name: z.literal("select_step"), step_id: oneOf(stepIds) }));
+  if (guideIds.length) presentation.push(z.strictObject({ name: z.literal("start_guidance"), scenario_id: oneOf(guideIds) }));
+  if (skus.length) presentation.push(z.strictObject({ name: z.literal("locate_item"), sku: oneOf(skus) }));
+  if (visualIds.length) presentation.push(z.strictObject({ name: z.literal("show_visual"), visual_id: oneOf(visualIds) }));
+  const background: z.ZodType[] = [z.strictObject({ name: z.literal("suggest_sos") })];
+  if (pulseAvailable) background.push(z.strictObject({ name: z.literal("read_pulse") }));
+  if (cameraAvailable) background.push(z.strictObject({ name: z.literal("request_camera") }));
+  if (presentation.length || background.length > 1) variants.push(z.strictObject({
+    name: z.literal("launch_tasks"),
+    background: z.array(z.union(background as [z.ZodType, ...z.ZodType[]])).min(1).max(3).refine((actions) => new Set(actions.map((item) => (item as { name: string }).name)).size === actions.length),
+    presentation: (presentation.length ? z.union(presentation as [z.ZodType, ...z.ZodType[]]) : z.never()).nullable(),
+  }));
   variants.push(z.strictObject({ name: z.literal("suggest_sos") }));
   const action = (variants.length === 1 ? variants[0]! : z.union(variants as [z.ZodType, z.ZodType, ...z.ZodType[]])).pipe(ActionSchema);
   return z.strictObject({

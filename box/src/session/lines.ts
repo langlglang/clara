@@ -5,11 +5,15 @@ import type { GpsFix } from "../location/gps.js";
  * only from the checked scenario, and who is coming only from comingLine().
  */
 export const LINES = {
-  countdown: (_seconds: number) => "Starting SOS. I can keep helping while the call is prepared.",
+  countdown: (_seconds: number) => "I'm starting the dispatch request. I'll keep helping you here.",
   cancelled: "SOS cancelled.",
   sosOpened: "SOS is active. I'll keep helping here and ask if the dispatcher needs anything from you.",
   callPlaced: "The call request to the team dispatcher was accepted. I'll keep helping you here.",
   callFailed: "I couldn't place a call to the team dispatcher. Please call emergency services directly from a phone.",
+  dispatchOffer: "Would you like me to contact the team dispatcher?",
+  pulseStarting: "I'm reading the pulse sensor now.",
+  cameraStarting: "I'm taking a photo now.",
+  presentationFailed: "I couldn't show that information. Ask me to try again.",
   noVoice: "Voice is not available right now. The SOS button remains on screen.",
   itemMissing: (name: string | null) => `${name ?? "That item"} is not in this box.`,
   endOfSteps: "That was the last step. The SOS button stays on screen.",
@@ -29,6 +33,10 @@ export const LINES_ES: { [K in keyof typeof LINES]: (typeof LINES)[K] extends (.
   sosOpened: "El SOS está activo. Seguiré ayudándote y preguntaré si el operador necesita algún dato.",
   callPlaced: "Se aceptó la solicitud de llamada al operador del equipo. Seguiré ayudándote aquí.",
   callFailed: "No pude llamar al operador del equipo. Llama directamente a los servicios de emergencia desde un teléfono.",
+  dispatchOffer: "¿Quieres que contacte al operador del equipo?",
+  pulseStarting: "Estoy leyendo el sensor de pulso ahora.",
+  cameraStarting: "Estoy tomando una foto ahora.",
+  presentationFailed: "No pude mostrar esa información. Pídeme que lo intente de nuevo.",
   noVoice: "La voz no está disponible ahora. El botón SOS sigue en pantalla.",
   itemMissing: (name: string | null) => `${name ?? "Ese material"} no está en esta caja.`,
   endOfSteps: "Ese era el último paso. El botón SOS sigue en pantalla.",

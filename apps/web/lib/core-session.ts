@@ -60,9 +60,13 @@ export function createCoreSessionBook(network: Network, emergency: EmergencyWork
       if (response.reply) session.turns.push({ from: "clara", words: response.reply });
       session.turns = session.turns.slice(-12);
       const action = response.action;
-      if (action && actionAllowed(action, request.state) && ["locate_item", "show_visual", "suggest_sos", "read_pulse", "request_camera", "capture_camera"].includes(action.name)) {
-        const id = action.name === "locate_item" ? action.sku : action.name === "show_visual" ? action.visual_id : null;
-        session.actions.push({ name: action.name as ActionRecord["name"], id, status: "requested", at: new Date(now()).toISOString() });
+      if (action && actionAllowed(action, request.state)) {
+        const launched = action.name === "launch_tasks" ? [...action.background, ...(action.presentation ? [action.presentation] : [])] : [action];
+        for (const task of launched) {
+          if (!["locate_item", "show_visual", "suggest_sos", "read_pulse", "request_camera", "capture_camera"].includes(task.name)) continue;
+          const id = task.name === "locate_item" ? task.sku : task.name === "show_visual" ? task.visual_id : null;
+          session.actions.push({ name: task.name as ActionRecord["name"], id, status: "requested", at: new Date(now()).toISOString() });
+        }
         session.actions = session.actions.slice(-6);
       }
       session.replies.set(request.client_turn_id, response);

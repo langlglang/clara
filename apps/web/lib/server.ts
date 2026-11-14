@@ -6,6 +6,7 @@ import { DEMO_BOXES, createNetwork, randomIds, type MaintainerAlert, type Networ
 import { createRideBook, type Ride, type RideBook, type RideChange, type VehicleKind } from "./rides";
 import { createCallBook, type CallBook } from "./calls";
 import { createDemo911, type Demo911 } from "./demo911";
+import { createAutoSupply } from "./autoSupply";
 import { ridePushListener, wireAlertPushes } from "./notify";
 import { createPushBook, resolveVapid, type PushBook, type PushSender, type VapidEnv } from "./push";
 import { createTextBook, photonConfig, wireTexts, type PhotonConfig, type PhotonEnv, type TextBook } from "./photon";
@@ -206,6 +207,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const calls = createCallBook({ network, rides, twilio, baseUrl: publicBaseUrl(env), ...(options.fetch ? { fetch: options.fetch } : {}) });
   if (snap) calls.importState(snap.calls);
   const demo911 = createDemo911({ network, twilio, number: env.CLARA_DEMO_911_NUMBER, timers: options.timers !== false, ...(options.fetch ? { fetch: options.fetch } : {}) });
+  // Demo assumption: a guided step that uses a kit item counts as one used (see lib/autoSupply.ts).
+  const autoSupply = createAutoSupply({ network, scenarios });
   const photon = photonConfig(env);
   const texts = createTextBook({ network, rides, photon, ...(options.fetch ? { fetch: options.fetch } : {}) });
   // Other books are saved under `extra` once they expose exportState/importState (duck-typed, so adding one is enough).
@@ -311,6 +314,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       emergency.stop();
       core.clear();
       demo911.stop();
+      autoSupply.stop();
     },
   };
 }

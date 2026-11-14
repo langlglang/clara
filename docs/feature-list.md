@@ -53,7 +53,7 @@ Someone opens the box → the mic becomes available without automatically contac
 22. **Second language** (Claude speaks freely only in languages a teammate checked; elsewhere fixed recorded lines).
 23. **First-aid voice exam.** Simulated panicked bystanders, an Opus grader, results (including failures) in the README.
 24. **Approved answers** to common questions; below a match threshold, Clara asks for clarification or says it does not know.
-25. **Pulse sensor (demo implemented in code; on-finger reference check pending).** A fresh MAX30102 sample window can yield an ESP32 pulse estimate; the Pi shows a number only for a valid-quality result, otherwise "unavailable." A numeric result is not yet verified against an independent reference. It cannot select treatment. Scene-report/dashboard integration remains proposed.
+25. **Pulse sensor (demo implemented in code; valid on-finger BPM pending).** A fresh MAX30102 sample window can yield an ESP32 pulse estimate; the Pi shows a number only for a valid-quality result, otherwise a specific unavailable or unstable-signal message. A direct on-finger check received 11 hardware reports, all `suspect`; raw optical sampling and USB were confirmed, but no numeric BPM has been verified against an independent reference. It cannot select treatment. Scene-report/dashboard integration remains proposed.
 
 ## Stretch
 26. Ride matching for patient transport (one accept wins).

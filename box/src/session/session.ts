@@ -929,7 +929,11 @@ export class BoxSession {
       this.latestPulse = reading?.quality === "valid" && reading.bpm !== null ? reading : null;
       const text = this.latestPulse
         ? `The MAX30102 returned ${this.latestPulse.bpm} beats per minute at ${this.latestPulse.observedAt}.`
-        : "The pulse sensor did not return a usable reading.";
+        : reading?.quality === "suspect"
+          ? "The sensor detected a signal but could not get a stable pulse estimate. Hold your finger steady and try again."
+          : reading?.quality === "unavailable"
+            ? "The sensor did not detect enough signal. Check finger placement and try again."
+            : "The pulse sensor could not be read. Please try again.";
       this.queueCompletedTask({ kind: "reading", title: "Pulse sensor", body: text, image_url: null, item: null, source_label: "MAX30102 via ESP32" });
     }).catch(() => {
       if (this.lidOpen && this.sessionId === sessionId) this.queueCompletedTask({ kind: "status", title: "Pulse unavailable", body: "The pulse sensor could not be read.", image_url: null, item: null, source_label: "MAX30102 via ESP32" });
@@ -948,7 +952,7 @@ export class BoxSession {
     this.publish();
     void (async () => {
       const frame = await camera.captureOnce(sessionId, "cloud_interpretation", controller.signal);
-      if (!frame) return null;
+      if (!frame) { this.log("camera: capture unavailable"); return null; }
       try {
         return await inspect.call(this.o.cloud, {
           schema_version: CAMERA_INSPECT_VERSION,
@@ -964,6 +968,7 @@ export class BoxSession {
       }
     })().then((result) => {
       if (controller.signal.aborted || !this.lidOpen || this.sessionId !== sessionId) return;
+      this.log(`camera: cloud status ${result?.status ?? "not_sent"}`);
       const text = result?.status === "observed" && result.observation
         ? `${result.observation} ${result.limitation}`
         : "I couldn't make out enough from that photo. Please tell me what you see.";

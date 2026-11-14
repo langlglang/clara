@@ -7,7 +7,7 @@ import { ensureRuntime } from "../../../../../lib/server";
 export const dynamic = "force-dynamic";
 
 const MAX_JPEG_BYTES = 800_000;
-const INSPECT_DEADLINE_MS = 4_000;
+const INSPECT_DEADLINE_MS = 8_000;
 const MAX_BODY_BYTES = 1_200_000;
 const LIMITATION = "This is one camera frame. I may miss details; please describe what you see.";
 const used = new Map<string, number>();
@@ -63,11 +63,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (apiKey) observation = await createAnthropicVisionInspector(apiKey).inspect(request.image_base64, signal);
-  } catch {
+  } catch (error) {
     // A camera/model failure is unavailable, never a generated fallback observation.
+    console.warn("[camera] inspection unavailable", { reason: signal.aborted ? "timeout_or_cancelled" : "model_error", name: error instanceof Error ? error.name : "unknown" });
   } finally {
     jpeg.fill(0);
   }
+  if (!observation) console.info("[camera] no bounded visual features returned");
   const response: CameraInspectResponse = {
     schema_version: CAMERA_INSPECT_VERSION,
     task_id: request.task_id,

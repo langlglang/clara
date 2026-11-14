@@ -176,7 +176,7 @@ export class HttpCloudLink implements CloudLink {
   async inspectCamera(request: CameraInspectRequest, signal: AbortSignal): Promise<CameraInspectResponse> {
     if (this.closed) throw new CloudError("closed", "The cloud link is closed.");
     if (!this.o.token) throw new CloudError("unauthorized", "Camera upload needs a box token.");
-    const json = await withDeadline(this.clock, 6_000, (s) => this.request("POST", BOX_ROUTES.camera(this.o.boxId), request, s), signal);
+    const json = await withDeadline(this.clock, 10_000, (s) => this.request("POST", BOX_ROUTES.camera(this.o.boxId), request, s), signal);
     const parsed = CameraInspectResponseSchema.safeParse(json);
     if (!parsed.success || parsed.data.task_id !== request.task_id) throw new CloudError("bad_response", "Camera response was invalid.");
     return parsed.data;

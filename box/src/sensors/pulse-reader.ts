@@ -22,7 +22,6 @@ export class PulseReader {
   async read(signal: AbortSignal, timeoutMs = 20_000): Promise<PulseObservation | null> {
     if (this.board.simulated || this.active || signal.aborted || timeoutMs <= 0) return null;
     let accepting = false;
-    let unavailableCount = 0;
     let latest: PulseObservation | null = null;
     let finish!: (value: PulseObservation | null) => void;
     const result = new Promise<PulseObservation | null>((resolve) => { finish = resolve; });
@@ -37,7 +36,7 @@ export class PulseReader {
         source: "MAX30102 via ESP32",
         sequence: event.seq,
       };
-      if (valid || (event.quality === "unavailable" && ++unavailableCount >= 2)) finish(latest);
+      if (valid) finish(latest);
     };
     const timer = setTimeout(() => finish(latest), Math.min(timeoutMs, 20_000));
     const cancel = () => finish(null);

@@ -111,6 +111,16 @@ describe("background sensor tasks", () => {
     expect(session.view().presentation).toMatchObject({ kind: "reading", title: "Pulse sensor", body: expect.stringContaining("72 beats per minute") });
   });
 
+  it("describes an unstable hardware signal without inventing a pulse number", async () => {
+    const reader = { read: async () => ({ bpm: null, quality: "suspect", observedAt: "2026-11-13T20:00:00.000Z", source: "MAX30102 via ESP32", sequence: 45 }) } as unknown as PulseReader;
+    const { session } = setup(undefined, { pulseReader: reader });
+    session.lidOpened();
+    expect(session.applyAction({ name: "read_pulse" })).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(session.view().presentation?.body).toContain("could not get a stable pulse estimate");
+    expect(session.view().presentation?.body).not.toMatch(/\d+ beats per minute/);
+  });
+
   it("does not offer cloud camera without a credential and requires the exact one-time voice consent", async () => {
     let active: BoxSession | null = null;
     const frame = Buffer.concat([Buffer.from([0xff, 0xd8]), Buffer.alloc(128), Buffer.from([0xff, 0xd9])]);

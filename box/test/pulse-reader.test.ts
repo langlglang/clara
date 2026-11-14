@@ -23,9 +23,11 @@ describe("PulseReader", () => {
     const pending = reader.read(new AbortController().signal, 100);
     await Promise.resolve();
     h.send({ t: "pulse", bpm: null, quality: "suspect", seq: 2 });
-    h.send({ t: "pulse", bpm: 73, quality: "valid", seq: 3 });
+    h.send({ t: "pulse", bpm: null, quality: "unavailable", seq: 3 });
+    h.send({ t: "pulse", bpm: null, quality: "unavailable", seq: 4 });
+    h.send({ t: "pulse", bpm: 73, quality: "valid", seq: 5 });
     const result = await pending;
-    expect(result).toMatchObject({ bpm: 73, quality: "valid", source: "MAX30102 via ESP32", sequence: 3 });
+    expect(result).toMatchObject({ bpm: 73, quality: "valid", source: "MAX30102 via ESP32", sequence: 5 });
     expect(Date.parse(result!.observedAt)).toBeGreaterThan(0);
     expect(h.counts()).toEqual({ started: 1, stopped: 1 });
   });
@@ -33,7 +35,7 @@ describe("PulseReader", () => {
   it("returns unavailable without a number when no finger is present", async () => {
     const h = fakeBoard();
     const reader = new PulseReader(h.board);
-    const pending = reader.read(new AbortController().signal, 100);
+    const pending = reader.read(new AbortController().signal, 20);
     await Promise.resolve();
     h.send({ t: "pulse", bpm: null, quality: "unavailable", seq: 1 });
     h.send({ t: "pulse", bpm: null, quality: "unavailable", seq: 2 });

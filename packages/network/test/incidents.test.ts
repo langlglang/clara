@@ -267,3 +267,27 @@ describe("incidents", () => {
     expect(seen.length).toBe(n);
   });
 });
+
+describe("box location from its own GPS", () => {
+  const beat = (h: Harness, gps: { latitude: number; longitude: number; observed_at: string; accuracy_m: number | null } | undefined, at = h.at()) =>
+    h.net.ingest(batch(boxEvents("box-room-101", null).make("box.heartbeat", at, { battery_pct: 80, online_parts: ["gps"], ...(gps ? { gps } : {}) })));
+  const where = (h: Harness) => h.net.kitMap().find((p) => p.box_id === "box-room-101")!.location;
+
+  it("moves the box to a recent, good fix and ignores jitter, stale and rough fixes", () => {
+    const h = harness();
+    expect(where(h)).toEqual({ lat: 40.3536, lng: -74.66 });
+    // A few metres off: GPS jitter, the box stays put.
+    beat(h, { latitude: 40.3537, longitude: -74.6601, observed_at: h.at(), accuracy_m: 6 });
+    expect(where(h)).toEqual({ lat: 40.3536, lng: -74.66 });
+    // Too rough, or too old: ignored.
+    beat(h, { latitude: 40.3431, longitude: -74.6551, observed_at: h.at(), accuracy_m: 450 });
+    beat(h, { latitude: 40.3431, longitude: -74.6551, observed_at: new Date(h.now.ms - 20 * 60_000).toISOString(), accuracy_m: null });
+    expect(where(h)).toEqual({ lat: 40.3536, lng: -74.66 });
+    // The box is really ~1.2 km away: it moves, and the map, matching and ETAs follow it.
+    beat(h, { latitude: 40.3431, longitude: -74.6551, observed_at: h.at(), accuracy_m: 8 });
+    expect(where(h)).toEqual({ lat: 40.3431, lng: -74.6551 });
+    // A heartbeat without a fix leaves it where it is.
+    beat(h, undefined);
+    expect(where(h)).toEqual({ lat: 40.3431, lng: -74.6551 });
+  });
+});

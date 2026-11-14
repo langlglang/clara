@@ -5,6 +5,10 @@
 import { EventBatchSchema, type BoxEvent, type Incident } from "@clara/contracts";
 import { alertNearbyBoxes, closeHowForBoxClosed, closeIncident, startIncident, type AlertContext, type Push } from "./alerts.js";
 import { refreshBox } from "./boxes.js";
+import { haversineKm } from "./matching.js";
+
+/** A box's GPS fix moves it on the map only when it is farther than this from its stored location (GPS jitter). */
+export const BOX_MOVE_KM = 0.05;
 import type { IncidentEntry } from "./store.js";
 import type { MaintainerAlert } from "./supplies.js";
 
@@ -47,7 +51,15 @@ export function ingest(ctx: AlertContext, input: unknown, now: Date): IngestResu
 
     // Any event is contact with the box; the heartbeat also carries the battery.
     entry.box.last_seen_at = at;
-    if (event.type === "box.heartbeat") entry.box.battery_pct = event.battery_pct;
+    if (event.type === "box.heartbeat") {
+      entry.box.battery_pct = event.battery_pct;
+      // Follow the box's own GPS: a recent, good fix that is more than BOX_MOVE_KM from where we have it.
+      const fix = event.gps;
+      if (fix && (fix.accuracy_m === null || fix.accuracy_m <= 100) && Date.parse(event.occurred_at) - Date.parse(fix.observed_at) <= 10 * 60_000) {
+        const at = { lat: fix.latitude, lng: fix.longitude };
+        if (haversineKm(entry.box.location, at) > BOX_MOVE_KM) entry.box.location = at;
+      }
+    }
     if (event.type === "box.opened") entry.open_session_id = event.session_id;
     if (event.type === "box.closed") entry.open_session_id = null;
     ctx.store.putBox(entry);

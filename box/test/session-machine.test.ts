@@ -955,6 +955,24 @@ describe("BoxSession actions", () => {
     expect(speech.said.at(-1)).toMatch(/Voice is not available/);
   });
 
+  it("sends its GPS position with the heartbeat only when the fix is recent and accurate", () => {
+    let fix: { latitude: number; longitude: number; observedAt: number; accuracyM: number | null } | null = null;
+    const { session, cloud, clock } = setup(undefined, { location: { current: () => fix } });
+    const beats = () => cloud.events.filter((e) => e.type === "box.heartbeat") as Array<{ gps?: unknown }>;
+    session.startHeartbeat(30_000, () => ["gps"]);
+    expect(beats().at(-1)!.gps).toBeUndefined(); // no fix yet
+    fix = { latitude: 40.3431, longitude: -74.6551, observedAt: clock.now(), accuracyM: 8 };
+    clock.advance(30_000);
+    expect(beats().at(-1)!.gps).toEqual({ latitude: 40.3431, longitude: -74.6551, observed_at: new Date(fix.observedAt).toISOString(), accuracy_m: 8 });
+    fix = { ...fix, accuracyM: 400 }; // too rough to move a box
+    clock.advance(30_000);
+    expect(beats().at(-1)!.gps).toBeUndefined();
+    fix = { ...fix, accuracyM: null, observedAt: clock.now() - 6 * 60_000 }; // stale
+    clock.advance(30_000);
+    expect(beats().at(-1)!.gps).toBeUndefined();
+    session.close();
+  });
+
   it("sends a heartbeat on its interval", () => {
     const { session, cloud, clock } = setup();
     session.startHeartbeat(30_000, () => ["screen"]);

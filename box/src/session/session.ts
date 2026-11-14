@@ -893,10 +893,19 @@ export class BoxSession {
   startHeartbeat(intervalMs: number, parts: () => string[]): void {
     this.heartbeatCancel?.();
     const beat = () => {
-      this.emit("box.heartbeat", { battery_pct: null, online_parts: parts().slice(0, 20) });
+      const gps = this.heartbeatFix();
+      this.emit("box.heartbeat", { battery_pct: null, online_parts: parts().slice(0, 20), ...(gps ? { gps } : {}) });
       this.heartbeatCancel = this.clock.setTimeout(beat, intervalMs);
     };
     beat();
+  }
+
+  /** The GPS fix to send with a heartbeat: recent (5 min) and, when the receiver says, accurate to 100 m. */
+  private heartbeatFix(): { latitude: number; longitude: number; observed_at: string; accuracy_m: number | null } | null {
+    const fix = this.o.location?.current() ?? null;
+    if (!fix || this.clock.now() - fix.observedAt > 5 * 60_000) return null;
+    if (fix.accuracyM !== null && fix.accuracyM > 100) return null;
+    return { latitude: fix.latitude, longitude: fix.longitude, observed_at: new Date(fix.observedAt).toISOString(), accuracy_m: fix.accuracyM };
   }
 
   close(): void {

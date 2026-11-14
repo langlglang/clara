@@ -19,9 +19,20 @@ const base = {
 
 export const SourceSchema = z.enum(["touch", "voice", "device", "system"]);
 
+/** The box's own GPS fix, sent with its heartbeat when it has a recent, good one. */
+export const BoxFixSchema = z.strictObject({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  observed_at: z.iso.datetime(),
+  /** Horizontal accuracy in metres when the receiver reports one. */
+  accuracy_m: z.number().min(0).max(100_000).nullable(),
+});
+export type BoxFix = z.infer<typeof BoxFixSchema>;
+
 /**
  * Where the SOS is, sent once when it opens: the box's GPS fix when it has a recent one (with its configured address
- * too, if set), else the configured address. GPS leaves the box only here, for the emergency call.
+ * too, if set), else the configured address. The box's own position also goes out with its heartbeat (see
+ * BoxFixSchema), so the network's map and alert radius follow where the box really is.
  */
 export const EmergencyLocationSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("configured_address"), address: z.string().trim().min(1).max(200) }),
@@ -41,7 +52,7 @@ export type EmergencyQuestionId = z.infer<typeof EmergencyQuestionIdSchema>;
 export const BoxEventSchema = z.discriminatedUnion("type", [
   z.strictObject({ ...base, type: z.literal("box.opened") }),
   z.strictObject({ ...base, type: z.literal("box.closed") }),
-  z.strictObject({ ...base, type: z.literal("box.heartbeat"), battery_pct: z.number().min(0).max(100).nullable(), online_parts: z.array(z.string()).max(20) }),
+  z.strictObject({ ...base, type: z.literal("box.heartbeat"), battery_pct: z.number().min(0).max(100).nullable(), online_parts: z.array(z.string()).max(20), gps: BoxFixSchema.optional() }),
   z.strictObject({ ...base, type: z.literal("scenario.started"), scenario_id: Id, source: SourceSchema }),
   z.strictObject({ ...base, type: z.literal("step.shown"), scenario_id: Id, step_id: Id, source: SourceSchema }),
   z.strictObject({ ...base, type: z.literal("step.done"), scenario_id: Id, step_id: Id, source: SourceSchema }),

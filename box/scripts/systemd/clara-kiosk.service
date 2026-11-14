@@ -1,0 +1,66 @@
+# Adapted from Sophi (github.com/mzhao1599/sophi), devices/pi/systemd/sophi-screen.service.
+# The box screen: Chromium full screen inside cage (a Wayland kiosk compositor), showing the box service's
+# page on http://localhost:8787. Independent of clara-box.service: neither waits for the other.
+[Unit]
+Description=Clara box screen (cage and Chromium, full screen)
+Wants=dbus.socket systemd-logind.service
+After=dbus.socket systemd-logind.service systemd-user-sessions.service
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+ConditionPathExists=/dev/tty1
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# Its own user, so the browser can't read the box service's files.
+User=clara-kiosk
+Group=clara-kiosk
+SupplementaryGroups=video render input
+PAMName=clara-kiosk
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=tty1
+UtmpMode=user
+Environment=CLARA_SCREEN_URL=http://localhost:8787/
+# The browser profile lives in memory and is fresh on each start (no restore bubble, no first-run screens).
+RuntimeDirectory=clara-kiosk
+RuntimeDirectoryMode=0700
+Environment=HOME=/run/clara-kiosk
+Environment=XDG_CONFIG_HOME=/run/clara-kiosk/config
+Environment=XDG_CACHE_HOME=/run/clara-kiosk/cache
+# The wait script holds until a screen is connected and the page answers, then execs cage + Chromium.
+# --use-fake-ui-for-media-stream is NOT set: the screen never gets the mic or camera; the box service owns them.
+ExecStart=/opt/clara/clara-kiosk-wait.sh /usr/bin/cage -d -s -- /usr/bin/chromium \
+  --kiosk \
+  --ozone-platform=wayland \
+  --user-data-dir=/run/clara-kiosk/chromium \
+  --no-first-run \
+  --no-default-browser-check \
+  --noerrdialogs \
+  --disable-infobars \
+  --hide-crash-restore-bubble \
+  --deny-permission-prompts \
+  --password-store=basic \
+  --disable-features=Translate \
+  --disable-pinch \
+  --overscroll-history-navigation=0 \
+  --force-device-scale-factor=1 \
+  --disable-background-networking \
+  --disable-component-update \
+  ${CLARA_SCREEN_URL}
+Restart=always
+RestartSec=5
+RestartSteps=6
+RestartMaxDelaySec=120
+# Under memory pressure the browser goes before the box service.
+OOMScoreAdjust=800
+CPUWeight=50
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

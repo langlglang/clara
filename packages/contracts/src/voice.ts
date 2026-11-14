@@ -1,0 +1,116 @@
+// Voice turn contract. First drafted for Clara before the event and adapted from the Sophi device turn contract (github.com/mzhao1599/sophi, packages/contracts).
+import { z } from "zod";
+
+/**
+ * Voice turn API, `voice-turn/0.1` (proposed). The box sends one turn per utterance; the server answers
+ * with what it heard, a short reply and at most one action. See docs/contracts.md and docs/voice.md.
+ */
+export const VOICE_TURN_VERSION = "voice-turn/0.1";
+
+/** A clip is 16 kHz mono 16-bit PCM WAV: 32 bytes per millisecond. */
+export const CLIP_SAMPLE_RATE = 16_000;
+export const CLIP_MAX_MS = 15_000;
+export const CLIP_MIN_MS = 300;
+/** 15 s of audio is 480 KB of samples; base64 adds a third. */
+export const CLIP_MAX_BASE64_CHARS = Math.ceil(((CLIP_MAX_MS * 32 + 1_024) * 4) / 3) + 4;
+export const MAX_TEXT_INPUT = 500;
+export const MAX_REPLY = 250;
+export const MAX_HEARD = 1_000;
+
+const Id = z.string().min(1).max(64).regex(/^[A-Za-z0-9_.:-]+$/);
+
+export const TurnInputSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("audio"),
+    mime: z.literal("audio/wav"),
+    data_base64: z.string().min(1).max(CLIP_MAX_BASE64_CHARS),
+    duration_ms: z.number().int().min(0).max(CLIP_MAX_MS),
+  }),
+  z.strictObject({ type: z.literal("text"), text: z.string().trim().min(1).max(MAX_TEXT_INPUT) }),
+]);
+export type TurnInput = z.infer<typeof TurnInputSchema>;
+
+export const AllowedStepSchema = z.strictObject({ step_id: Id, label: z.string().min(1).max(120) });
+export const QuestionSchema = z.strictObject({ question_id: Id, text: z.string().min(1).max(200) });
+export const ManifestItemSchema = z.strictObject({ sku: Id, name: z.string().min(1).max(80), on_hand: z.number().int().min(0).max(999) });
+export const RecentTurnSchema = z.strictObject({ from: z.enum(["person", "clara"]), words: z.string().max(MAX_HEARD) });
+
+export const TurnStateSchema = z.strictObject({
+  scenario_id: Id.nullable(),
+  step_id: Id.nullable(),
+  allowed_steps: z.array(AllowedStepSchema).max(20),
+  questions: z.array(QuestionSchema).max(20),
+  manifest: z.array(ManifestItemSchema).max(40),
+  triage_available: z.boolean(),
+  recent_turns: z.array(RecentTurnSchema).max(12),
+});
+export type TurnState = z.infer<typeof TurnStateSchema>;
+
+export const TurnRequestSchema = z.strictObject({
+  schema_version: z.literal(VOICE_TURN_VERSION),
+  client_turn_id: z.uuid(),
+  session_id: z.uuid(),
+  /** BCP 47 language code, for example "en" or "ar". */
+  language: z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/),
+  input: TurnInputSchema,
+  state: TurnStateSchema,
+});
+export type TurnRequest = z.infer<typeof TurnRequestSchema>;
+
+export const UsageItemSchema = z.strictObject({ sku: Id, qty: z.number().int().min(1).max(99) });
+
+export const ActionSchema = z.discriminatedUnion("name", [
+  z.strictObject({ name: z.literal("select_step"), step_id: Id }),
+  z.strictObject({ name: z.literal("ask_clarifying"), question_id: Id }),
+  z.strictObject({ name: z.literal("locate_item"), sku: Id }),
+  z.strictObject({ name: z.literal("record_usage"), items: z.array(UsageItemSchema).min(1).max(10) }),
+  z.strictObject({ name: z.literal("start_triage") }),
+  z.strictObject({ name: z.literal("suggest_sos") }),
+]);
+export type Action = z.infer<typeof ActionSchema>;
+export type ActionName = Action["name"];
+
+export const FixedReasonSchema = z.enum(["not_heard", "no_model", "timeout", "model_error", "invalid_reply", "refusal"]);
+export type FixedReason = z.infer<typeof FixedReasonSchema>;
+
+export const SpeechSchema = z.strictObject({
+  mime: z.literal("audio/wav"),
+  sample_rate: z.number().int().positive(),
+  data_base64: z.string().min(1),
+});
+
+export const TurnResponseSchema = z.strictObject({
+  schema_version: z.literal(VOICE_TURN_VERSION),
+  client_turn_id: z.uuid(),
+  heard: z.string().max(MAX_HEARD).nullable(),
+  reply: z.string().max(MAX_REPLY + 200),
+  action: ActionSchema.nullable(),
+  answered_by: z.enum(["model", "fixed"]),
+  reason: FixedReasonSchema.nullable(),
+  speech: SpeechSchema.nullable(),
+});
+export type TurnResponse = z.infer<typeof TurnResponseSchema>;
+
+/**
+ * True when every ID the action names was offered in `state`. Both sides call this: the server before
+ * answering, the box before acting.
+ */
+export function actionAllowed(action: Action, state: TurnState): boolean {
+  switch (action.name) {
+    case "select_step":
+      return state.allowed_steps.some((s) => s.step_id === action.step_id);
+    case "ask_clarifying":
+      return state.questions.some((q) => q.question_id === action.question_id);
+    case "locate_item":
+      return state.manifest.some((m) => m.sku === action.sku);
+    case "record_usage":
+      return action.items.every((item) => {
+        const entry = state.manifest.find((m) => m.sku === item.sku);
+        return entry !== undefined && item.qty <= entry.on_hand;
+      });
+    case "start_triage":
+      return state.triage_available;
+    case "suggest_sos":
+      return true;
+  }
+}

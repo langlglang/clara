@@ -1,0 +1,7 @@
+# Adapted from Sophi (github.com/mzhao1599/sophi), devices/pi/systemd/sophi-screen.pam.
+# Installed as /etc/pam.d/clara-kiosk. clara-kiosk.service (PAMName=) opens a login session with it so logind
+# hands cage the display and touch. cage's documented minimal stack; the clara-kiosk user has no password.
+auth     required pam_unix.so nullok
+account  required pam_unix.so
+session  required pam_unix.so
+session  required pam_systemd.so

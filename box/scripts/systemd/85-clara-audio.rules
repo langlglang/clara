@@ -1,0 +1,6 @@
+# Adapted from Sophi (github.com/mzhao1599/sophi), devices/pi/systemd/85-walker-audio.rules.
+# Gives the USB soundbar the fixed ALSA card name "Speaker", so CLARA_ALSA_PLAYBACK=default:CARD=Speaker keeps
+# working whichever USB port it is in. Installed as /etc/udev/rules.d/85-clara-audio.rules.
+# 5a47:5858 is the soundbar Sophi used (same model as Clara's, B086JXJ1LF). Confirm with `lsusb` on the box;
+# another speaker has another id: change both values.
+SUBSYSTEM=="sound", ACTION=="add", KERNEL=="card*", ATTRS{idVendor}=="5a47", ATTRS{idProduct}=="5858", ATTR{id}="Speaker"

@@ -1,0 +1,7 @@
+{
+  "items": [
+    { "sku": "sku_a", "name": "Test item A", "slot": "A1", "led": 0, "on_hand": 2, "low_at": 1 },
+    { "sku": "sku_b", "name": "Test item B", "slot": "B1", "led": 1, "on_hand": 5, "low_at": 0 },
+    { "sku": "sku_empty", "name": "Test empty item", "slot": "C1", "led": 2, "on_hand": 0, "low_at": 0 }
+  ]
+}

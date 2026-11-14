@@ -1,0 +1,17 @@
+{
+  "scenario_id": "test_fixture",
+  "version": "0.0.0-test",
+  "title": "TEST FIXTURE (not medical content)",
+  "status": "draft",
+  "sources": ["https://example.org/test-fixture-not-medical-content"],
+  "start": "s1",
+  "steps": [
+    { "step_id": "s1", "label": "Test step one", "text": "TEST PLACEHOLDER 1. Not medical content.", "next": ["s2", "s3"], "item": "sku_a", "image": "images/test-one.png", "audio": { "en": "audio/en/test-one.wav" } },
+    { "step_id": "s2", "label": "Test step two", "text": "TEST PLACEHOLDER 2. Not medical content.", "next": ["s4"], "timer": "pressure" },
+    { "step_id": "s3", "label": "Test SOS step", "text": "TEST PLACEHOLDER 3. Not medical content.", "next": ["s4"], "sos": true },
+    { "step_id": "s4", "label": "Test missing item", "text": "TEST PLACEHOLDER 4. Not medical content.", "next": ["s5"], "item": "sku_empty" },
+    { "step_id": "s5", "label": "Test end", "text": "TEST PLACEHOLDER 5. Not medical content.", "next": [] }
+  ],
+  "questions": [{ "question_id": "q1", "text": "TEST QUESTION placeholder?" }],
+  "triage_available": false
+}

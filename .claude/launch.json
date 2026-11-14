@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "clara-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "web"],
+      "port": 3000,
+      "env": { "CLARA_MODEL": "stub", "CLARA_TURN_BUDGET_MS": "6500" }
+    }
+  ]
+}

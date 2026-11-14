@@ -1,0 +1,222 @@
+# Interface and message contracts — proposal v0.7
+
+**No schemas or implementations exist yet.** This document is the source for initial schemas in future `contracts/`. JSON examples are illustrative; generate JSON Schema/Protobuf and compatibility tests before integration. All clocks use UTC RFC 3339 plus a monotonic `uptime_ms` where ordering matters. IDs are opaque UUIDs. `null` is never a fake reading.
+
+## Versioning and transport
+
+- Envelope `schema_version: "2.4"` uses semantic major/minor. The 2.0 pre-implementation draft removed an unsupported required battery field from lid events and used the selected raw optical sensor; 2.1 defines optional fields for a future ESP32-derived pulse result; 2.2 adds optional compartment-light mapping and commands; 2.3 adds the optional handoff card; 2.4 adds optional box-network events (`box.status`, `network.alert`, `network.alert.ack`, `network.alert.clear`) and anti-theft events (`mount.removed`/`mount.restored`, `alarm.set.request`, `alarm.status`, `security.flag`) and running supply-ledger events (`supply.expected_use`, `supply.usage_proposed`, `supply.usage_confirmed`, `supply.usage_unconfirmed`, `supply.restocked`). No existing field changes meaning. Add optional fields or new event types in a minor version; change meaning, required fields, enum semantics or units in a major version. Producers send their supported major/minor in `hello`; consumers reject unknown major and ignore unknown optional fields in same major. Older consumers ignore unsupported optional events and leave unsupported effects off.
+- ESP32-WROOM-32 board ↔ Pi: USB cable to the board's USB-to-UART bridge, exposing a Linux serial device. Demo framing is newline-delimited JSON, maximum 1 KiB per message, 115200 baud, with event ID, per-boot sequence and `boot_id`; ACK/retry for state changes. Discover by `/dev/serial/by-id/` where available, not a hard-coded `ttyUSB0`. The link may carry a current sensor result for the active session; do not log that payload. If later moving to a noisy or longer link, add a length/CRC frame in a new contract version.
+- Pi ↔ cloud: TLS 1.3 WebSocket for streaming events and HTTPS for signed bundles/manifest. Device identity uses per-device credentials with rotation; no secret in firmware logs.
+- Screen ↔ agent: ordered session event stream. Companion ↔ directory: HTTPS; location records include verification and revision. No direct companion-to-box control in v0.1.
+- Every command with side effects has `request_id` idempotency and a deadline. ACK means received, not completed. Completion has its own result event.
+
+## Common envelope
+
+```json
+{
+  "schema_version": "2.4", "event_id": "uuid", "session_id": "uuid",
+  "source": "screen", "type": "utterance.final", "seq": 42,
+  "occurred_at": "2026-11-02T20:00:00Z", "uptime_ms": 30012,
+  "trace_id": "uuid", "payload": {}
+}
+```
+
+Required: version, event ID, source, type, sequence, occurrence time, payload. `session_id` is optional only for boot/heartbeat, `box.status`, network alerts, mount events and `security.flag`. Reject oversize payloads, malformed UTF-8, duplicate event IDs, and timestamp/sequence conflicts; log a minimal error without media. Authenticate source before trusting identifiers.
+
+## Event catalog
+
+| Producer → consumer | Type | Required payload | Meaning |
+| --- | --- | --- | --- |
+| MCU → screen | `lid.opened` / `lid.closed` | `boot_id`, `switch_state` | Debounced physical state; not proof that screen is ready. No battery voltage is inferred. |
+| MCU → screen | `power.health` | `fault_codes[]`; `battery_mv?`, `external_power?` only with installed measurement hardware | Optional telemetry. Omit unknown readings; do not emit from a controller with no voltage-sense path. |
+| Screen → cloud | `session.hello` | `box_id`, `capabilities[]`, `protocol_hash`, `manifest_rev`, `consent_grants[]` | Start/restore authenticated session |
+| Screen → cloud | `utterance.partial` / `utterance.final` | `turn_id`, `text`, `language`, `confidence` | Partial cannot advance a demo step |
+| Screen → cloud | `user.action` | `action` (`next`, `back`, `repeat`, `stop`, `sos`), `step_package_id?` | Local action takes effect before network send |
+| Screen → cloud | `media.capture` | `consent_id`, `frame_id`, `captured_at`, `purpose`, `sha256` | Single frame metadata; media goes via scoped upload |
+| Screen → cloud | `location.observation` | `consent_id`, `latitude`, `longitude`, `accuracy_m`, `observed_at`, `source_model` | Optional fresh GT-U7 fix; never replaces verified site address and is omitted without a fix or consent |
+| Screen → MCU | `sensor.read.request` | `request_id`, `device_id`, `measurement_type`, `deadline_ms` | Starts a fresh wired sensor observation; ACK is not a result |
+| MCU → screen | `sensor.reading` | `request_id`, `device_id`, `model`, `sample_seq`, `sampled_uptime_ms`, `measurements[]`, `quality` | New I²C result; Pi validates and adds UTC receive time |
+| Screen → MCU | `light.set.request` | `request_id`, `step_package_id`, `kit_revision`, `manifest_rev`, `slot_id`, `channel`, `lease_ms`, `deadline_ms` | Set exactly one verified compartment output; Pi resolves slot to channel before sending |
+| Screen → MCU | `light.clear.request` | `request_id`, `reason`, `deadline_ms` | Turn all compartment outputs off |
+| MCU → screen | `light.status` | `request_id`, `state`, `channel?`, `lease_expires_uptime_ms?` | Completion or rejection; `on` means output asserted, not verified light emission |
+| Cloud → screen | `step.present` | `step_package` below | Atomic synchronized presentation |
+| Cloud → screen | `agent.status` | `state`, `turn_id`, `message?` | Working/offline/failed; never implies emergency call success |
+| Screen → cloud | `turn.cancel` | `turn_id`, `reason` | Late tool/agent results must be ignored |
+| Screen/app → cloud | `emergency.status` | `state`, `source`, `observed_at` | Demo only: `mock_opened` or `mock_failed`; no real call state |
+| Cloud/local builder → screen | `handoff.present` | `handoff_card` below | Show a source-labeled fictional context card after local user action; never send it to a remote person in the demo |
+| MCU → screen | `mount.removed` / `mount.restored` | `boot_id`, `switch_state` | Debounced bracket switch state (2.4). Not proof of theft; the Pi decides whether a session was active. |
+| Screen → MCU | `alarm.set.request` | `request_id`, `pattern` (`open_chime`, `alert_chime`, `off`), `lease_ms`, `deadline_ms` | Drive the buzzer and light-flash pattern for a bounded lease (proposed maximum 10 s) (2.4). `off` always wins. |
+| MCU → screen | `alarm.status` | `request_id`, `state` (`on`, `off`, `rejected`) | Output asserted, not proof of sound (2.4) |
+| Screen → cloud | `box.status` | `box_id`, `site_id`, `state` (`ready`, `in_use`, `low_supplies`), `manifest_rev`, `supply_summary[]`, `sent_at` | Heartbeat every 30 s and on change (2.4). Supply summary comes from the verified manifest. No health data, media or transcript. The registry, not the box, marks a silent box `offline`. |
+| Cloud → screen | `network.alert` | `incident_id`, `origin_box_id`, `site_id`, `origin_location`, `directions_id`, `need` (`bleeding_kit`, `general_kit`), `created_at`, `expires_at` | Sent to other boxes at the same site after the origin reports `mock_opened` (2.4). One per incident. Never contains a transcript, image, reading or handoff card. |
+| Screen → cloud | `network.alert.ack` | `incident_id`, `box_id`, `action` (`bringing_kit`, `dismissed`), `acted_at` | A local tap at the receiving box (2.4). The origin shows it as unconfirmed; it is not proof that anyone is coming. |
+| Cloud → screen | `network.alert.clear` | `incident_id`, `reason` (`origin_closed`, `origin_stop`, `staff_clear`, `expired`) | Receiving boxes remove the card and stop the alert pattern (2.4) |
+| Screen → cloud | `security.flag` | `flag_id`, `box_id`, `kind` (`open_no_emergency`, `item_missing_no_emergency`, `mount_removed_no_session`, `return_overdue`), `opened_at?`, `duration_s?`, `snapshot_ref?`, `raised_at` | For the maintainer view only (2.4). `snapshot_ref` points to the local encrypted frame; the frame itself is fetched only by the maintainer role. Wording is "needs check," never "theft." |
+| Screen (local) | `supply.expected_use` | `session_id`, `step_id`, `sku`, `qty`, `manifest_rev` | Logged when a scenario step that uses an item is shown (2.4). A hint for the end-of-session screen, not a count change. |
+| Screen (local) | `supply.usage_proposed` | `usage_id`, `session_id`, `manifest_rev`, `items[]` (`sku`, `qty`), `source` (`agent`, `expected_use`, `manual`) | Proposed list awaiting a confirm tap (2.4). An `agent` proposal is a user report mapped by the model; unknown SKUs or quantities above stock are rejected before display. |
+| Screen → cloud | `supply.usage_confirmed` | `usage_id`, `box_id`, `manifest_rev`, `items[]`, `confirmed_at` | The only event that lowers stock (2.4). Written after a local confirm tap. Synced to the hub through the outbox. |
+| Screen → cloud | `supply.usage_unconfirmed` | `usage_id`, `box_id`, `manifest_rev`, `slot_ids[]`, `recorded_at` | No confirmation before session end (2.4). Affected slots become unverified; no count change. |
+| Screen → cloud | `supply.restocked` | `box_id`, `manifest_rev`, `items[]` (`sku`, `slot_id`, `qty`), `verified_by`, `verified_at` | A teammate's restock check (2.4). Resets counts and clears unverified slots. |
+
+## Core objects
+
+```json
+{
+  "step_package_id": "uuid", "protocol_id": "adult_severe_bleeding",
+  "protocol_version": "demo-v1", "bundle_hash": "sha256:...",
+  "step_id": "demo-step-id", "variant_id": "plain_en_US",
+  "text": "Versioned demo text from bundle",
+  "speech_script": "Versioned demo speech from bundle",
+  "visual": {"asset_id": "demo-asset-id", "sha256": "sha256:...", "alt_text": "Asset description"},
+  "item": {"sku": "DRESSING-01", "manifest_rev": 3, "slot_id": "B2", "verified": true},
+  "requires_ack": true, "mock_sos_banner": true
+}
+```
+
+The renderer verifies bundle hash and step/asset linkage before display. `item` may be absent; if `verified` is false, do not say the item is present. Speech, text and visual share one package ID and step cursor.
+
+The Pi may issue `light.set.request` only after the active package's `item` passes SKU, manifest, layout and slot-light-map checks. The command's `channel` is a physical output index, not model-generated text. The ESP32 accepts a channel only in its configured range and a short lease (proposed maximum 30 seconds), clears all other outputs first, and rejects a closed-lid, stale-sequence or expired-deadline command. Renew only while the same step remains active. The Pi sends `light.clear.request` on a step change, interruption, Stop or mock SOS; the ESP32 also clears on lid close, USB disconnect, reset or lease expiry. A failed/late status cannot make the screen claim a light is on.
+
+Example `light.set.request` payload for a proposed six-slot tray: `{"request_id":"uuid","step_package_id":"uuid","kit_revision":3,"manifest_rev":3,"slot_id":"B2","channel":3,"lease_ms":15000,"deadline_ms":500}`. `light.status.state` is `on`, `off`, or `rejected`; `on` confirms only the asserted GPIO output. A repeated request ID returns the same result rather than extending the lease; a renewal has a new request ID.
+
+Proposed `handoff_card` for a **fictional** on-box demo:
+
+```json
+{
+  "handoff_card_id": "uuid", "session_id": "uuid",
+  "created_at": "2026-11-03T20:00:03Z", "recipient_scope": "in_person",
+  "site_id": "fictional-public-site", "mock_sos_state": "mock_opened",
+  "facts": [{"source_type": "user_report", "source_event_id": "uuid",
+             "observed_at": "2026-11-03T20:00:01Z",
+             "text": "Volunteer reported a fictional bleeding scenario",
+             "certainty": "reported_unconfirmed"}],
+  "steps": [{"step_id": "demo-step-id", "state": "shown",
+             "observed_at": "2026-11-03T20:00:02Z"}],
+  "open_questions": ["Has the volunteer found the dressing?"],
+  "consent_scope": "on_box"
+}
+```
+
+Allowed fact sources are `user_report`, `camera_observation`, `sensor_reading`, and `local_action`; each needs an event ID and time. Camera/sensor entries require separate sharing consent and must preserve uncertainty, device and freshness. Step state is `shown` or `acknowledged`, never inferred as completed. The validator rejects a card with unsupported claims, unconsented observations, a mismatched session, or a claimed real SOS outcome. If the agent is unavailable, the Pi constructs a minimal card from local events. The on-box card expires with the session and stays behind a user-invoked Show handoff control.
+
+```json
+{
+  "request_id": "uuid", "device_id": "opaque-id", "model": "MAX30102-breakout",
+  "sample_seq": 81, "sampled_uptime_ms": 30012,
+  "measurements": [{"type": "ppg_red_raw", "value": 40217, "unit": "count"},
+                   {"type": "ppg_ir_raw", "value": 48701, "unit": "count"}],
+  "received_at": "2026-11-02T20:00:02Z", "quality": "valid",
+  "provenance": {"transport": "ESP32-I2C-USB-serial", "adapter_version": "1.0", "source": "sensor_raw"},
+  "consent_id": "uuid"
+}
+```
+
+These numbers are illustrative schema fixtures, never runtime results. The selected MAX30102 emits raw optical samples; `measurement_type: "ppg_raw"` requests new red/IR samples. The breakout does **not** emit heart rate or SpO₂ directly. A future ESP32-derived `heart_rate` result uses `measurements: [{"type":"heart_rate","value":80,"unit":"bpm"}]`, `provenance.source: "derived"`, `algorithm_version`, `window_start_uptime_ms`, and `window_end_uptime_ms`. These window bounds use the ESP32 monotonic clock and must enclose enough fresh samples; no numeric bpm is displayed until that algorithm is checked. At runtime, `sensor.read` must obtain **new values from the wired board**. The ESP32 records when it receives the request in its monotonic uptime clock and returns only later board updates with new `sample_seq`; the Pi stamps `received_at` in UTC. Do not present that receive time as a precise physiological measurement time. A direct Pi I²C adapter uses the same logical fields and its own monotonic clock. Allowed `quality`: `valid`, `suspect`, `invalid`, `unavailable`; `valid` means fresh and well formed, **not medically accurate**. Never coerce missing fields to zero or replace a failed read with a fixture or generated value. The demo displays only fresh, valid results and does not use values to choose treatment steps. The overall UI identifies Clara as a demo; no per-reading warning badge is required.
+
+## Tool result and error contract
+
+```json
+{
+  "request_id": "uuid", "turn_id": "uuid", "status": "error",
+  "observed_at": "2026-11-02T20:00:03Z", "provenance": "inventory-service@1.0",
+  "error": {"code": "MANIFEST_STALE", "retryable": false, "message": "Slot verification expired"}
+}
+```
+
+Errors: `UNAUTHORIZED`, `CONSENT_REQUIRED`, `UNSUPPORTED_VERSION`, `TIMEOUT`, `DISCONNECTED`, `STALE_RESULT`, `INVALID_QUALITY`, `MANIFEST_STALE`, `PROTOCOL_UNAVAILABLE`, `INTERNAL`. User messages use safe mapped copy, not internal stack traces. A retry requires the same request ID for side effects or a new ID for a new observation; deadline and cancellation still apply.
+
+## Inventory and directory records
+
+```json
+{
+  "kit_model": "CL-DEMO-A", "kit_revision": 3, "box_id": "opaque-id",
+  "manifest_rev": 3, "layout_asset_id": "CL-DEMO-A-r3-top",
+  "verified_at": "2026-11-02T19:00:00Z", "verified_by": "authorized-restocker-id",
+  "items": [{"sku": "DRESSING-01", "lot": "lot-ref", "expiry": "2028-01-01", "slot_id": "B2", "quantity": 2, "state": "present"}],
+  "slot_lights": [{"slot_id": "B2", "channel": 3}]
+}
+```
+
+Each physical box is sealed/labeled with model and revision; restocker scans each slot, records lot/expiry, signs a manifest, and photographs layout. Runtime checks box ID + manifest revision + layout asset hash. After use or broken seal, mark affected items `unknown` until reverified. Never silently substitute a supply or slot across revisions. Directory records contain `site_id`, verified address/floor/landmark, accessibility/availability status, last inspection, and optional GNSS location with `accuracy_m` and age; stale availability is displayed as such.
+
+`slot_lights` is optional until LEDs are installed. Its channel numbers are local to the box and must be unique, within the ESP32's configured output count, and physically checked against each printed slot. The mapping is part of the versioned manifest and must change with any tray or wiring revision. If absent, mismatched, or unverified, the Pi sends no `light.set.request` and relies on the screen/printed labels.
+
+## Box network and anti-theft rules (2.4)
+
+`network.alert` is sent by deterministic Pi and backend code after `emergency.status: mock_opened`, never by the agent, a camera frame or a sensor value. It is idempotent by `incident_id`; a duplicate SOS tap keeps the same incident. Delivery and `network.alert.ack` are separate states, and the origin box never shows "sent" without a delivery record. A receiving box that already has an active session shows a banner instead of a full-screen card. Directions are referenced by `directions_id` from the verified site record; the agent may read them aloud but cannot generate a route. These box-to-box alerts are **not** responder alerts: they reach the team's own demo boxes, not people's phones, and do not use the later `responder-alert` contract.
+
+The ESP32 starts every buzzer output off, clears the alarm on lease expiry, lid close, USB disconnect or reset, and treats `off` as higher priority than any pattern. The open snapshot is a local file on the Pi referenced by `snapshot_ref`; it never travels in a session event, `media.capture`, `network.alert` or `handoff_card`. A snapshot or buzzer failure never delays `lid.opened` handling.
+
+## Voice turn API — `voice-turn/0.1` (proposed)
+
+A request/response HTTP contract between the box and the server, separate from the event envelope. Producer: `box/` (cloud client). Consumer: `server/` (`POST /v1/boxes/{box_id}/turns`). Shared zod schemas live in `packages/contracts`; the box and server import the same file, and `packages/contracts` tests cover both shapes. Design: [voice](voice.md).
+
+Request (JSON, at most 1.5 MB):
+
+```json
+{
+  "schema_version": "voice-turn/0.1", "client_turn_id": "uuid", "session_id": "uuid",
+  "language": "en",
+  "input": { "type": "audio", "mime": "audio/wav", "data_base64": "…", "duration_ms": 2400 },
+  "state": {
+    "scenario_id": "severe_bleeding", "step_id": "start",
+    "allowed_steps": [{ "step_id": "pressure", "label": "Press hard on the wound" }],
+    "questions": [{ "question_id": "where", "text": "Where is the bleeding?" }],
+    "manifest": [{ "sku": "GAUZE-01", "name": "gauze roll", "on_hand": 2 }],
+    "triage_available": true,
+    "recent_turns": [{ "from": "person", "words": "…" }, { "from": "clara", "words": "…" }]
+  }
+}
+```
+
+`input` is either audio (16 kHz mono 16-bit WAV, at most 15 s) or `{ "type": "text", "text": "…" }` (at most 500 characters, for the Talk-by-typing fallback and tests). `language` is a BCP 47 code the server passes to speech-to-text and text-to-speech.
+
+Response:
+
+```json
+{
+  "schema_version": "voice-turn/0.1", "client_turn_id": "uuid",
+  "heard": "my friend's leg is bleeding a lot",
+  "reply": "",
+  "action": { "name": "select_step", "step_id": "pressure" },
+  "answered_by": "model",
+  "reason": null,
+  "speech": null
+}
+```
+
+`action` is null or one of `select_step{step_id}`, `ask_clarifying{question_id}`, `locate_item{sku}`, `record_usage{items[{sku, qty}]}`, `start_triage`, `suggest_sos`. Every ID must come from the request's `state`; the server never returns an ID it was not given, and the box rejects one anyway. `answered_by` is `model` or `fixed`; with `fixed`, `reason` is one of `not_heard`, `no_model`, `timeout`, `model_error`, `invalid_reply`, `refusal`. `speech` is null or `{ "mime": "audio/wav", "sample_rate": 16000, "data_base64": "…" }`; it is null with `select_step` (the box plays the step's local audio) and whenever text-to-speech failed (the box speaks `reply` itself). `heard` is null when nothing was transcribed.
+
+Rules: the clip is never stored or logged on either side. A `select_step` changes the box's step only after the box checks the ID is in its own allowed list. `suggest_sos` never opens SOS; only a tap does. `record_usage` only proposes a usage list (see `supply.usage_proposed`). Compatibility tests must cover: an unknown `step_id`/`question_id`/`sku` rejected, empty allowed lists (the action is then not offered), text and audio inputs, a fixed reply with each `reason`, and a response with and without `speech`.
+
+## Responder alerts — separate later contract `responder-alert/0.1`
+
+**No responder alert producer, push service, real responder account or real emergency-contact integration exists in the demo.** The current 2.4 `emergency.status` states remain mock-only. The HackPrinceton responder preview is local seeded fiction and emits none of the messages below. This separate, future contract requires legal, dispatch, privacy and responder-program decisions before implementation.
+
+| Producer → consumer | Message | Required fields | Rule |
+| --- | --- | --- | --- |
+| Companion app → responder service | `responder.profile` | `responder_id`, `notification_opt_in`, `availability`, `training[]`, `location_consent`, `coarse_location?`, `last_seen_at` | Only an authenticated responder can change their own opt-in/availability; training has type, verification source/status and expiry. |
+| Authenticated SOS service → responder service | `alert.request` | `schema_version`, `request_id`, `incident_id`, `trigger_source`, `reported_need`, `site_id`, `public_site`, `created_at`, `expires_at` | Explicit human SOS or authorized dispatch only; never an agent/camera/sensor inference. Idempotent by incident and request ID. |
+| Responder service → selected companion apps | `alert.invitation` | `invitation_id`, `incident_id`, `requested_skill`, `coarse_area`, `expires_at` | Send only to opted-in, available, currently eligible nearby accounts; omit exact incident location and patient/media data. |
+| Responder app → responder service | `alert.response` | `request_id`, `invitation_id`, `action` (`accept` or `decline`), `responded_at` | Authenticate responder; reject expired/replayed invitations. Exact location is released only after authorized acceptance. |
+| Responder service → initiating UI | `alert.status` | `incident_id`, `state`, `observed_at`, `source` | `requested`, `delivered`, `accepted`, `arrived`, `expired`, `canceled`, or `failed`; each is evidence-scoped. `arrived` needs explicit verified check-in, not GPS proximity. |
+| Initiating UI → responder service | `handoff.share.request` | `request_id`, `incident_id`, `handoff_card_id`, `accepted_responder_id`, `sharing_authority`, `expires_at` | Share only after acceptance, authentication and consent/authority checks; never block the initial alert on card generation. |
+| Responder service → accepted responder app | `handoff.card` | `incident_id`, `handoff_card_id`, `facts[]`, `steps[]`, `open_questions[]`, `created_at`, `expires_at` | Minimum permitted context with source/time/uncertainty; no raw media by default; revoke on incident cancel/expiry. |
+
+Example future request, **never sent by the demo**:
+
+```json
+{
+  "schema_version": "responder-alert/0.1", "request_id": "uuid",
+  "incident_id": "uuid", "trigger_source": "human_sos",
+  "reported_need": "cpr_aed_assistance", "site_id": "public-site-id",
+  "public_site": true, "created_at": "2026-11-03T20:00:00Z",
+  "expires_at": "2026-11-03T20:05:00Z"
+}
+```
+
+The initiating UI must show emergency contact and responder alert as **separate** states. Opening a dialer, submitting a request, push delivery and volunteer acceptance are not proof of a completed 911 call or an arriving responder. A candidate with stale location, expired/unverified training, no opt-in, or an ineligible/private site receives no invitation. Expiry or cancellation revokes incident location and handoff access. Future compatibility tests must cover duplicate SOS, opt-out, false alarm/cancel, expired training, stale position, empty matches, push failure, no exact location or handoff before acceptance, forged accept, late accept, no sharing authority, revoked/expired card, and status claims without evidence. New message semantics require a new responder-alert version; they do not silently change demo envelope 2.4.
+
+## Integration acceptance
+
+Future demo contract tests must cover unknown major (including rejection of the earlier 1.x draft), optional minor field, duplicate/reordered events, MCU reboot sequence reset, lid events without battery telemetry, no invented battery voltage, raw optical sample type, derived-result provenance and window bounds, cancellation race, stale sensor, missing consent, stale/absent GPS fix, mismatched manifest/layout/light mapping, wrong or duplicate LED channel, lid-close/Stop/lease-expiry LED clear, offline reconnect, handoff source/consent filtering, unsupported handoff claims, SOS status ambiguity, duplicate network alert, network alert while offline, alert to a busy box, alert clear and expiry, stale heartbeat shown offline, ack shown as unconfirmed, mount bounce, alarm `off` priority and lease expiry, snapshot never present in session or network payloads, one flag per non-emergency open, supply proposals with unknown SKU or excess quantity rejected, no stock change without `supply.usage_confirmed`, unconfirmed sessions marking slots unverified, and restock clearing them. The ESP32 producer and Pi consumer must use the same 2.4 fixture when implemented; the screen/cloud sensor consumer must reject a purported chip-reported bpm from this breakout. No tests or producers exist yet.

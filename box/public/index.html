@@ -1,0 +1,107 @@
+<!doctype html>
+<!-- Clara box screen (800x480 kiosk), Field Kit theme (docs/design/field-kit.md). Plain HTML/CSS/JS, no build step. The server fills in the token. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=800, height=480, initial-scale=1">
+<meta name="screen-token" content="__SCREEN_TOKEN__">
+<title>Clara box</title>
+<link rel="stylesheet" href="/screen/assets/style.css">
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <span id="brand">CLARA</span>
+    <span id="box-name"></span>
+    <span id="tag-sim" class="tag sim" hidden>SIMULATION</span>
+    <span id="status" class="tag status"><i class="dot"></i><span id="status-text">ONLINE</span></span>
+    <span id="tag-link" class="tag lost" hidden><i class="dot"></i>SCREEN LOST THE BOX SERVICE</span>
+  </header>
+
+  <div id="banners">
+    <div id="coming" class="banner coming" hidden><i class="dot"></i><span id="coming-text"></span></div>
+    <div id="nearby-banner" class="banner nearby" hidden><b>EMERGENCY NEARBY</b><span id="nearby-banner-text"></span></div>
+    <div id="notice" class="banner notice" hidden><span id="notice-text"></span><button data-action="dismiss_notice" class="small">OK</button></div>
+  </div>
+
+  <main id="main">
+    <section id="idle" hidden>
+      <div class="lbl">FIRST-AID KIT · READY</div>
+      <h1>Clara</h1>
+      <p>Open the lid to start, or tap Start. Clara shows one step at a time.</p>
+      <button data-action="start" class="big strong">START</button>
+    </section>
+
+    <section id="guide" hidden>
+      <div id="words">
+        <div id="step-label" class="lbl"></div>
+        <div id="step-text"></div>
+        <div id="item" hidden>
+          <span id="slot"></span>
+          <span id="item-text"></span>
+          <span id="item-state"></span>
+        </div>
+        <div id="options"></div>
+        <div id="caption"></div>
+      </div>
+      <div id="picture"><img id="step-image" alt=""><div id="no-image">NO PICTURE</div></div>
+    </section>
+  </main>
+
+  <aside id="rail">
+    <button data-action="sos" id="sos-button" class="sos">SOS<small>SIMULATED 911</small></button>
+    <button data-action="multiple_injured" id="multi-button" class="multi">MULTIPLE INJURED</button>
+    <div id="tiles"></div>
+  </aside>
+
+  <footer id="controls">
+    <button data-action="back" id="back-button">BACK</button>
+    <button data-action="repeat" id="repeat-button">REPEAT</button>
+    <button data-action="next" id="next-button" class="strong">NEXT</button>
+    <button data-action="talk" id="talk-button" class="talk"><i class="dot"></i>TALK</button>
+  </footer>
+
+  <div id="usage" class="overlay" hidden>
+    <div class="card">
+      <div class="lbl">RESTOCK</div>
+      <h2>Used from the kit?</h2>
+      <ul id="usage-list"></ul>
+      <div class="row"><button data-action="confirm_usage" class="strong">CONFIRM</button><button data-action="dismiss_usage">NOT NOW</button></div>
+    </div>
+  </div>
+
+  <div id="countdown" class="overlay danger" hidden>
+    <div class="card center">
+      <div class="sim-strip">SIMULATION · NO REAL CALL IS MADE</div>
+      <h2>OPENING MOCK 911 CALL IN</h2>
+      <div id="countdown-number">5</div>
+      <button data-action="cancel_sos" class="big cancel">CANCEL</button>
+    </div>
+  </div>
+
+  <div id="call" class="overlay call" hidden>
+    <div class="card">
+      <div class="sim-strip">SIMULATION · NO REAL CALL IS MADE</div>
+      <div class="call-head"><h2>MOCK 911 CALL</h2><span id="call-time"></span></div>
+      <div class="lbl">WHAT TO SAY</div>
+      <ol id="coaching"></ol>
+      <div id="call-network"></div>
+      <div id="call-coming"></div>
+      <div class="row"><button data-action="hide_911" class="strong">BACK TO STEPS</button></div>
+    </div>
+  </div>
+
+  <div id="nearby-card" class="overlay alert" hidden>
+    <div class="alert-strip">EMERGENCY NEARBY</div>
+    <div class="card">
+      <h2 id="nearby-title"></h2>
+      <div class="lbl">DIRECTIONS</div>
+      <p id="nearby-directions"></p>
+      <p id="nearby-note"></p>
+      <div class="row"><button id="bringing-button" class="big primary">BRINGING THIS KIT</button><button id="nearby-dismiss" class="big">DISMISS</button></div>
+    </div>
+  </div>
+</div>
+<script src="/screen/assets/app.js"></script>
+</body>
+</html>

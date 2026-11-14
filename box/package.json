@@ -1,0 +1,16 @@
+{
+  "name": "@clara/box",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "sim": "tsx src/main.ts --sim",
+    "check": "tsx src/check/index.ts"
+  },
+  "dependencies": {
+    "@clara/contracts": "*",
+    "serialport": "^13.0.0",
+    "zod": "^4.6.0"
+  }
+}

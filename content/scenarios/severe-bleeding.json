@@ -1,0 +1,109 @@
+{
+  "scenario_id": "severe_bleeding",
+  "version": "draft-1",
+  "title": "Severe bleeding",
+  "status": "draft",
+  "sources": [
+    "https://www.stopthebleed.org/",
+    "https://www.redcross.org/take-a-class/resources/learn-first-aid/bleeding-life-threatening-external",
+    "https://cpr.heart.org/en/resuscitation-science/2024-first-aid-guidelines"
+  ],
+  "start": "start",
+  "steps": [
+    {
+      "step_id": "start",
+      "label": "Tell me what happened",
+      "text": "I'm Clara. I'll guide you step by step. Tell me what happened, or tap the injury below.",
+      "next": ["safety"]
+    },
+    {
+      "step_id": "safety",
+      "label": "Check it is safe and put on gloves",
+      "text": "First, make sure it is safe for you to go to them. Put on the gloves from the lit compartment.",
+      "item": "GLOVES",
+      "next": ["get_help"]
+    },
+    {
+      "step_id": "get_help",
+      "label": "Alert help now",
+      "text": "Heavy bleeding can be life-threatening. I'm alerting help now. If someone is with you, ask them to call for emergency help too.",
+      "sos": true,
+      "next": ["find_wound"]
+    },
+    {
+      "step_id": "find_wound",
+      "label": "Find where the blood is coming from",
+      "text": "Find where the blood is coming from. Open or cut away clothing so you can see the wound. Use the shears in the lit compartment.",
+      "item": "SHEARS",
+      "next": ["tourniquet", "pack_wound", "direct_pressure"]
+    },
+    {
+      "step_id": "tourniquet",
+      "label": "Arm or leg: apply the tourniquet",
+      "text": "On an arm or leg, use the tourniquet. Place it high on the limb, a hand's width above the wound, not on a joint. Pull the strap tight.",
+      "item": "TOURNIQUET",
+      "next": ["tighten"]
+    },
+    {
+      "step_id": "tighten",
+      "label": "Twist the rod until bleeding stops",
+      "text": "Twist the rod until the bleeding stops, then lock the rod in its clip. It will hurt. That is expected. Do not loosen it.",
+      "timer": "tourniquet",
+      "next": ["second_tourniquet", "keep_warm"]
+    },
+    {
+      "step_id": "second_tourniquet",
+      "label": "Still bleeding: add a second tourniquet",
+      "text": "If it is still bleeding, put the second tourniquet on just above the first one and tighten it the same way.",
+      "item": "TOURNIQUET",
+      "next": ["keep_warm"]
+    },
+    {
+      "step_id": "pack_wound",
+      "label": "Body, neck or groin: pack the wound",
+      "text": "If the wound is on the body, neck, armpit or groin, pack it. Push the gauze from the lit compartment deep into the wound until it is full.",
+      "item": "HEMOSTATIC_GAUZE",
+      "next": ["hold_pressure"]
+    },
+    {
+      "step_id": "direct_pressure",
+      "label": "Press hard on the wound",
+      "text": "Put gauze on the wound and press down hard with both hands, using your body weight.",
+      "item": "GAUZE",
+      "next": ["hold_pressure", "tourniquet"]
+    },
+    {
+      "step_id": "hold_pressure",
+      "label": "Keep pressing for 3 minutes",
+      "text": "Keep pressing hard with both hands for at least 3 minutes. Do not lift your hands to look.",
+      "timer": "pressure",
+      "next": ["bandage", "tourniquet"]
+    },
+    {
+      "step_id": "bandage",
+      "label": "Wrap the pressure bandage",
+      "text": "Wrap the pressure bandage tightly over the gauze to keep the pressure on.",
+      "item": "PRESSURE_BANDAGE",
+      "next": ["keep_warm"]
+    },
+    {
+      "step_id": "keep_warm",
+      "label": "Keep them warm and stay with them",
+      "text": "Cover them with the emergency blanket to keep them warm. Stay with them, keep them still, and watch their breathing.",
+      "item": "BLANKET",
+      "next": ["handoff"]
+    },
+    {
+      "step_id": "handoff",
+      "label": "Show the summary to whoever arrives",
+      "text": "When help arrives, show them this screen. It has what happened and when each step was done.",
+      "next": []
+    }
+  ],
+  "questions": [
+    { "question_id": "where", "text": "Where is the bleeding: an arm, a leg, or the body, neck or groin?" },
+    { "question_id": "still_bleeding", "text": "Is it still bleeding?" },
+    { "question_id": "awake", "text": "Are they awake and talking to you?" }
+  ],
+  "triage_available": true
+}

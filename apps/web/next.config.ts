@@ -1,0 +1,31 @@
+import type { NextConfig } from "next";
+
+const config: NextConfig = {
+  poweredByHeader: false,
+  devIndicators: false,
+  // Keep `next dev` from writing an AGENTS.md into apps/web (the repo root has the project one).
+  agentRules: false,
+  // The shared packages ship TypeScript source; Next compiles them with the app.
+  transpilePackages: ["@clara/contracts", "@clara/network", "@clara/agent"],
+  // The packages use NodeNext imports ("./alerts.js" for alerts.ts). Turbopack does not map those yet, so the app
+  // builds and runs with webpack (see package.json scripts), which does with extensionAlias.
+  webpack(config: { resolve: { extensionAlias?: Record<string, string[]> } }) {
+    config.resolve.extensionAlias = { ...config.resolve.extensionAlias, ".js": [".ts", ".tsx", ".js"] };
+    return config;
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // The companion app asks for the browser's location at sign-up; nothing asks for the mic or camera.
+          { key: "Permissions-Policy", value: "microphone=(), camera=(), geolocation=(self)" },
+        ],
+      },
+    ];
+  },
+};
+
+export default config;

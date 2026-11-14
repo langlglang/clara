@@ -1,0 +1,28 @@
+{
+  "scenario_id": "demo_bleeding",
+  "version": "placeholder-0",
+  "status": "PLACEHOLDER: structure only. Step text is not written yet and has not been checked against the sources. Write it from the sources below and have a teammate check every step before any demo.",
+  "sources": [
+    "https://www.redcross.org/take-a-class/resources/learn-first-aid/bleeding-life-threatening-external",
+    "https://www.stopthebleed.org/media/pkpnanvp/acs-stop-the-bleed-version-30-instructor-guide.pdf"
+  ],
+  "start": "start",
+  "steps": [
+    { "step_id": "start", "label": "Tell me what happened", "text": "Placeholder: opening line for a fictional bleeding scene.", "next": ["pressure", "tourniquet"] },
+    { "step_id": "pressure", "label": "Press hard on the bleeding wound", "text": "Placeholder: direct pressure step, to be written from the sources.", "next": ["packing", "tourniquet", "monitor"], "item": "GAUZE-01" },
+    { "step_id": "packing", "label": "Pack the wound with gauze", "text": "Placeholder: wound packing step, to be written from the sources.", "next": ["tourniquet", "monitor"], "item": "GAUZE-01" },
+    { "step_id": "tourniquet", "label": "Apply the tourniquet on the arm or leg", "text": "Placeholder: tourniquet step, to be written from the sources.", "next": ["monitor"], "item": "TQ-01" },
+    { "step_id": "monitor", "label": "Stay with them and keep watching", "text": "Placeholder: stay-with-them step, to be written from the sources.", "next": [] }
+  ],
+  "questions": [
+    { "question_id": "where", "text": "Where is the bleeding: an arm, a leg, or the body?" },
+    { "question_id": "stopping", "text": "Is the bleeding slowing down while you press?" }
+  ],
+  "manifest": [
+    { "sku": "GLOVES-01", "name": "gloves", "on_hand": 4, "slot": "A1" },
+    { "sku": "GAUZE-01", "name": "gauze roll", "on_hand": 2, "slot": "B1" },
+    { "sku": "DRESSING-01", "name": "pressure dressing", "on_hand": 2, "slot": "B2" },
+    { "sku": "TQ-01", "name": "tourniquet", "on_hand": 1, "slot": "C1" }
+  ],
+  "triage_available": false
+}

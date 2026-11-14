@@ -1,0 +1,11 @@
+# Camera and sensor handoff — proposed demo
+
+Clara uses fictional scenarios and consenting volunteers; it will never be used on a patient. The user aims the movable camera and explicitly captures one frame for a demo question. The frame returns an observation with time and uncertainty. A failed or blurry frame produces “cannot tell,” not a guessed finding.
+
+The selected [InnoMaker USB camera](https://www.amazon.com/dp/B0H26BG9RP) still needs a movable mount and a close-up focus test. The `sensor.read` tool **must read real connected hardware**. The team selected an [Amazon MAX30102 breakout pack](https://www.amazon.com/dp/B07ZQNC8XP), wired by 3.3 V I²C to the ESP32; the ESP32 sends new samples to the Pi over their existing USB cable. Direct Pi I²C is an alternative. This breakout outputs optical samples, not a ready-made pulse number. A disconnected device, stale result or failed read returns `unavailable`; no fixture or random fallback is shown as a sensor result. See [sensor selection](../sensor-selection.md).
+
+The camera listing includes a microphone. Explicitly select the separate MillSO mic for voice input so the audio route does not change when the camera is attached. The selected GT-U7 GPS receiver can attach to Pi USB serial; test antenna placement and fix age/accuracy, and keep the verified site address as the location fallback.
+
+The overall UI says **Clara Demo**. A displayed sample or derived pulse value shows value, unit, device and time without an extra experimental badge. Only show bpm after a versioned algorithm has been checked on live signals; do not call a computed value a direct chip reading. The agent can describe the result but does not use it to diagnose or choose the fictional scenario's steps. A consenting volunteer starts each reading; measurements are not stored by default.
+
+Use [sensor contracts](../contracts.md) and [hardware notes](../hardware-power.md). Acceptance: real fresh reading, reconnect, no reading, wrong device, and volunteer change are tested on the selected hardware.

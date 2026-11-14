@@ -962,6 +962,9 @@ export class BoxSession {
         return;
       case "emergency.question": {
         if (!this.sos || push.session_id !== this.sessionId || push.task_id !== this.emergencyTaskId) return;
+        // Older cloud workers may still send this optional question during a rolling deploy.
+        // The current flow has no need for a people count, so it must not interrupt guidance.
+        if (push.question_id === "people_count") return;
         const previous = this.emergencyQuestion;
         if (previous?.taskId === push.task_id && previous.questionId === push.question_id) return;
         this.clearEmergencyQuestion();
@@ -1333,7 +1336,8 @@ export class BoxSession {
     question.prompted = true;
     if (this.sos) this.sos.overlay = false;
     this.caption = question.prompt;
-    this.presentation = { kind: "question", title: "Clara asks", body: question.prompt, image_url: null, item: null, source_label: null };
+    // Background fact collection may speak and show a caption, but must leave the
+    // current guidance illustration or kit location on screen.
     // The existing Clara speech queue serializes this prompt with the main conversation.
     this.o.speech?.say(question.wav ? { text: question.prompt, wav: question.wav } : { text: question.prompt }).catch(() => {});
     this.publish();

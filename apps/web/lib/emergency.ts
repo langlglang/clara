@@ -75,7 +75,6 @@ export function createEmergencyWorker(o: { network: Network; emit: (change: { ki
     const sosSeq = rows.find((row) => row.event.event_id === task.task_id)?.seq ?? 0;
     const reportedSituation = rows.some(({ seq, event }) => seq < sosSeq && event.session_id === task.session_id && event.type === "report.heard" && /\b(bleed\w*|blood|breath\w*|unconscious|hurt|injur\w*|fell|burn\w*|pain|cut|accident)\b/i.test(event.text));
     if (!answered.has("situation") && !reportedSituation) return "situation";
-    if (!answered.has("people_count")) return "people_count";
     if (location(task).kind === "unavailable" && !answered.has("location")) return "location";
     return null;
   };
@@ -130,7 +129,7 @@ export function createEmergencyWorker(o: { network: Network; emit: (change: { ki
     if (task.timer) clearTimeout(task.timer);
     task.timer = null;
     const next = nextQuestion(task);
-    if (next === task.pending) return;
+    if (next === task.pending && (next !== null || task.ready)) return;
     task.speechAbort?.abort();
     task.speechAbort = null;
     task.delivered = null;

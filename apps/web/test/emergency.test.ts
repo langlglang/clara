@@ -35,6 +35,16 @@ describe("simulated caller fact worker", () => {
     t.worker.stop();
   });
 
+  it("does not ask for a people count when the situation and location are already known", () => {
+    const t = setup();
+    t.ingest(event("box.opened", {}), event("report.heard", { text: "I have a cut on my arm." }), t.sos);
+    const incidentId = t.network.openIncidentForBox(box_id)!.incident.incident_id;
+    t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "configured_address", address: "1455 California Ave" } }));
+    expect(t.worker.state(incidentId)).toMatchObject({ pending: null, ready: true });
+    expect(t.pushes).not.toContainEqual(expect.objectContaining({ type: "emergency.question" }));
+    t.worker.stop();
+  });
+
   it("accepts only the pending question with exact same-session report provenance", () => {
     const t = setup();
     const incidentId = t.open();
@@ -47,13 +57,14 @@ describe("simulated caller fact worker", () => {
     t.ingest(event("emergency.answer", { task_id: t.sos.event_id, question_id: "situation", answer: "Different words", source_event_id: report.event_id }));
     expect(t.worker.state(incidentId)?.pending).toBe("situation");
     t.ingest(event("emergency.answer", { task_id: t.sos.event_id, question_id: "situation", answer: report.text, source_event_id: report.event_id }));
-    expect(t.worker.state(incidentId)?.pending).toBe("people_count");
+    expect(t.worker.state(incidentId)).toMatchObject({ pending: null, ready: true });
     t.ingest(event("emergency.answer", { task_id: t.sos.event_id, question_id: "people_count", answer: report.text, source_event_id: report.event_id }));
-    expect(t.worker.state(incidentId)?.pending).toBe("people_count");
+    expect(t.worker.state(incidentId)).toMatchObject({ pending: null, ready: true });
+    expect(t.pushes).not.toContainEqual(expect.objectContaining({ type: "emergency.question", question_id: "people_count" }));
     t.worker.stop();
   });
 
-  it("does not turn an unrelated utterance into a people count or location", () => {
+  it("asks for location only when unavailable and ignores unrelated utterances", () => {
     const t = setup();
     const incidentId = t.open();
     t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "unavailable" } }));
@@ -62,11 +73,8 @@ describe("simulated caller fact worker", () => {
       t.ingest(report, event("emergency.answer", { task_id: t.sos.event_id, question_id, answer: text, source_event_id: report.event_id }));
     };
     answer("situation", "Someone fell near the stairs.");
-    expect(t.worker.state(incidentId)?.pending).toBe("people_count");
-    answer("people_count", "Where is the gauze");
-    expect(t.worker.state(incidentId)?.pending).toBe("people_count");
-    answer("people_count", "Two people need help");
     expect(t.worker.state(incidentId)?.pending).toBe("location");
+    expect(t.pushes).not.toContainEqual(expect.objectContaining({ type: "emergency.question", question_id: "people_count" }));
     answer("location", "Where is the gauze");
     expect(t.worker.state(incidentId)?.pending).toBe("location");
     answer("location", "Near the north entrance");

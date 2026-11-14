@@ -1,15 +1,14 @@
 #include "pulse_estimator.h"
 
+#include <cmath>
+
 namespace clara {
 
 const char* pulseQualityName(PulseQuality quality) {
   switch (quality) {
-    case PulseQuality::Valid:
-      return "valid";
-    case PulseQuality::Suspect:
-      return "suspect";
-    case PulseQuality::Unavailable:
-      return "unavailable";
+    case PulseQuality::Valid: return "valid";
+    case PulseQuality::Suspect: return "suspect";
+    case PulseQuality::Unavailable: return "unavailable";
   }
   return "unavailable";
 }
@@ -17,47 +16,97 @@ const char* pulseQualityName(PulseQuality quality) {
 void PulseEstimator::reset() {
   finger_ = false;
   haveBeat_ = false;
+  filteredCount_ = 0;
   filled_ = 0;
   next_ = 0;
 }
 
-void PulseEstimator::sample(uint32_t ir, bool beat, uint32_t now) {
-  if (ir < kFingerIr) {
-    // Finger lifted: every interval measured so far belonged to the last placement.
-    reset();
-    return;
-  }
+void PulseEstimator::beginContact(uint32_t ir, uint32_t sampledAtMs) {
+  reset();
   finger_ = true;
-  if (!beat) return;
+  lastSample_ = sampledAtMs;
+  dc_ = static_cast<float>(ir);
+  ac1_ = ac2_ = filtered1_ = filtered2_ = trough_ = 0;
+}
+
+void PulseEstimator::acceptPeak(uint32_t peakAtMs) {
   if (haveBeat_) {
-    const uint32_t interval = now - lastBeat_;
-    if (interval >= kMinIntervalMs && interval <= kMaxIntervalMs) {
-      intervals_[next_] = interval;
-      next_ = static_cast<uint8_t>((next_ + 1) % kIntervalSlots);
-      if (filled_ < kIntervalSlots) ++filled_;
-    } else if (interval > kMaxIntervalMs) {
-      // A long silence: start counting again rather than mixing old and new beats.
+    const uint32_t interval = peakAtMs - lastBeat_;
+    if (interval < kMinIntervalMs) return;  // One beat cannot create two peaks.
+    if (interval > kMaxIntervalMs) {
       filled_ = 0;
       next_ = 0;
     } else {
-      return;  // A double trigger inside one beat: keep the earlier beat time.
+      intervals_[next_] = interval;
+      next_ = static_cast<uint8_t>((next_ + 1) % kIntervalSlots);
+      if (filled_ < kIntervalSlots) ++filled_;
     }
   }
   haveBeat_ = true;
-  lastBeat_ = now;
+  lastBeat_ = peakAtMs;
 }
 
-PulseResult PulseEstimator::result(uint32_t now) const {
-  if (!finger_) return {-1, PulseQuality::Unavailable};
-  if (!haveBeat_ || now - lastBeat_ > kBeatStaleMs || filled_ < kMinIntervals) return {-1, PulseQuality::Suspect};
-  uint32_t sum = 0;
-  for (uint8_t i = 0; i < filled_; ++i) sum += intervals_[i];
-  const float mean = static_cast<float>(sum) / filled_;
-  for (uint8_t i = 0; i < filled_; ++i) {
-    const float diff = static_cast<float>(intervals_[i]) - mean;
-    if ((diff < 0 ? -diff : diff) > mean * kMaxSpread) return {-1, PulseQuality::Suspect};
+void PulseEstimator::sample(uint32_t ir, uint32_t sampledAtMs) {
+  if (ir < kFingerIr || ir >= kSaturatedIr) {
+    reset();
+    return;
   }
-  const int bpm = static_cast<int>(60000.0f / mean + 0.5f);
+  if (!finger_) {
+    beginContact(ir, sampledAtMs);
+    return;
+  }
+  const uint32_t dt = sampledAtMs - lastSample_;
+  if (dt < 20 || dt > kSampleGapMs) {
+    beginContact(ir, sampledAtMs);  // An unknown sample gap invalidates all old beat times.
+    return;
+  }
+  lastSample_ = sampledAtMs;
+  const float difference = static_cast<float>(ir) - dc_;
+  if (std::fabs(difference) > dc_ * 0.20f) {
+    beginContact(ir, sampledAtMs);  // Abrupt contact or motion; start a new window.
+    return;
+  }
+  dc_ += difference / 32.0f;  // Remove slow baseline drift without truncating the 18-bit reading.
+  const float ac = static_cast<float>(ir) - dc_;
+  const float filtered = (ac + ac1_ + ac2_) / 3.0f;  // Smooth high-frequency noise at 25 records/s.
+  ac2_ = ac1_;
+  ac1_ = ac;
+  if (filteredCount_ < 2) {
+    ++filteredCount_;
+    filtered2_ = filtered1_;
+    filtered1_ = filtered;
+    trough_ = filtered < trough_ ? filtered : trough_;
+    return;
+  }
+
+  if (filtered < trough_) trough_ = filtered;
+  const float minimumProminence = fmaxf(80.0f, dc_ * 0.002f);
+  if (filtered1_ > filtered2_ && filtered1_ >= filtered &&
+      filtered1_ > minimumProminence && filtered1_ - trough_ > minimumProminence * 2.0f) {
+    acceptPeak(sampledAtMs - dt);
+    trough_ = filtered;
+  }
+  filtered2_ = filtered1_;
+  filtered1_ = filtered;
+}
+
+PulseResult PulseEstimator::result(uint32_t nowMs) const {
+  if (!finger_ || nowMs - lastSample_ > kSampleGapMs) return {-1, PulseQuality::Unavailable};
+  if (!haveBeat_ || nowMs - lastBeat_ > kBeatStaleMs || filled_ < kMinIntervals) return {-1, PulseQuality::Suspect};
+  uint32_t sorted[kIntervalSlots];
+  for (uint8_t i = 0; i < filled_; ++i) sorted[i] = intervals_[i];
+  for (uint8_t i = 1; i < filled_; ++i) {
+    uint32_t value = sorted[i];
+    uint8_t j = i;
+    while (j > 0 && sorted[j - 1] > value) { sorted[j] = sorted[j - 1]; --j; }
+    sorted[j] = value;
+  }
+  const uint32_t median = sorted[filled_ / 2];
+  for (uint8_t i = 0; i < filled_; ++i) {
+    if (std::fabs(static_cast<float>(sorted[i]) - median) > median * kMaxIntervalSpread)
+      return {-1, PulseQuality::Suspect};
+  }
+  const int bpm = static_cast<int>((60000u + median / 2) / median);
   if (bpm < 30 || bpm > 200) return {-1, PulseQuality::Suspect};
   return {bpm, PulseQuality::Valid};
 }

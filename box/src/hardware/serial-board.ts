@@ -151,6 +151,13 @@ interface Pending {
   t: ToBoard["t"];
 }
 
+export type RawSensorReading = Extract<FromBoard, { t: "sensor.raw" }>;
+
+interface PendingRaw {
+  resolve(reading: RawSensorReading | null): void;
+  timer: NodeJS.Timeout;
+}
+
 const MAX_ID = 2 ** 31 - 1;
 
 export class SerialBoard implements Board {
@@ -165,10 +172,12 @@ export class SerialBoard implements Board {
   private link: SerialLink | null = null;
   private readonly reader: LineReader;
   private readonly pending = new Map<number, Pending>();
+  private readonly pendingRaw = new Map<number, PendingRaw>();
   private nextId = 1;
   private boot: string | null = null;
   private leds: number | null = null;
   private heartbeat: NodeJS.Timeout | null = null;
+  private readWake: NodeJS.Timeout | null = null;
   private retry: NodeJS.Timeout | null = null;
   private missedPings = 0;
   private closed = false;
@@ -244,6 +253,18 @@ export class SerialBoard implements Board {
     return this.send({ t: "pulse.stop" });
   }
 
+  /** A fresh hardware sample, or null on a nack, timeout, disconnect, or unavailable result. */
+  async readSensorRaw(): Promise<RawSensorReading | null> {
+    if (!this.link || !this.connected || this.closed) return null;
+    const id = this.allocateId();
+    const result = new Promise<RawSensorReading | null>((resolve) => {
+      const timer = setTimeout(() => this.settleRaw(id, null), 1500);
+      this.pendingRaw.set(id, { resolve, timer });
+    });
+    if (!(await this.send({ t: "sensor.read" }, id))) this.settleRaw(id, null);
+    return result;
+  }
+
   ping(): Promise<boolean> {
     return this.send({ t: "ping" });
   }
@@ -262,11 +283,10 @@ export class SerialBoard implements Board {
   }
 
   /** Sends one command and resolves with its ack (false on nack, timeout, or no link). */
-  send(command: Command): Promise<boolean> {
+  send(command: Command, reservedId?: number): Promise<boolean> {
     const link = this.link;
     if (!link || this.closed) return Promise.resolve(false);
-    const id = this.nextId;
-    this.nextId = this.nextId >= MAX_ID ? 1 : this.nextId + 1;
+    const id = reservedId ?? this.allocateId();
     const parsed = ToBoardSchema.safeParse({ ...command, id });
     if (!parsed.success) {
       this.log.error("command failed validation; not sent", { t: command.t, problem: parsed.error.issues[0]?.message });
@@ -295,6 +315,20 @@ export class SerialBoard implements Board {
         this.settle(id, false);
       }
     });
+  }
+
+  private allocateId(): number {
+    const id = this.nextId;
+    this.nextId = this.nextId >= MAX_ID ? 1 : this.nextId + 1;
+    return id;
+  }
+
+  private settleRaw(id: number, reading: RawSensorReading | null): void {
+    const entry = this.pendingRaw.get(id);
+    if (!entry) return;
+    this.pendingRaw.delete(id);
+    clearTimeout(entry.timer);
+    entry.resolve(reading);
   }
 
   private settle(id: number, ok: boolean): Pending | undefined {
@@ -349,6 +383,9 @@ export class SerialBoard implements Board {
       if (this.link === link) this.drop("port closed (unplugged?)");
     });
     void this.ping();
+    // On the tested macOS CP210x bridge, serialport's read callback waits until another JS event
+    // wakes the loop. Polling the stream cheaply keeps command ACK latency below its deadline.
+    this.readWake = setInterval(() => { if (this.link === link) link.stream.read(0); }, 50);
     this.heartbeat = setInterval(() => void this.beat(), this.heartbeatMs);
   }
 
@@ -370,7 +407,10 @@ export class SerialBoard implements Board {
     this.link = null;
     if (this.heartbeat) clearInterval(this.heartbeat);
     this.heartbeat = null;
+    if (this.readWake) clearInterval(this.readWake);
+    this.readWake = null;
     for (const id of [...this.pending.keys()]) this.settle(id, false);
+    for (const id of [...this.pendingRaw.keys()]) this.settleRaw(id, null);
     this.reader.reset();
     this.boot = null;
     if (link) {
@@ -431,6 +471,14 @@ export class SerialBoard implements Board {
     if (message.t === "mount") {
       if (this.hub.onWall === message.on_wall) return;
       this.hub.emit(message);
+      return;
+    }
+    if (message.t === "sensor.raw") {
+      if (!this.pendingRaw.has(message.id)) return; // An expired request cannot become a current reading.
+      const valid = message.quality === "valid" && message.red !== null && message.ir !== null;
+      const unavailable = message.quality === "unavailable" && message.red === null && message.ir === null;
+      this.settleRaw(message.id, valid ? message : null);
+      if (valid || unavailable) this.hub.emit(message);
       return;
     }
     // Pulse: passed on as is. A null bpm stays null; nothing here invents a number.

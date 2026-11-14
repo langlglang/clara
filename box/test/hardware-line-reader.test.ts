@@ -52,4 +52,11 @@ describe("LineReader", () => {
     reader.push(Buffer.from('{"t":"pulse","bpm":null,"quality":"unavailable","seq":2}\n'));
     expect(results.map((r) => (r.ok ? "ok" : r.problem))).toEqual(["malformed", "malformed", "invalid", "invalid", "ok"]);
   });
+
+  it("rejects an older serial protocol hello and accepts the current one", () => {
+    const { results, reader } = makeReader();
+    reader.push(Buffer.from('{"t":"hello","fw":"old","boot":"a","leds":3}\n'));
+    reader.push(Buffer.from('{"t":"hello","proto":"1.1","fw":"clara-0.2.0","boot":"b","leds":3}\n'));
+    expect(results.map((result) => result.ok ? "ok" : result.problem)).toEqual(["invalid", "ok"]);
+  });
 });

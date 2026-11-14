@@ -2,6 +2,8 @@
 
 **Updated 2026-11-13 at the start of HackPrinceton.** This list supersedes older planning docs in this folder where they disagree (those were written before the event; see "What changed" at the end). Labels: **must** (the core loop), **should**, **stretch**.
 
+**ESP32 build status:** the current three-light board profile has been built and flashed with a Pi-compatible USB serial protocol. Pi hello, LED commands, a fresh raw sensor result and null BPM with no finger are verified on the connected board. A steady on-finger BPM, the installed lid mechanism and six-compartment layout are not yet verified; see [firmware](../firmware/README.md).
+
 ## The story
 
 Clara is a network of AI-guided first-aid boxes for places where professional help is far away: conflict zones, refugee camps, and high-poverty or remote areas. Open a box and an AI talks you through treating the injury, lights the compartment holding what you need, and calls a network of nearby trained volunteers to the scene. Clara bridges the gap **until someone can reach care**; it does not replace doctors. Sites connect over **Starlink** (one terminal per site, boxes on local Wi-Fi); the life-critical steps still work by touch if the link drops.

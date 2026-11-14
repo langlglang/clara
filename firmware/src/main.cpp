@@ -1,7 +1,7 @@
 // Adapted from Sophi (github.com/mzhao1599/sophi), firmware/src/hand/main.cpp and firmware/src/common/board_serial.h.
 //
-// Clara's ESP32-WROOM-32: reports the lid and wall-mount switches, lights one compartment LED at a time, runs
-// the all-LED CPR rhythm or SOS flash, drives the buzzer, and reads the MAX30102 pulse sensor. It speaks the
+// Clara's ESP32-WROOM-32: reports the lid switch, drives the three installed LEDs, and reads the MAX30102.
+// Optional mount and buzzer outputs are disabled for the current board. It speaks the
 // newline JSON contract in packages/contracts/src/serial.ts at 115200 baud and acks every command by id.
 //
 // Safety rules (docs/subsystems/firmware.md, docs/contracts.md):
@@ -10,14 +10,13 @@
 // - LED and rhythm commands are refused while the lid is closed (CLARA_LED_REQUIRE_LID_OPEN);
 // - a pulse bpm is sent only with quality "valid"; otherwise it is null. Never a made-up number.
 //
-// Pins are placeholders until the board is wired; see README.md. Not yet built or run on hardware.
+// Pins follow the tested Clara bench wiring; see README.md. This integrated build still needs a hardware check.
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
 #include <esp_system.h>
 
 #include "MAX30105.h"
-#include "heartRate.h"
 #include "buzzer.h"
 #include "debounce.h"
 #include "lights.h"
@@ -36,27 +35,30 @@
 #ifndef CLARA_BUZZER_PASSIVE
 #define CLARA_BUZZER_PASSIVE 0
 #endif
+#ifndef CLARA_BUZZER_ENABLED
+#define CLARA_BUZZER_ENABLED 0
+#endif
 
 namespace {
 
-constexpr const char* kFirmware = "clara-0.1.0";
+constexpr const char* kFirmware = "clara-0.2.0";
 constexpr unsigned long kBaud = 115200;
 
-// ---- Pins (placeholders; avoid strapping pins 0, 2, 5, 12, 15, flash pins 6-11, and UART0 pins 1, 3) ----
+// ---- Installed pins (avoid strapping pins 0, 2, 5, 12, 15, flash pins 6-11, and UART0 pins 1, 3) ----
 // Switches go between the pin and GND with the internal pull-up (34-39 have none, so they are not used).
-constexpr uint8_t kLidPin = 32;
-constexpr uint8_t kMountPin = 33;
-// Roller-lever switch wired normally-open, pressed by the closed lid: closed lid pulls the pin LOW.
-constexpr bool kLidOpenLevel = HIGH;
+constexpr uint8_t kLidPin = 33;
+constexpr uint8_t kMountPin = 32;
+// Current bench wiring: switch COM to GND, NC to GPIO33; released lid pulls the pin LOW.
+constexpr bool kLidOpenLevel = LOW;
 // Mount switch pressed by the wall bracket: on the wall pulls the pin LOW.
 constexpr bool kOnWallLevel = LOW;
 // One LED per compartment: GPIO -> series resistor (start at 330 ohm) -> LED anode; cathode -> GND.
-constexpr uint8_t kLedPins[8] = {4, 13, 16, 17, 18, 19, 23, 26};
+constexpr uint8_t kLedPins[3] = {18, 19, 23};
 constexpr uint8_t kBuzzerPin = 25;
 constexpr int kSdaPin = 21;
 constexpr int kSclPin = 22;
 
-static_assert(CLARA_LED_COUNT >= 1 && CLARA_LED_COUNT <= 8, "CLARA_LED_COUNT must be 1..8 with these pins");
+static_assert(CLARA_LED_COUNT >= 1 && CLARA_LED_COUNT <= 3, "Only three LED pins are wired in this board profile");
 
 // ---- PWM (LEDC, Arduino-ESP32 core 2.0.x API) ----
 constexpr uint32_t kLedPwmHz = 5000;
@@ -67,6 +69,9 @@ constexpr uint8_t kBuzzerPwmChannel = 14;
 // ---- Timing (placeholders, not measured) ----
 constexpr uint32_t kLinkWatchdogMs = 10000;  // the Pi pings every 3 s
 constexpr uint32_t kPulseReportMs = 1000;
+constexpr uint32_t kSensorProbeMs = 2000;
+constexpr uint32_t kRawReadTimeoutMs = 1000;
+constexpr uint32_t kFifoRecordMs = 40;  // 100 conversions/s, averaged 4: 25 FIFO records/s.
 
 clara::Lights lights(CLARA_LED_COUNT);
 clara::Buzzer buzzer;
@@ -86,7 +91,16 @@ uint32_t lastFromPi = 0;
 bool sensorFound = false;
 bool pulseRunning = false;
 uint32_t lastPulseReport = 0;
-uint8_t lastLevels[8] = {};
+uint32_t lastSensorProbe = 0;
+uint32_t sampleSeq = 0;
+uint32_t lastSampleAt = 0;
+uint32_t lastRed = 0;
+uint32_t lastIr = 0;
+bool rawPending = false;
+long rawRequestId = 0;
+uint32_t rawRequestedAt = 0;
+uint32_t rawBaselineSeq = 0;
+uint8_t lastLevels[3] = {};
 uint16_t lastTone = 0xFFFF;
 
 // ---- output ----
@@ -104,6 +118,7 @@ void sendDoc(JsonDocument& doc) {
 void sendHello() {
   JsonDocument doc;
   doc["t"] = "hello";
+  doc["proto"] = "1.1";
   doc["fw"] = kFirmware;
   doc["boot"] = bootId;
   doc["leds"] = CLARA_LED_COUNT;
@@ -138,6 +153,24 @@ void sendPulse(const clara::PulseResult& result) {
   sendDoc(doc);
 }
 
+void sendRaw(long id, bool valid) {
+  JsonDocument doc;
+  doc["t"] = "sensor.raw";
+  doc["id"] = id;
+  doc["seq"] = seq++;
+  doc["sample_seq"] = sampleSeq;
+  doc["sampled_uptime_ms"] = valid ? lastSampleAt : 0;
+  doc["quality"] = valid ? "valid" : "unavailable";
+  if (valid) {
+    doc["red"] = lastRed;
+    doc["ir"] = lastIr;
+  } else {
+    doc["red"] = nullptr;
+    doc["ir"] = nullptr;
+  }
+  sendDoc(doc);
+}
+
 void ack(long id, bool ok, const char* err = nullptr) {
   JsonDocument doc;
   doc["t"] = "ack";
@@ -152,11 +185,13 @@ void ack(long id, bool ok, const char* err = nullptr) {
 void writeBuzzer(uint16_t hz) {
   if (hz == lastTone) return;
   lastTone = hz;
+#if CLARA_BUZZER_ENABLED
 #if CLARA_BUZZER_PASSIVE
   ledcWriteTone(kBuzzerPwmChannel, hz);
 #else
   // An active buzzer makes its own tone: any non-zero frequency means on.
   digitalWrite(kBuzzerPin, hz ? HIGH : LOW);
+#endif
 #endif
 }
 
@@ -170,29 +205,67 @@ void startPulse() {
   pulse.reset();
   pulseRunning = true;
   lastPulseReport = millis();
-  if (sensorFound) sensor.wakeUp();
 }
 
 void stopPulse() {
   pulseRunning = false;
   pulse.reset();
-  if (sensorFound) sensor.shutDown();
+}
+
+void probeSensor(uint32_t now) {
+  if (now - lastSensorProbe < kSensorProbeMs) return;
+  lastSensorProbe = now;
+  Wire.beginTransmission(0x57);
+  if (Wire.endTransmission() != 0) {
+    sensorFound = false;
+    stopPulse();
+    if (rawPending) {
+      sendRaw(rawRequestId, false);
+      rawPending = false;
+    }
+    return;
+  }
+  if (sensorFound) return;
+  sensorFound = sensor.begin(Wire, I2C_SPEED_STANDARD);
+  if (!sensorFound) return;
+  sensor.setup(0x1F, 4, 2, 100, 411, 4096);  // Tested bench settings: red + IR, 25 averaged FIFO records/s.
+  sensor.clearFIFO();
+  if (!lidOpen) sensor.shutDown();
+}
+
+void readSensor(uint32_t now) {
+  if (sensorFound && lidOpen) {
+    const uint16_t fetched = sensor.check();
+    const uint8_t buffered = sensor.available();
+    // SparkFun's small host buffer can overwrite old records. A missed record invalidates beat timing.
+    if (fetched > buffered) pulse.reset();
+    const uint32_t receivedAt = millis();
+    for (uint8_t i = 0; i < buffered; ++i) {
+      lastRed = sensor.getFIFORed();
+      lastIr = sensor.getFIFOIR();
+      const uint32_t age = static_cast<uint32_t>(buffered - 1 - i) * kFifoRecordMs;
+      const uint32_t sampledAt = receivedAt >= age ? receivedAt - age : 0;
+      if (lastSampleAt && (sampledAt <= lastSampleAt || sampledAt - lastSampleAt > clara::kSampleGapMs)) pulse.reset();
+      lastSampleAt = sampledAt;
+      ++sampleSeq;
+      if (pulseRunning) pulse.sample(lastIr, sampledAt);
+      sensor.nextSample();
+    }
+  }
+  if (rawPending && sampleSeq != rawBaselineSeq && lastSampleAt > rawRequestedAt) {
+    sendRaw(rawRequestId, true);
+    rawPending = false;
+  } else if (rawPending && now - rawRequestedAt >= kRawReadTimeoutMs) {
+    sendRaw(rawRequestId, false);
+    rawPending = false;
+  }
 }
 
 void readPulse(uint32_t now) {
   if (!pulseRunning) return;
-  if (sensorFound) {
-    sensor.check();  // non-blocking: moves new FIFO samples into the library's buffer
-    while (sensor.available()) {
-      const uint32_t ir = sensor.getFIFOIR();
-      sensor.nextSample();
-      const bool beat = ir >= clara::kFingerIr && checkForBeat(static_cast<long>(ir));
-      pulse.sample(ir, beat, now);
-    }
-  }
   if (now - lastPulseReport >= kPulseReportMs) {
     lastPulseReport = now;
-    sendPulse(sensorFound ? pulse.result(now) : clara::PulseResult{-1, clara::PulseQuality::Unavailable});
+    sendPulse(sensorFound && lidOpen ? pulse.result(now) : clara::PulseResult{-1, clara::PulseQuality::Unavailable});
   }
 }
 
@@ -255,17 +328,33 @@ void handleLine(const char* line, size_t length) {
       buzzer.stop();
       writeBuzzer(0);
     } else {
+#if !CLARA_BUZZER_ENABLED
+      return ack(id, false, "unsupported");
+#endif
       buzzer.start(pattern, now);
     }
     return ack(id, true);
   }
   if (strcmp(t, "pulse.start") == 0) {
-    startPulse();
     if (!sensorFound) return ack(id, false, "pulse_sensor_missing");
+    if (!lidOpen) return ack(id, false, "lid_closed");
+    startPulse();
     return ack(id, true);
   }
   if (strcmp(t, "pulse.stop") == 0) {
     stopPulse();
+    return ack(id, true);
+  }
+  if (strcmp(t, "sensor.read") == 0) {
+    if (!sensorFound) return ack(id, false, "sensor_missing");
+    if (!lidOpen) return ack(id, false, "lid_closed");
+    if (rawPending) return ack(id, false, "busy");
+    // The normal sensor pump owns the FIFO. Never read it here: two readers can corrupt its small host ring.
+    // The result must advance sampleSeq and have a later reconstructed sample time.
+    rawRequestId = id;
+    rawRequestedAt = now;
+    rawBaselineSeq = sampleSeq;
+    rawPending = true;
     return ack(id, true);
   }
   ack(id, false, "unknown_command");
@@ -287,7 +376,18 @@ void readSwitches(uint32_t now) {
   if (lidSwitch.update(digitalRead(kLidPin) == kLidOpenLevel, now) == clara::Debouncer::Result::Changed) {
     lidOpen = lidSwitch.level();
     lidKnown = true;
-    if (!lidOpen) quiet();  // Lid closed: nothing stays lit or sounding.
+    if (!lidOpen) {
+      quiet();  // Lid closed: nothing stays lit or sounding.
+      stopPulse();
+      if (rawPending) {
+        sendRaw(rawRequestId, false);
+        rawPending = false;
+      }
+      if (sensorFound) sensor.shutDown();
+    } else if (sensorFound) {
+      sensor.wakeUp();
+      sensor.clearFIFO();
+    }
     sendLid();
   }
 #if CLARA_MOUNT_SWITCH
@@ -322,11 +422,11 @@ void setup() {
     ledcAttachPin(kLedPins[ch], ch);
     ledcWrite(ch, 0);
   }
-#if CLARA_BUZZER_PASSIVE
+#if CLARA_BUZZER_ENABLED && CLARA_BUZZER_PASSIVE
   ledcSetup(kBuzzerPwmChannel, 2000, 8);
   ledcAttachPin(kBuzzerPin, kBuzzerPwmChannel);
   ledcWriteTone(kBuzzerPwmChannel, 0);
-#else
+#elif CLARA_BUZZER_ENABLED
   pinMode(kBuzzerPin, OUTPUT);
   digitalWrite(kBuzzerPin, LOW);
 #endif
@@ -343,14 +443,8 @@ void setup() {
   snprintf(bootId, sizeof bootId, "%08lx", static_cast<unsigned long>(esp_random()));
 
   Wire.begin(kSdaPin, kSclPin);
-  sensorFound = sensor.begin(Wire, I2C_SPEED_FAST);
-  if (sensorFound) {
-    // SparkFun's heart-rate example settings: red LED low (a "sensor on" glow), IR for the beat detector.
-    sensor.setup();
-    sensor.setPulseAmplitudeRed(0x0A);
-    sensor.setPulseAmplitudeGreen(0);
-    sensor.shutDown();  // Off until the Pi asks for a reading.
-  }
+  Wire.setClock(100000);
+  lastSensorProbe = millis() - kSensorProbeMs;
 
   sendHello();
   lastFromPi = millis();
@@ -360,11 +454,13 @@ void loop() {
   const uint32_t now = millis();
   pumpSerial(now);
   readSwitches(now);
+  probeSensor(now);
   // The Pi went quiet (unplugged, crashed): leave nothing lit or sounding, and stop the sensor.
   if (now - lastFromPi > kLinkWatchdogMs && (lights.anyOn() || buzzer.on() || pulseRunning)) {
     quiet();
     if (pulseRunning) stopPulse();
   }
-  readPulse(now);
+  readSensor(millis());  // Command parsing above may have advanced the clock past `now`.
+  readPulse(millis());
   writeOutputs(now);
 }

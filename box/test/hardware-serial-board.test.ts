@@ -40,7 +40,7 @@ describe("SerialBoard", () => {
     await settle();
     expect(port.lines[0]).toEqual({ t: "ping", id: 1 });
     expect(events).toEqual([
-      { type: "connected", firmware: "clara-0.1.0", leds: 8 },
+      { type: "connected", firmware: "clara-0.2.0", leds: 8 },
       { t: "lid", open: false, seq: 0 },
       { t: "mount", on_wall: true, seq: 1 },
     ]);
@@ -70,6 +70,44 @@ describe("SerialBoard", () => {
     ]);
   });
 
+  it("returns a fresh correlated raw sensor result from the board", async () => {
+    const port = new FakePort();
+    const answer = goodBoard();
+    port.responder = (command, p) => {
+      answer(command, p);
+      if (command.t === "sensor.read") p.send({
+        t: "sensor.raw", id: command.id, seq: 2, sample_seq: 42,
+        sampled_uptime_ms: 9000, red: 110234, ir: 128765, quality: "valid",
+      });
+    };
+    const { board, events } = makeBoard([port]);
+    await board.start();
+    await settle();
+    const reading = await board.readSensorRaw();
+    expect(port.lines.at(-1)).toEqual({ t: "sensor.read", id: 2 });
+    expect(reading).toMatchObject({ id: 2, sample_seq: 42, red: 110234, ir: 128765, quality: "valid" });
+    expect(events.at(-1)).toEqual(reading);
+  });
+
+  it("does not return malformed, unavailable or unrequested raw values", async () => {
+    const port = new FakePort();
+    const answer = goodBoard();
+    port.responder = (command, p) => {
+      answer(command, p);
+      if (command.t === "sensor.read") p.send({
+        t: "sensor.raw", id: command.id, seq: 2, sample_seq: 42,
+        sampled_uptime_ms: 0, red: null, ir: null, quality: "unavailable",
+      });
+    };
+    const { board, events } = makeBoard([port]);
+    await board.start();
+    await settle();
+    expect(await board.readSensorRaw()).toBeNull();
+    port.send({ t: "sensor.raw", id: 999, seq: 3, sample_seq: 43, sampled_uptime_ms: 9000, red: 1, ir: 1, quality: "valid" });
+    await settle();
+    expect(events.filter((event) => "t" in event && event.t === "sensor.raw")).toHaveLength(1);
+  });
+
   it("resolves false on a nack, on silence, and for commands outside the contract", async () => {
     const port = new FakePort();
     const answer = goodBoard();
@@ -97,7 +135,7 @@ describe("SerialBoard", () => {
     port.send({ t: "lid", open: true, seq: 5 });
     await settle();
     expect(events.filter((e) => "t" in e)).toEqual([]);
-    port.send({ t: "hello", fw: "x", boot: "b", leds: 6 });
+    port.send({ t: "hello", proto: "1.1", fw: "x", boot: "b", leds: 6 });
     port.send({ t: "lid", open: true, seq: 6 });
     port.send({ t: "lid", open: true, seq: 7 });
     port.send({ t: "pulse", bpm: null, quality: "unavailable", seq: 8 });
@@ -116,8 +154,8 @@ describe("SerialBoard", () => {
     const { board, events } = makeBoard([port]);
     await board.start();
     await settle();
-    port.send({ t: "hello", fw: "clara-0.1.0", boot: "b1", leds: 6 }); // same boot: nothing new
-    port.send({ t: "hello", fw: "clara-0.1.0", boot: "b2", leds: 6 });
+    port.send({ t: "hello", proto: "1.1", fw: "clara-0.2.0", boot: "b1", leds: 6 }); // same boot: nothing new
+    port.send({ t: "hello", proto: "1.1", fw: "clara-0.2.0", boot: "b2", leds: 6 });
     await settle();
     expect(events.filter((e) => "type" in e && e.type === "connected")).toHaveLength(2);
   });
@@ -139,7 +177,7 @@ describe("SerialBoard", () => {
     for (let i = 0; i < 20 && !board.connected; i += 1) await new Promise((r) => setTimeout(r, 10));
     await settle();
     expect(board.connected).toBe(true);
-    expect(events.at(-3)).toEqual({ type: "connected", firmware: "clara-0.1.0", leds: 6 });
+    expect(events.at(-3)).toEqual({ type: "connected", firmware: "clara-0.2.0", leds: 6 });
     expect(events.at(-1)).toEqual({ t: "mount", on_wall: true, seq: 1 });
     expect(events.at(-2)).toEqual({ t: "lid", open: true, seq: 0 });
     expect(await board.buzz("off")).toBe(true);
@@ -180,7 +218,7 @@ describe("SerialBoard", () => {
     board.onEvent((event) => late.push(event));
     await settle(1);
     expect(late).toEqual([
-      { type: "connected", firmware: "clara-0.1.0", leds: 6 },
+      { type: "connected", firmware: "clara-0.2.0", leds: 6 },
       { t: "lid", open: true, seq: 0 },
       { t: "mount", on_wall: true, seq: 1 },
     ]);

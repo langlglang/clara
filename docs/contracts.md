@@ -1,6 +1,12 @@
 # Interface and message contracts — proposal v0.7
 
-**No schemas or implementations exist yet.** This document is the source for initial schemas in future `contracts/`. JSON examples are illustrative; generate JSON Schema/Protobuf and compatibility tests before integration. All clocks use UTC RFC 3339 plus a monotonic `uptime_ms` where ordering matters. IDs are opaque UUIDs. `null` is never a fake reading.
+The broad `2.4` envelope below is still proposed. The Pi ↔ ESP32 link has an implemented, smaller [serial `1.1` schema](../packages/contracts/src/serial.ts); its wire messages and hardware status are described in [the firmware guide](../firmware/README.md). JSON examples in this document are illustrative. All clocks use UTC RFC 3339 plus a monotonic `uptime_ms` where ordering matters. IDs are opaque UUIDs. `null` is never a fake reading.
+
+## Implemented Pi ↔ ESP32 serial `1.1`
+
+The ESP32 and Pi use 115200-baud newline JSON, maximum 1 KiB per line. `hello` requires `proto:"1.1"`, a per-reset `boot` identifier, firmware version and installed LED count; the Pi rejects an older hello. The current board has three installed LED channels (GPIO18, GPIO19, GPIO23), a lid switch on GPIO33, and MAX30102 I²C on GPIO21/22. The Pi's `sensor.read` command has an integer `id`. The ESP32 ACKs it, then returns `sensor.raw` with the same `id`, an advanced `sample_seq`, a reconstructed monotonic sample time after the request, red/IR counts and `quality:"valid"`; after one second without a new sample it returns null counts with `quality:"unavailable"`. A missing sensor or closed lid is NACKed. The Pi returns null on unavailable, timeout, malformed values or disconnect. It never substitutes a fixture or generated reading. Raw `valid` describes transport freshness, not medical accuracy.
+
+`pulse.start` and `pulse.stop` are separate commands. The ESP32's demo-only signal processor reports a numeric BPM only after contact, continuous 25-record/s input, non-saturated signal, enough prominent peaks and consistent recent intervals; otherwise the `pulse` event has `bpm:null`. It calculates no SpO₂. The Pi keeps raw sensor data out of ordinary logs. These serial messages are a working adapter design, **not** implementation of the full `2.4` envelope, inventory-authorized light commands, or clinical validation. Change the serial protocol literal, producer, Zod consumer, examples and compatibility tests together.
 
 ## Versioning and transport
 

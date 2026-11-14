@@ -71,7 +71,7 @@ export interface SpeechQueue {
 export type BoardEvent =
   | { type: "connected"; firmware: string; leds: number }
   | { type: "disconnected"; reason: string }
-  | Extract<FromBoard, { t: "lid" | "mount" | "pulse" }>;
+  | Extract<FromBoard, { t: "lid" | "mount" | "pulse" | "sensor.raw" }>;
 
 export interface Board {
   readonly label: string;

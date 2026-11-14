@@ -40,7 +40,9 @@ flowchart TB
   MCU -->|GPIO via transistor if needed| BUZZ[Proposed buzzer; part TBD]
 ```
 
-The ESP32 board's USB connector likely goes through a USB-to-serial bridge; confirm its actual chip and Linux device path when it arrives. Use the [USB serial message contract](contracts.md). There is **no Pi GPIO↔ESP32 UART wire**, no separate 3.3 V regulator for the dev board, and no Pi power-button wire in this demo. The limit switch connects only to a safe ESP32 GPIO and ground, with pull-up/debounce. Avoid boot-strapping pins and verify the exact board pinout before wiring. Power the screen and hub according to their actual labels, not assumptions based on connector shape.
+The current ESP32 board communicates through its USB-to-serial bridge at `/dev/cu.SLAB_USBtoUART` on the development Mac; the Pi should discover its stable `/dev/serial/by-id/` path. Use the implemented [serial contract](contracts.md#implemented-pi--esp32-serial-11). There is **no Pi GPIO↔ESP32 UART wire**, no separate 3.3 V regulator for the dev board, and no Pi power-button wire in this demo. Power the screen and hub according to their actual labels, not assumptions based on connector shape.
+
+**Current three-light bench profile:** GPIO33 is the lid input (switch `NC`, `COM` to ground, open when LOW); GPIO21/22 are MAX30102 SDA/SCL; GPIO18/19/23 drive the three installed LEDs, each through its own resistor. The user observed all three bench LEDs lighting. The [integrated firmware](../firmware/README.md) uses this profile over USB serial; six kit slots, a mount switch, a buzzer and their mapping are still proposed.
 
 ### Proposed anti-theft inputs and outputs
 

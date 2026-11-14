@@ -29,7 +29,7 @@ export interface Microphone {
 export interface Listener {
   /** True only when this listener captures hands-free without a screen button. */
   readonly handsFree?: boolean;
-  start(onClip: (clip: Clip) => void): void;
+  start(onClip: (clip: Clip) => void, onActivity?: (active: boolean) => void, onAvailability?: (available: boolean) => void): void;
   /** Half-duplex: paused while the box speaks. */
   pause(): void;
   resume(): void;

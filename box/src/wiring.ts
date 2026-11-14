@@ -110,17 +110,22 @@ export async function loadVoiceLoop(o: {
         const sessionId = session.sessionId;
         return state && sessionId ? { sessionId, language: session.language, state } : null;
       },
-      onAction: (action: Action, _response: TurnResponse) => {
-        session.applyAction(action, "voice");
+      onAction: (action: Action, response: TurnResponse) => {
+        const accepted = session.applyAction(action, "voice", response);
+        if (accepted && action.name === "select_step") session.remember("clara", response.reply);
       },
       ...(o.speaker ? { playCue: (name: CueName) => o.speaker!.playCue(name) } : {}),
       onEvent: (event) => {
+        if (event.type === "status") {
+          session.setVoiceStatus(event.status);
+          return;
+        }
         if (event.type !== "turn") return;
         if (event.heard) {
           session.remember("person", event.heard);
           session.heard(event.heard);
         }
-        session.remember("clara", event.reply);
+        if (event.action?.name !== "select_step") session.remember("clara", event.reply);
         if (event.action?.name !== "select_step" && event.reply) session.showCaption(event.reply, !event.action);
       },
       log: logger("voice", o.log),

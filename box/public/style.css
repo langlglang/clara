@@ -55,6 +55,14 @@ button.small { min-height: 44px; min-width: 64px; font-size: 15px; }
 .tag.status { margin-left: auto; color: var(--ok); }
 .tag.status.offline { color: var(--offline); border-style: dashed; }
 .tag.lost { color: var(--warn); border-color: var(--warn); }
+#voice-state::before { content: ""; width: 9px; height: 9px; flex: none; background: var(--muted); }
+#voice-state.ready::before, .voice-activity.ready .activity-dot { background: var(--ok); }
+#voice-state.listening::before, .voice-activity.listening .activity-dot { background: var(--accent); animation: voice-pulse 0.8s ease-in-out infinite; }
+#voice-state.processing::before, .voice-activity.processing .activity-dot { background: var(--info); animation: voice-pulse 1.2s ease-in-out infinite; }
+#voice-state.speaking::before, .voice-activity.speaking .activity-dot { background: var(--info); }
+#voice-state.unavailable::before, .voice-activity.unavailable .activity-dot { background: var(--warn); }
+@keyframes voice-pulse { 50% { opacity: 0.3; transform: scale(0.65); } }
+@media (prefers-reduced-motion: reduce) { #voice-state::before, .activity-dot { animation: none !important; } }
 
 /* Banners: help-status strip, nearby emergency, notices */
 #banners { grid-column: 1 / 2; }
@@ -71,6 +79,9 @@ button.small { min-height: 44px; min-width: 64px; font-size: 15px; }
 #idle { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px 10px; }
 #idle h1 { font: 700 52px/1 var(--font-head); letter-spacing: 0.04em; text-transform: uppercase; margin: 0; }
 #idle p { margin: 0 0 8px; color: var(--muted); font-size: 19px; max-width: 460px; }
+#idle p:empty { display: none; }
+.voice-activity { display: inline-flex; align-items: center; gap: 12px; margin-top: 8px; padding: 12px 16px; border: 1px solid var(--border); background: var(--surface); font: 700 18px/1 var(--font-head); letter-spacing: var(--track); }
+.activity-dot { display: inline-block; width: 14px; height: 14px; flex: none; background: var(--muted); }
 #idle-caption { font-size: 22px; max-width: 460px; }
 #idle-caption:empty { display: none; }
 #presentation { display: grid; grid-template-columns: 1fr 168px; gap: 14px; height: 100%; }

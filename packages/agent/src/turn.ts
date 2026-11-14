@@ -13,6 +13,8 @@ export interface TurnDeps {
   assistant: Assistant | null;
   ears: Ears | null;
   voice: Voice | null;
+  /** Canonical demo content resolver; model and box-supplied text cannot author guidance. */
+  guidance?: (scenarioId: string, stepId: string) => string | null;
   /** The whole turn's limit, speech included. */
   budgetMs?: number;
   /** Time kept back for text-to-speech after the model answers. */
@@ -100,9 +102,13 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   // The assistant already checked this; checked again here because acting on an unoffered ID is the one thing that must never happen.
   if (action && !actionAllowed(action, request.state)) return fixed("invalid_reply", words);
 
-  // 3. Speech, only when there are words to say: select_step is spoken by the box's recorded step audio.
-  // ask_clarifying with no reply uses the question as written.
-  let reply = action?.name === "select_step" ? "" : result.reply.reply;
+  // 3. Resolve selected guidance against server-owned content, then voice that exact text. The model's
+  // selected-step wording is discarded by parseReply; the box also checks this against its local bundle.
+  let reply = result.reply.reply;
+  if (action?.name === "select_step") {
+    reply = (request.state.scenario_id && deps.guidance?.(request.state.scenario_id, action.step_id)) || "";
+    if (!reply) return fixed("invalid_reply", words);
+  }
   if (!reply && action?.name === "ask_clarifying") {
     reply = request.state.questions.find((q) => q.question_id === action.question_id)?.text ?? "";
   }

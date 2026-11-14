@@ -5,7 +5,8 @@ import { z } from "zod";
 import { Id } from "@clara/contracts";
 
 export type ScreenPhase = "idle" | "guiding" | "countdown" | "sos";
-export const SCREEN_VIEW_VERSION = "screen-view/1.0" as const;
+export const SCREEN_VIEW_VERSION = "screen-view/1.1" as const;
+export type ScreenVoiceState = "off" | "starting" | "ready" | "listening" | "processing" | "speaking" | "unavailable";
 
 export interface ScreenStep {
   step_id: string;
@@ -62,6 +63,8 @@ export interface ScreenView {
   messages: { from: string; text: string; at: number }[];
   pending_usage: { sku: string; name: string; qty: number }[] | null;
   voice_available: boolean;
+  /** Actual voice-loop activity; the lid and hands-free capability gate the displayed state. */
+  voice_state: ScreenVoiceState;
   /** The scene report link for the QR code; null until the server gives one. */
   report_url: string | null;
 }

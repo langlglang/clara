@@ -62,6 +62,11 @@ export interface RuntimeOptions extends NetworkOptions {
 }
 
 const stepLabels: Record<string, string> = Object.fromEntries(bleeding.steps.map((s: { step_id: string; label: string }) => [s.step_id, s.label]));
+const guidanceText = new Map<string, string>(bleeding.steps.map((s) => [s.step_id, s.text] as const));
+/** Resolve guidance from the server's versioned demo bundle, never from model or device text. */
+export function resolveGuidance(scenarioId: string, stepId: string): string | null {
+  return scenarioId === bleeding.scenario_id ? guidanceText.get(stepId) ?? null : null;
+}
 export const REPORT_OPTIONS: ReportOptions = {
   timeZone: "America/New_York",
   stepLabels,
@@ -85,7 +90,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const env: ClaraAgentEnv = { CLARA_TURN_BUDGET_MS: "6500", ...(options.env ?? (process.env as ClaraAgentEnv)) };
   const network = createNetwork(options);
   network.seedDemo();
-  const agent = options.agent ?? createClaraAgent(env, { log: (line) => console.log(line) });
+  const agent = options.agent ?? createClaraAgent(env, { guidance: resolveGuidance, log: (line) => console.log(line) });
   const maintainerAlerts: MaintainerAlert[] = [];
   network.subscribe((change) => {
     if (change.kind !== "maintainer") return;

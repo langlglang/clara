@@ -13,7 +13,7 @@
     {
       "step_id": "start",
       "label": "Tell me what happened",
-      "text": "I'm Clara. I'll guide you step by step. Tell me what happened, or tap the injury below.",
+      "text": "Tell me what happened and what you need help with.",
       "next": ["safety"]
     },
     {

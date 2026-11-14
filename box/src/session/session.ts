@@ -1,15 +1,25 @@
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { actionAllowed, comingLine, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type TurnState } from "@clara/contracts";
+import { actionAllowed, comingLine, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type TurnResponse, type TurnState } from "@clara/contracts";
 import { EventFactory, type EventBody } from "../engine/events.js";
 import { ScenarioEngine, type RecentTurn, type Source, type StepIntent } from "../engine/engine.js";
 import type { Kit } from "../engine/kit.js";
 import type { LocationProvider } from "../location/gps.js";
 import type { Board, CloudLink, CueName, SpeechQueue } from "../ports.js";
-import { SCREEN_VIEW_VERSION, type ScreenPresentation, type ScreenPress, type ScreenView } from "../screen/view.js";
+import { SCREEN_VIEW_VERSION, type ScreenPresentation, type ScreenPress, type ScreenView, type ScreenVoiceState } from "../screen/view.js";
+import type { VoiceStatus } from "../voice/voice-loop.js";
 import { systemClock, type Cancel, type Clock } from "./clock.js";
 import { LINES, coachingLines } from "./lines.js";
+
+const SCREEN_VOICE_STATES: Record<VoiceStatus, ScreenVoiceState> = {
+  off: "starting",
+  listening: "ready",
+  hearing: "listening",
+  thinking: "processing",
+  speaking: "speaking",
+  unavailable: "unavailable",
+};
 
 /**
  * The box's state machine:
@@ -83,6 +93,7 @@ export class BoxSession {
   private readonly countdownSeconds: number;
 
   private voice: VoiceControl | null = null;
+  private voiceStatus: VoiceStatus = "off";
   private lidOpen = false;
   private presentation: ScreenPresentation | null = null;
   private countdown: Countdown | null = null;
@@ -139,7 +150,14 @@ export class BoxSession {
 
   attachVoice(voice: VoiceControl | null): void {
     this.voice = voice;
+    this.voiceStatus = "off";
     if (voice && this.lidOpen) voice.start();
+    this.publish();
+  }
+
+  setVoiceStatus(status: VoiceStatus): void {
+    if (!this.lidOpen || this.voiceStatus === status) return;
+    this.voiceStatus = status;
     this.publish();
   }
 
@@ -167,6 +185,7 @@ export class BoxSession {
   lidClosed(): void {
     if (!this.lidOpen) return;
     this.lidOpen = false;
+    this.voiceStatus = "off";
     if (!this.active) {
       this.publish();
       return;
@@ -234,10 +253,10 @@ export class BoxSession {
     return true;
   }
 
-  goTo(stepId: string, source: Source): boolean {
+  goTo(stepId: string, source: Source, wav?: Buffer): boolean {
     const intents = this.engine.goTo(stepId, source);
     if (!intents) return false;
-    this.apply(intents);
+    this.apply(intents, true, wav);
     return true;
   }
 
@@ -397,15 +416,23 @@ export class BoxSession {
    * Carries out a model action, only if `actionAllowed` against the box's own current state. Returns false
    * (and does nothing) otherwise.
    */
-  applyAction(action: Action, source: Source = "voice"): boolean {
+  applyAction(action: Action, source: Source = "voice", response?: TurnResponse): boolean {
     const state = this.turnState();
     if (!state || !actionAllowed(action, state)) {
       this.log(`action ${action.name} refused: not allowed in the current state`);
       return false;
     }
     switch (action.name) {
-      case "select_step":
-        return this.goTo(action.step_id, source);
+      case "select_step": {
+        const step = this.engine.step(action.step_id);
+        if (response && response.reply !== step.text) {
+          this.log("selected guidance refused: cloud text differs from local content");
+          this.say("I couldn't verify that guidance. Please tell me again.");
+          return false;
+        }
+        const wav = response?.speech ? Buffer.from(response.speech.data_base64, "base64") : undefined;
+        return this.goTo(action.step_id, source, wav);
+      }
       case "ask_clarifying": {
         const question = this.o.scenario.questions.find((q) => q.question_id === action.question_id);
         this.notice = question?.text ?? null;
@@ -536,6 +563,8 @@ export class BoxSession {
   view(): ScreenView {
     const step = this.engine.current;
     const countdown = this.countdown;
+    const voiceState: ScreenVoiceState = !this.lidOpen ? "off"
+      : this.voice?.handsFree !== true ? "unavailable" : SCREEN_VOICE_STATES[this.voiceStatus];
     return {
       schema_version: SCREEN_VIEW_VERSION,
       revision: this.revision,
@@ -590,6 +619,7 @@ export class BoxSession {
       messages: this.messages.map((m) => ({ ...m })),
       pending_usage: this.pendingUsage ? this.pendingUsage.map((u) => ({ ...u })) : null,
       voice_available: this.lidOpen && this.voice?.handsFree === true,
+      voice_state: voiceState,
       report_url: this.reportUrl,
     };
   }
@@ -605,7 +635,7 @@ export class BoxSession {
     if (!this.active) this.beginSession();
   }
 
-  private apply(intents: StepIntent[], speakStep = true): void {
+  private apply(intents: StepIntent[], speakStep = true, wav?: Buffer): void {
     for (const intent of intents) {
       switch (intent.kind) {
         case "show":
@@ -621,7 +651,7 @@ export class BoxSession {
             } : null,
             source_label: `Demo scenario ${this.o.scenario.version}`,
           };
-          if (speakStep) this.speakStep(intent.step);
+          if (speakStep) this.speakStep(intent.step, wav);
           break;
         case "light":
           this.lit = { sku: intent.sku, slot: intent.slot };
@@ -647,9 +677,13 @@ export class BoxSession {
     this.publish();
   }
 
-  private speakStep(step: { text: string; audio?: Record<string, string> | undefined }): void {
+  private speakStep(step: { text: string; audio?: Record<string, string> | undefined }, wav?: Buffer): void {
     this.o.speech?.stopAll();
     this.caption = step.text;
+    if (wav) {
+      this.o.speech?.say({ text: step.text, wav }).catch(() => {});
+      return;
+    }
     const recorded = step.audio?.[this.language];
     const exists = this.o.fileExists ?? existsSync;
     const file = recorded && this.o.contentDir ? join(this.o.contentDir, recorded) : undefined;

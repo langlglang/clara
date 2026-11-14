@@ -35,7 +35,7 @@ export const LOCAL_LINES = {
 } as const;
 
 /** What the box is doing now, for the screen. */
-export type VoiceStatus = "off" | "listening" | "thinking" | "speaking";
+export type VoiceStatus = "off" | "listening" | "hearing" | "thinking" | "speaking" | "unavailable";
 export type VoiceFailure = "timeout" | "unreachable" | "invalid_reply";
 
 export type VoiceLoopEvent =
@@ -58,8 +58,8 @@ export interface VoiceLoopOptions {
   voiceTurn: CloudLink["voiceTurn"];
   getContext: () => VoiceContext | null;
   /**
-   * An allowed action from the server. For select_step the reply text is NOT spoken: the owner moves to the
-   * step and plays its recorded audio (through the same queue). Awaited before any reply is spoken.
+   * An allowed action from the server. For select_step, the owner verifies canonical text, moves to the
+   * step, and queues its WAV or local fallback; this loop must not speak the reply again.
    */
   onAction?: (action: Action, response: TurnResponse) => void | Promise<void>;
   /** Cue sounds: "listening" when the mic opens, "done" when a clip is sent (Speaker.playCue). */
@@ -96,6 +96,7 @@ class VoiceLoopImpl implements VoiceLoop {
   private cueDue = false;
   private cueing = false;
   private current: VoiceStatus = "off";
+  private micAvailable = true;
   private readonly clock: Clock;
   private readonly log: Logger;
   private readonly lines: Record<keyof typeof LOCAL_LINES, string>;
@@ -109,7 +110,7 @@ class VoiceLoopImpl implements VoiceLoop {
     (o.queue as Partial<{ onBusy(listener: () => void): void }>).onBusy?.(() => {
       if (!this.running) return;
       this.o.listener.pause();
-      if (!this.turn) this.setStatus("speaking");
+      this.setStatus("speaking");
     });
   }
 
@@ -120,7 +121,7 @@ class VoiceLoopImpl implements VoiceLoop {
   start(): void {
     if (this.running) return;
     this.running = true;
-    this.o.listener.start((clip) => void this.onClip(clip));
+    this.o.listener.start((clip) => void this.onClip(clip), (active) => this.onActivity(active), (available) => this.onAvailability(available));
     this.o.listener.pause();
     this.cueDue = true;
     this.settle();
@@ -182,6 +183,28 @@ class VoiceLoopImpl implements VoiceLoop {
     clip.wav.fill(0);
     if (this.o.playCue) void this.o.playCue("done").catch(() => {});
     await this.runTurn(input);
+  }
+
+  private onActivity(active: boolean): void {
+    if (!this.running || !this.micAvailable || this.turn || this.o.queue.busy) return;
+    if (active) {
+      this.setStatus("hearing");
+      return;
+    }
+    // A completed clip starts a turn synchronously; defer READY to avoid flashing it before PROCESSING.
+    queueMicrotask(() => {
+      if (this.running && !this.turn && !this.o.queue.busy) this.setStatus("listening");
+    });
+  }
+
+  private onAvailability(available: boolean): void {
+    this.micAvailable = available;
+    if (!this.running) return;
+    if (!available) {
+      if (!this.turn && !this.o.queue.busy) this.setStatus("unavailable");
+    } else if (this.current === "unavailable") {
+      this.settle();
+    }
   }
 
   private async runTurn(input: TurnInput): Promise<void> {
@@ -275,6 +298,10 @@ class VoiceLoopImpl implements VoiceLoop {
   /** Opens the mic when nothing holds it: no turn out, nothing playing, no cue playing. */
   private settle(): void {
     if (!this.running || this.turn || this.o.queue.busy || this.cueing) return;
+    if (!this.micAvailable) {
+      this.setStatus("unavailable");
+      return;
+    }
     if (this.cueDue && this.o.playCue) {
       this.cueDue = false;
       this.cueing = true;

@@ -15,7 +15,7 @@ import { GET as getKitMap } from "../app/api/kit-map/route";
 import { GET as getMaintainer } from "../app/api/maintainer/route";
 import { POST as signUp } from "../app/api/volunteers/route";
 import { GET as getInbox } from "../app/api/volunteers/[id]/inbox/route";
-import { createRuntime, setRuntime, type Runtime } from "../lib/server";
+import { createRuntime, resolveGuidance, setRuntime, type Runtime } from "../lib/server";
 import type { InboxResponse, IncidentDetail, StateSnapshot } from "../lib/views";
 
 const T0 = Date.parse("2026-11-13T19:00:00.000Z");
@@ -83,6 +83,23 @@ describe("box API", () => {
     expect(body.client_turn_id).toBe(turn.client_turn_id);
     expect(typeof body.reply).toBe("string");
     expect((await postTurn(post("/api/boxes/box-clinic/turns", { ...turn, schema_version: "x" }), params({ id: "box-clinic" }))).status).toBe(400);
+    expect((await postTurn(post("/api/boxes/box-clinic/turns", { ...turn, schema_version: "voice-turn/0.1" }), params({ id: "box-clinic" }))).status).toBe(400);
+  });
+
+  it("returns canonical scenario text for an allowed selection", async () => {
+    const turn = {
+      schema_version: VOICE_TURN_VERSION,
+      client_turn_id: randomUUID(),
+      session_id: randomUUID(),
+      language: "en",
+      input: { type: "text", text: "There is bleeding" },
+      state: { scenario_id: "severe_bleeding", step_id: null, allowed_steps: [{ step_id: "start", label: "Tell me what happened" }], questions: [], manifest: [], triage_available: false, recent_turns: [] },
+    };
+    const res = await postTurn(post("/api/boxes/box-clinic/turns", turn), params({ id: "box-clinic" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ action: { name: "select_step", step_id: "start" }, reply: "Tell me what happened and what you need help with.", speech: null });
+    expect(resolveGuidance("unknown", "start")).toBeNull();
+    expect(resolveGuidance("severe_bleeding", "unknown")).toBeNull();
   });
 
   it("streams the box's pushes as SSE", async () => {

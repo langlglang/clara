@@ -1,6 +1,6 @@
 # Conversation and presentation runtime
 
-**Status:** proposed agent architecture with a limited presentation surface implemented. The current demo handles one voice turn at a time and can render answer, question, inventory-item, and preauthored-guidance cards through `screen-view/1.0`; inventory lights and mock SOS also exist. It does **not** implement a persistent cloud agent, generated diagrams, sensor reading cards, camera tools, or background agents. Clara is a proof of concept for fictional scenarios; no real emergency call is placed.
+**Status:** proposed agent architecture with a limited presentation surface implemented. The current demo handles one voice turn at a time and can render answer, question, inventory-item, and preauthored-guidance cards through `screen-view/1.1`; inventory lights and mock SOS also exist. It does **not** implement a persistent cloud agent, generated diagrams, sensor reading cards, camera tools, or background agents. Clara is a proof of concept for fictional scenarios; no real emergency call is placed.
 
 ## The interaction
 

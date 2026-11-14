@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { Alert } from "@clara/contracts";
+import { VOICE_TURN_VERSION, type Alert, type TurnResponse } from "@clara/contracts";
 import { FakeCloudLink } from "../src/cloud/fake.js";
 import { loadKit, loadScenario } from "../src/engine/index.js";
 import type { Board, BoardEvent, SpeechQueue } from "../src/ports.js";
@@ -49,10 +49,12 @@ class FakeBoard implements Board {
 
 class FakeSpeech implements SpeechQueue {
   said: string[] = [];
+  played: { text: string; wav?: Buffer }[] = [];
   stops = 0;
   busy = false;
-  async say(item: { text: string }) {
+  async say(item: { text: string; wav?: Buffer }) {
     this.said.push(item.text);
+    this.played.push(item);
   }
   stopAll() {
     this.stops += 1;
@@ -155,6 +157,19 @@ describe("BoxSession lid", () => {
     session.attachVoice({ handsFree: false, start: () => {}, stop: () => {}, pressTalk: () => {} });
     session.lidOpened();
     expect(session.view().voice_available).toBe(false);
+  });
+
+  it("shows ready, listening, processing, speaking, and unavailable from voice events", () => {
+    const { session } = setup();
+    session.attachVoice({ handsFree: true, start: () => {}, stop: () => {}, pressTalk: () => {} });
+    session.lidOpened();
+    expect(session.view().voice_state).toBe("starting");
+    for (const [event, expected] of [["listening", "ready"], ["hearing", "listening"], ["thinking", "processing"], ["speaking", "speaking"], ["unavailable", "unavailable"]] as const) {
+      session.setVoiceStatus(event);
+      expect(session.view().voice_state).toBe(expected);
+    }
+    session.lidClosed();
+    expect(session.view().voice_state).toBe("off");
   });
 });
 
@@ -278,6 +293,34 @@ describe("BoxSession pushes", () => {
 });
 
 describe("BoxSession actions", () => {
+  it("plays Cartesia guidance once when the returned text matches local content", () => {
+    const { session, speech } = setup();
+    session.lidOpened();
+    const text = session.engine.step("s1").text;
+    const wav = Buffer.from("cartesia-wav");
+    const response: TurnResponse = {
+      schema_version: VOICE_TURN_VERSION, client_turn_id: uuid(), heard: "help", reply: text,
+      action: { name: "select_step", step_id: "s1" }, answered_by: "model", reason: null,
+      speech: { mime: "audio/wav", sample_rate: 16_000, data_base64: wav.toString("base64") },
+    };
+    expect(session.applyAction(response.action!, "voice", response)).toBe(true);
+    expect(speech.played).toHaveLength(1);
+    expect(speech.played[0]).toMatchObject({ text, wav });
+    expect(session.view().presentation).toMatchObject({ kind: "guidance", body: text });
+  });
+
+  it("refuses guidance text that differs from the local content", () => {
+    const { session, speech } = setup();
+    session.lidOpened();
+    const response: TurnResponse = {
+      schema_version: VOICE_TURN_VERSION, client_turn_id: uuid(), heard: "help", reply: "Unapproved text",
+      action: { name: "select_step", step_id: "s1" }, answered_by: "model", reason: null, speech: null,
+    };
+    expect(session.applyAction(response.action!, "voice", response)).toBe(false);
+    expect(session.view().step).toBeNull();
+    expect(speech.said).toEqual(["I couldn't verify that guidance. Please tell me again."]);
+  });
+
   it("shows an item request without starting a scenario step, then shows an answer", () => {
     const { session, board } = setup();
     session.lidOpened();
@@ -316,7 +359,7 @@ describe("BoxSession actions", () => {
     session.lidOpened();
     session.applyAction({ name: "select_step", step_id: "s1" });
     cloud.responder = (req) => ({
-      schema_version: "voice-turn/0.1",
+      schema_version: VOICE_TURN_VERSION,
       client_turn_id: req.client_turn_id,
       heard: "step two",
       reply: "ok",

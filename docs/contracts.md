@@ -2,14 +2,14 @@
 
 **Interaction update:** the implemented screen now exposes only the simulated SOS flow as a touch action; legacy step-navigation actions remain in the internal `ScreenPressSchema` for compatibility but have no visible controls. Lid open does not produce a voice turn. The proposed generic presentation contract is specified below and in [conversation runtime](conversation-runtime.md).
 
-## Pi → kiosk screen — implemented `screen-view/1.0`
+## Pi → kiosk screen — implemented `screen-view/1.1`
 
-The Pi sends whole `ScreenView` snapshots over a local, token-protected Server-Sent Events stream. `schema_version: "screen-view/1.0"` identifies the new additive presentation surface; `revision` is a monotonically increasing view update counter, not a schema version. The page rejects unknown schema majors. `lid_open` is the physical lid state, independent of `phase`: a user can open simulated SOS with the lid closed, and the microphone must still display **MIC OFF**. Existing `step` remains for older consumers, but the current page renders `presentation` when present. A null presentation means the idle view. Old consumers can ignore the new field and continue to use `step`; a new consumer must handle null and all enumerated kinds.
+The Pi sends whole `ScreenView` snapshots over a local, token-protected Server-Sent Events stream. `schema_version: "screen-view/1.1"` adds `voice_state` to the `1.0` presentation surface; `revision` is a monotonically increasing view update counter, not a schema version. The page rejects unknown schema majors. `lid_open` is the physical lid state, independent of `phase`: a user can open simulated SOS with the lid closed, and the microphone must still display **MIC OFF**. `voice_state` is `off`, `starting`, `ready`, `listening`, `processing`, `speaking`, or `unavailable`; ready means the mic is open, listening means voice activity was detected, and processing means a final utterance was sent. Existing `step` remains for older consumers, but the current page renders `presentation` when present. A null presentation means the idle view. Old consumers can ignore new fields and continue to use `step`; a new consumer must handle null and all enumerated kinds.
 
 ```json
 {
-  "schema_version": "screen-view/1.0", "revision": 7, "phase": "guiding",
-  "lid_open": true, "box_name": "Clara Demo", "online": true,
+  "schema_version": "screen-view/1.1", "revision": 7, "phase": "guiding",
+  "lid_open": true, "voice_state": "listening", "box_name": "Clara Demo", "online": true,
   "presentation": {
     "kind": "item", "title": "Find gauze", "body": "Compartment A1",
     "image_url": null, "item": {"sku":"GAUZE-01","name":"Gauze","slot":"A1","lit":true,"missing":false},
@@ -174,7 +174,7 @@ Each physical box is sealed/labeled with model and revision; restocker scans eac
 
 The ESP32 starts every buzzer output off, clears the alarm on lease expiry, lid close, USB disconnect or reset, and treats `off` as higher priority than any pattern. The open snapshot is a local file on the Pi referenced by `snapshot_ref`; it never travels in a session event, `media.capture`, `network.alert` or `handoff_card`. A snapshot or buzzer failure never delays `lid.opened` handling.
 
-## Voice turn API — implemented `voice-turn/0.1`
+## Voice turn API — implemented `voice-turn/0.2`
 
 A request/response HTTP contract between the box and the server, separate from the event envelope. Producer: `box/` (cloud client). Consumer: `server/` (`POST /v1/boxes/{box_id}/turns`). Shared zod schemas live in `packages/contracts`; the box and server import the same file, and `packages/contracts` tests cover both shapes. Design: [voice](voice.md).
 
@@ -182,12 +182,12 @@ Request (JSON, at most 1.5 MB):
 
 ```json
 {
-  "schema_version": "voice-turn/0.1", "client_turn_id": "uuid", "session_id": "uuid",
+  "schema_version": "voice-turn/0.2", "client_turn_id": "uuid", "session_id": "uuid",
   "language": "en",
   "input": { "type": "audio", "mime": "audio/wav", "data_base64": "…", "duration_ms": 2400 },
   "state": {
-    "scenario_id": "severe_bleeding", "step_id": "start",
-    "allowed_steps": [{ "step_id": "pressure", "label": "Press hard on the wound" }],
+    "scenario_id": "severe_bleeding", "step_id": null,
+    "allowed_steps": [{ "step_id": "start", "label": "Tell me what happened" }],
     "questions": [{ "question_id": "where", "text": "Where is the bleeding?" }],
     "manifest": [{ "sku": "GAUZE-01", "name": "gauze roll", "on_hand": 2 }],
     "triage_available": true,
@@ -202,19 +202,19 @@ Response:
 
 ```json
 {
-  "schema_version": "voice-turn/0.1", "client_turn_id": "uuid",
+  "schema_version": "voice-turn/0.2", "client_turn_id": "uuid",
   "heard": "my friend's leg is bleeding a lot",
-  "reply": "",
-  "action": { "name": "select_step", "step_id": "pressure" },
+  "reply": "Tell me what happened and what you need help with.",
+  "action": { "name": "select_step", "step_id": "start" },
   "answered_by": "model",
   "reason": null,
-  "speech": null
+  "speech": { "mime": "audio/wav", "sample_rate": 16000, "data_base64": "…" }
 }
 ```
 
-`action` is null or one of `select_step{step_id}`, `ask_clarifying{question_id}`, `locate_item{sku}`, `record_usage{items[{sku, qty}]}`, `start_triage`, `suggest_sos`. `record_usage` remains in the wire type but is **not offered by the current model schema**, because the minimal screen has no confirmation control. Every ID must come from the request's `state`; the server never returns an ID it was not given, and the box rejects one anyway. `answered_by` is `model` or `fixed`; with `fixed`, `reason` is one of `not_heard`, `no_model`, `timeout`, `model_error`, `invalid_reply`, `refusal`. `speech` is null or `{ "mime": "audio/wav", "sample_rate": 16000, "data_base64": "…" }`; it is null with `select_step` (the box plays the step's local audio) and whenever text-to-speech failed (the box speaks `reply` itself). `heard` is null when nothing was transcribed.
+`action` is null or one of `select_step{step_id}`, `ask_clarifying{question_id}`, `locate_item{sku}`, `record_usage{items[{sku, qty}]}`, `start_triage`, `suggest_sos`. `record_usage` remains in the wire type but is **not offered by the current model schema**, because the minimal screen has no confirmation control. Every ID must come from the request's `state`; the server never returns an ID it was not given, and the box rejects one anyway. `answered_by` is `model` or `fixed`; with `fixed`, `reason` is one of `not_heard`, `no_model`, `timeout`, `model_error`, `invalid_reply`, `refusal`. `speech` is null or `{ "mime": "audio/wav", "sample_rate": 16000, "data_base64": "…" }`; null means text-to-speech failed and the Pi speaks the same `reply` locally. `heard` is null when nothing was transcribed.
 
-Rules: the clip is never stored or logged on either side. A `select_step` changes the box's step only after the box checks the ID is in its own allowed list. Before any guidance is shown, only the entry content ID is offered. `suggest_sos` starts the **simulated** SOS countdown; it never calls 911. `record_usage` only proposes a usage list when a future confirmation path exists (see `supply.usage_proposed`). Compatibility tests must cover: an unknown `step_id`/`question_id`/`sku` rejected, empty allowed lists (the action is then not offered), text and audio inputs, a fixed reply with each `reason`, and a response with and without `speech`.
+Rules: the clip is never stored or logged on either side. For `select_step`, the server maps the chosen ID to canonical scenario text from its own versioned bundle, discards model wording, and synthesizes that exact text with Cartesia. An unknown scenario/step returns `invalid_reply` with no action. The Pi checks the ID was offered **and** the returned text matches its local bundle before showing or speaking guidance; a mismatch is refused. Before any guidance is shown, only the entry content ID is offered. `suggest_sos` starts the **simulated** SOS countdown; it never calls 911. `record_usage` only proposes a usage list when a future confirmation path exists (see `supply.usage_proposed`). `0.1` requests/responses are rejected rather than silently reinterpreted. Compatibility tests must cover: an unknown `step_id`/`question_id`/`sku` rejected, empty allowed lists (the action is then not offered), text and audio inputs, selected guidance with and without `speech`, a fixed reply with each `reason`, and old-version rejection.
 
 ## Generic presentation — proposed `presentation/1.0`
 

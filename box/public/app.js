@@ -39,6 +39,15 @@
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
   const upper = (value) => String(value).toUpperCase();
+  const voiceLabels = {
+    off: "MIC OFF",
+    starting: "STARTING MIC",
+    ready: "READY TO TALK",
+    listening: "LISTENING",
+    processing: "PROCESSING",
+    speaking: "SPEAKING",
+    unavailable: "VOICE UNAVAILABLE",
+  };
 
   // The help-status strip, from the who-is-coming line (comingLine() in @clara/contracts, a fixed template):
   // "Priya is coming, about 3 minutes. 1 more person is coming too." -> "PRIYA COMING · 3 MIN · +1 MORE".
@@ -100,7 +109,12 @@
     const v = view;
     text($("box-name"), v.box_name);
     show($("tag-sim"), v.simulated);
-    text($("voice-state"), !v.lid_open ? "MIC OFF" : v.voice_available ? "VOICE ENABLED" : "VOICE UNAVAILABLE");
+    const voiceState = !v.lid_open ? "off" : voiceLabels[v.voice_state] ? v.voice_state : "unavailable";
+    text($("voice-state"), voiceLabels[voiceState]);
+    $("voice-state").className = `tag ${voiceState}`;
+    show($("idle-activity"), v.lid_open);
+    $("idle-activity").className = `voice-activity ${voiceState}`;
+    text($("activity-text"), voiceLabels[voiceState]);
     $("status").classList.toggle("offline", !v.online);
     text($("status-text"), v.online ? "ONLINE" : "OFFLINE · SOS AVAILABLE");
     show($("tag-link"), !linkOk);
@@ -124,7 +138,7 @@
     } : null);
     show($("idle"), !p);
     show($("presentation"), Boolean(p));
-    text($("idle-instruction"), v.lid_open ? v.voice_available ? "Talk to Clara about what you need. Visuals appear here when useful." : "Voice is unavailable. The simulated SOS button still works." : "Open the lid to speak with Clara. The microphone is off while closed.");
+    text($("idle-instruction"), v.lid_open ? "" : "Open the lid to speak with Clara. The microphone is off while closed.");
     text($("idle-caption"), v.caption);
     if (p) {
       text($("visual-title"), p.title);

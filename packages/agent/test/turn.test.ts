@@ -20,15 +20,38 @@ const assistantFor = (...outputs: Parameters<typeof scriptedModel>[0]) => create
 afterEach(() => vi.useRealTimers());
 
 describe("handleTurn", () => {
-  it("answers a step with no reply text and no speech (the box plays its recording)", async () => {
+  it("voices the exact server-owned guidance text, ignoring model wording", async () => {
     const v = voice();
     const response = await handleTurn(textRequest("my friend's leg is bleeding"), {
       assistant: assistantFor(json({ transcript: "x", reply: "Press now.", action: { name: "select_step", step_id: "pressure" } })),
       ears: null,
       voice: v,
+      guidance: (scenarioId, stepId) => scenarioId === "demo_bleeding" && stepId === "pressure" ? "Checked demo guidance text." : null,
     });
-    expect(TurnResponseSchema.parse(response)).toMatchObject({ answered_by: "model", action: { name: "select_step", step_id: "pressure" }, speech: null, reply: "" });
-    expect(v.said).toEqual([]);
+    expect(TurnResponseSchema.parse(response)).toMatchObject({ answered_by: "model", action: { name: "select_step", step_id: "pressure" }, reply: "Checked demo guidance text." });
+    expect(response.speech?.mime).toBe("audio/wav");
+    expect(v.said).toEqual(["Checked demo guidance text."]);
+    expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.1" }).success).toBe(false);
+  });
+
+  it("refuses selected guidance missing from the server bundle", async () => {
+    const response = await handleTurn(textRequest("my friend's leg is bleeding"), {
+      assistant: assistantFor(json({ transcript: "x", reply: "", action: { name: "select_step", step_id: "pressure" } })),
+      ears: null,
+      voice: voice(),
+      guidance: () => null,
+    });
+    expect(response).toMatchObject({ answered_by: "fixed", reason: "invalid_reply", action: null });
+  });
+
+  it("returns canonical text with no WAV when Cartesia fails, for local fallback", async () => {
+    const response = await handleTurn(textRequest("my friend's leg is bleeding"), {
+      assistant: assistantFor(json({ transcript: "x", reply: "", action: { name: "select_step", step_id: "pressure" } })),
+      ears: null,
+      voice: voice(null),
+      guidance: () => "Checked demo guidance text.",
+    });
+    expect(response).toMatchObject({ action: { name: "select_step", step_id: "pressure" }, reply: "Checked demo guidance text.", speech: null });
   });
 
   it("transcribes audio in the session's language and speaks a worded reply", async () => {
@@ -114,7 +137,7 @@ describe("handleTurn", () => {
 describe("createClaraAgent", () => {
   it("runs without keys: text turns get no_model, and the stub works when asked for", async () => {
     expect(await createClaraAgent({}).handleTurn(textRequest("x"))).toMatchObject({ reason: "no_model" });
-    const stub = createClaraAgent({ CLARA_MODEL: "stub" });
+    const stub = createClaraAgent({ CLARA_MODEL: "stub" }, { guidance: (_scenarioId, stepId) => stepId === "pressure" ? "Checked demo guidance text." : null });
     expect(await stub.handleTurn(textRequest("press on the bleeding"))).toMatchObject({ action: { name: "select_step", step_id: "pressure" } });
     expect(stub.describe).not.toMatch(/sk-/);
   });

@@ -36,6 +36,8 @@ export interface ClaraAgentOptions {
   /** For tests: an Anthropic client (or fake) instead of one built from the key. */
   anthropic?: Anthropic;
   log?: (line: string) => void;
+  /** Server-owned, source-linked demo text for a scenario and step ID. */
+  guidance?: (scenarioId: string, stepId: string) => string | null;
 }
 
 export interface ClaraAgent {
@@ -76,7 +78,7 @@ export function createClaraAgent(env: ClaraAgentEnv, options: ClaraAgentOptions 
   const fetchImpl = options.fetch ?? fetch;
   const ears: Ears | null = cartesiaKey ? createCartesiaEars({ apiKey: cartesiaKey, fetchImpl }) : null;
   const voice: Voice | null = cartesiaKey ? createCartesiaVoice({ apiKey: cartesiaKey, voiceId: set(env, "CARTESIA_VOICE_ID"), fetchImpl }) : null;
-  const deps: TurnDeps = { assistant, ears, voice, budgetMs: whole(set(env, "CLARA_TURN_BUDGET_MS"), TURN_BUDGET_MS), log: options.log };
+  const deps: TurnDeps = { assistant, ears, voice, guidance: options.guidance, budgetMs: whole(set(env, "CLARA_TURN_BUDGET_MS"), TURN_BUDGET_MS), log: options.log };
   return {
     deps,
     describe: `model: ${describeModel}; speech: ${cartesiaKey ? "Cartesia" : "none (audio turns get a fixed line; text turns work)"}`,

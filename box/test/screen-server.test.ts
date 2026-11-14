@@ -37,6 +37,7 @@ const view = (revision: number): ScreenView => ({
   messages: [],
   pending_usage: null,
   voice_available: false,
+  voice_state: "off",
   report_url: null,
 });
 
@@ -117,7 +118,7 @@ describe("screen server", () => {
       req.end();
     });
     expect(chunks.join("")).toContain("event: view");
-    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.0"');
+    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.1"');
     expect(chunks.join("")).toContain('"presentation":null');
     expect(chunks.join("")).toContain('"step":null');
   });

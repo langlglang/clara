@@ -31,3 +31,14 @@ services:
         value: box-clinic,box-water-point
       - key: CLARA_AMBULANCE_ETA_MIN
         value: "35"
+      # Response coordinator (deepagents): "on" runs the deep agent when ANTHROPIC_API_KEY is set (off without it),
+      # "rules" runs the no-key planner, "off" disables it. Model defaults to claude-opus-5-5.
+      - key: CLARA_COORDINATOR
+        value: "on"
+      - key: CLARA_COORDINATOR_MODEL
+        sync: false
+      # Optional LangSmith tracing: set LANGSMITH_TRACING=true and the key in the dashboard.
+      - key: LANGSMITH_TRACING
+        sync: false
+      - key: LANGSMITH_API_KEY
+        sync: false

@@ -6,6 +6,7 @@ import type { DriverOption } from "../../lib/rides";
 import type { IncidentDetail, StateSnapshot } from "../../lib/views";
 import { StatusPill, Tile, TopBar } from "../TopBar";
 import { ConsoleMap, MapLegend, helperCounts } from "./ConsoleMap";
+import { CoordinatorPanel } from "./CoordinatorPanel";
 
 const ESCALATION: Record<string, string> = { first: "First 3 alerted", next: "Next 3 alerted (60 s, no reply)", all: "Everyone with the skill alerted (120 s)" };
 const VEHICLE: Record<string, string> = { car: "car", van: "van", motorbike: "motorbike", none: "no vehicle" };
@@ -13,7 +14,8 @@ const VEHICLE: Record<string, string> = { car: "car", van: "van", motorbike: "mo
 /**
  * Dispatch and rides (features 12, 17, 18 and volunteer rides): emergencies, live timeline, alerts with their states
  * and escalation, "said at the box", the triage board, the scene report link, and the ride plan: suggested driver
- * with reasons, approve and offer, reassign, backups. The map of helpers is always on.
+ * with reasons, approve and offer, reassign, backups; the response coordinator panel (deep agent or rules). The map of
+ * helpers is always on.
  */
 export function DispatchConsole() {
   const state = useLive<StateSnapshot>("/api/state");
@@ -180,6 +182,8 @@ function IncidentPanel({ d, now, announce, refresh }: { d: IncidentDetail; now: 
         );
       })}
       {!closed && d.candidates.length ? <span className="small muted">Next if no reply: {d.candidates.slice(0, 3).map((c) => c.name).join(", ")}</span> : null}
+
+      {d.coordinator ? <CoordinatorPanel c={d.coordinator} /> : null}
 
       {!closed ? <RidePlan d={d} now={now} announce={announce} refresh={refresh} /> : null}
 

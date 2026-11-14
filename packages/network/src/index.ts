@@ -1,5 +1,5 @@
 import { AlertResponseSchema, VolunteerSchema, type Alert, type BoxRecord, type Incident, type Volunteer } from "@clara/contracts";
-import { comingLineForBox, escalationOf, inbox, respond, tickIncidents, candidatesFor, type EscalationView, type Push, type RespondResult } from "./alerts.js";
+import { alertVolunteers, comingLineForBox, escalationOf, inbox, requestKit, respond, tickIncidents, candidatesFor, type AlertVolunteersResult, type EscalationView, type Push, type RequestKitResult, type RespondResult } from "./alerts.js";
 import { kitMap, maintainerView, refreshAllBoxes, refreshBox, registerBox, restock, type BoxRegistration, type KitPin, type MaintainerRow } from "./boxes.js";
 import { randomIds, type Clock, type Ids } from "./config.js";
 import { ingest, type IngestResult } from "./events.js";
@@ -116,6 +116,22 @@ export function createNetwork(options: NetworkOptions = {}) {
     candidates(incidentId: string): Candidate[] {
       const entry = store.getIncident(incidentId);
       return entry ? candidatesFor(store, entry) : [];
+    },
+
+    /**
+     * Alerts named candidates now, beside the automatic waves (the response coordinator's bounded action). Ids that
+     * aren't current candidates are refused with a reason; `reason` is for logs only and never reaches a volunteer.
+     */
+    alertVolunteers(incidentId: string, volunteerIds: readonly string[], _reason?: string): AlertVolunteersResult {
+      const result = alertVolunteers(ctx, incidentId, volunteerIds, clock());
+      if (result.outcome === "alerted") publish(result.pushes);
+      return result;
+    },
+    /** Sends one other box the incident's nearby.emergency push ("bring this kit"). */
+    requestKit(incidentId: string, boxId: string): RequestKitResult {
+      const result = requestKit(ctx, incidentId, boxId);
+      if (result.outcome === "requested") publish([result.push]);
+      return result;
     },
 
     // ---- Time ----

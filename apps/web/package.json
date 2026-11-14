@@ -12,6 +12,7 @@
   "dependencies": {
     "@clara/agent": "*",
     "@clara/contracts": "*",
+    "@clara/coordinator": "*",
     "@clara/network": "*",
     "@types/leaflet": "^1.9.22",
     "@types/react": "^19.3.0",

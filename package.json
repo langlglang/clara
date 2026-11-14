@@ -10,7 +10,7 @@
   "scripts": {
     "web": "npm run dev -w @clara/web",
     "box": "npm run dev -w @clara/box",
-    "typecheck": "tsc -p packages/contracts && tsc -p packages/agent && tsc -p packages/network && tsc -p box && npm run typecheck -w @clara/web",
+    "typecheck": "tsc -p packages/contracts && tsc -p packages/agent && tsc -p packages/network && tsc -p packages/coordinator && tsc -p box && npm run typecheck -w @clara/web",
     "test": "vitest run"
   },
   "devDependencies": {

@@ -238,3 +238,97 @@ export function comingLineForBox(store: Store, boxId: string): string | null {
   const entry = store.openIncidentForBox(boxId);
   return entry ? comingLine(entry.incident.alerts) : null;
 }
+
+/** Why one volunteer id couldn't be alerted by `alertVolunteers`. */
+export type AlertRefusal = "not_a_candidate" | "already_alerted" | "duplicate";
+
+export type AlertVolunteersResult =
+  | { outcome: "alerted"; incident: Incident; alerted: Alert[]; refused: { volunteer_id: string; why: AlertRefusal }[]; pushes: Push[] }
+  | { outcome: "not_found" }
+  | { outcome: "closed"; incident: Incident };
+
+/**
+ * Alerts named volunteers now, beside the automatic waves (used by the response coordinator). Only current
+ * candidates count (available, skilled for the need, in range, not busy elsewhere, not alerted yet); anyone else
+ * is refused with a reason. The new alerts start `sent`, exactly like wave alerts, and count toward the wave
+ * targets. Nothing else about the incident changes; `coming` still only comes from the volunteer.
+ */
+export function alertVolunteers(ctx: AlertContext, incidentId: string, volunteerIds: readonly string[], now: Date): AlertVolunteersResult {
+  const entry = ctx.store.getIncident(incidentId);
+  if (!entry) return { outcome: "not_found" };
+  const { incident } = entry;
+  if (incident.closed !== null) return { outcome: "closed", incident };
+  const candidates = new Map(candidatesFor(ctx.store, entry).map((c) => [c.volunteer.volunteer_id, c]));
+  const alertedIds = new Set(incident.alerts.map((a) => a.volunteer_id));
+  const seen = new Set<string>();
+  const refused: { volunteer_id: string; why: AlertRefusal }[] = [];
+  const fresh: Alert[] = [];
+  const at = now.toISOString();
+  for (const id of volunteerIds) {
+    if (seen.has(id)) {
+      refused.push({ volunteer_id: id, why: "duplicate" });
+      continue;
+    }
+    seen.add(id);
+    if (alertedIds.has(id)) {
+      refused.push({ volunteer_id: id, why: "already_alerted" });
+      continue;
+    }
+    const c = candidates.get(id);
+    if (!c) {
+      refused.push({ volunteer_id: id, why: "not_a_candidate" });
+      continue;
+    }
+    fresh.push({
+      alert_id: ctx.ids.id("alert"),
+      incident_id: incident.incident_id,
+      volunteer_id: id,
+      volunteer_name: c.volunteer.name,
+      state: "sent",
+      eta_minutes: null,
+      sent_at: at,
+      updated_at: at,
+    });
+  }
+  if (fresh.length > 0) {
+    incident.alerts.push(...fresh);
+    ctx.store.putIncident(entry);
+  }
+  return { outcome: "alerted", incident, alerted: fresh, refused, pushes: fresh.map((a) => alertUpdate(incident, a)) };
+}
+
+export type RequestKitResult =
+  | { outcome: "requested"; push: Push; already_told: boolean }
+  | { outcome: "not_found" | "unknown_box" | "own_box" }
+  | { outcome: "closed" };
+
+/**
+ * Tells one other box about an open incident ("Emergency at ..., bring this kit") with the same nearby.emergency
+ * push the incident start sends, and remembers it so the box gets nearby.clear on close. Distance and status
+ * limits are the caller's policy.
+ */
+export function requestKit(ctx: AlertContext, incidentId: string, boxId: string): RequestKitResult {
+  const entry = ctx.store.getIncident(incidentId);
+  if (!entry) return { outcome: "not_found" };
+  if (entry.incident.closed !== null) return { outcome: "closed" };
+  if (boxId === entry.incident.box_id) return { outcome: "own_box" };
+  const from = ctx.store.getBox(entry.incident.box_id);
+  const target = ctx.store.getBox(boxId);
+  if (!from || !target) return { outcome: "unknown_box" };
+  const already_told = entry.nearby_box_ids.includes(boxId);
+  if (!already_told) {
+    entry.nearby_box_ids.push(boxId);
+    ctx.store.putIncident(entry);
+  }
+  return {
+    outcome: "requested",
+    already_told,
+    push: push(boxId, {
+      type: "nearby.emergency",
+      incident_id: entry.incident.incident_id,
+      from_box_id: from.box.box_id,
+      from_box_name: from.box.name,
+      directions: from.box.directions,
+    }),
+  };
+}

@@ -1,5 +1,6 @@
 import { SKILLS_FOR_NEED, estimateEta, haversineKm, incidentEvents, type Candidate, type EscalationView, type Eta, type KitPin, type MaintainerAlert, type MaintainerRow, type ReportLabel, type SceneReport } from "@clara/network";
 import type { Alert, BoxRecord, Incident, LatLng, Volunteer } from "@clara/contracts";
+import type { CoordinatorLog, CoordinatorMode } from "@clara/coordinator";
 import type { BoxMessage, Runtime } from "./server";
 import type { Hospital, RideView, VehicleKind } from "./rides";
 
@@ -87,6 +88,20 @@ export interface IncidentDetail {
   ride: RideView | null;
   messages: BoxMessage[];
   scene: SceneStats;
+  coordinator: CoordinatorView;
+}
+
+/** The response coordinator for one incident: its mode and its log (null before its first trigger). */
+export interface CoordinatorView {
+  mode: CoordinatorMode;
+  label: string;
+  model: string | null;
+  log: CoordinatorLog | null;
+}
+
+export function coordinatorView(rt: Runtime, incidentId: string): CoordinatorView {
+  const c = rt.coordinator;
+  return { mode: c.mode, label: c.label, model: c.model, log: c.getLog(incidentId) ?? null };
 }
 
 export interface StateSnapshot {
@@ -233,6 +248,7 @@ export function incidentDetail(rt: Runtime, incidentId: string): IncidentDetail 
     ride: rt.rides.forIncident(incidentId) ?? null,
     messages: rt.messages.get(incidentId) ?? [],
     scene: sceneOf(rt, view.incident),
+    coordinator: coordinatorView(rt, incidentId),
   };
 }
 

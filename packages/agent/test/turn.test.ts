@@ -89,11 +89,37 @@ describe("handleTurn", () => {
     expect(await handleTurn(textRequest("How do I apply the gauze?", { state: active }), deps)).toMatchObject({
       action: { name: "select_step", step_id: "arm_pressure" }, reply: "Place gauze on the wound and press firmly.", answered_by: "fixed",
     });
+    for (const words of ["Can you show me how to put this on?", "What do I do with this gauze?", "How do I wrap it?", "Teach me how to apply it", "Teach me how to apply"]) {
+      expect(await handleTurn(textRequest(words, { state: active }), deps)).toMatchObject({
+        action: { name: "select_step", step_id: "arm_pressure" }, answered_by: "fixed",
+      });
+    }
     expect(await handleTurn(textRequest("Start dispatch and show me how to apply the gauze", { state: active }), deps)).toMatchObject({
       action: { name: "launch_tasks", background: [{ name: "suggest_sos" }], presentation: { name: "select_step", step_id: "arm_pressure" } },
       reply: "Place gauze on the wound and press firmly.", answered_by: "fixed",
     });
+    for (const words of ["Call the dispatcher and teach me how to apply the gauze", "Call dispatcher and teach me to use this gauze"]) {
+      expect(await handleTurn(textRequest(words, { state: active }), deps)).toMatchObject({
+        action: { name: "launch_tasks", background: [{ name: "suggest_sos" }], presentation: { name: "select_step", step_id: "arm_pressure" } },
+        answered_by: "fixed",
+      });
+    }
+    expect(await handleTurn(textRequest("", { state: active, input: audioInput }), {
+      ...deps, ears: ears("Call the dispatcher and teach me how to apply the gauze"),
+    })).toMatchObject({
+      action: { name: "launch_tasks", background: [{ name: "suggest_sos" }], presentation: { name: "select_step", step_id: "arm_pressure" } },
+      answered_by: "fixed",
+    });
     expect(await handleTurn(textRequest("I don't have gauze; how do I apply it?", { state: active }), deps)).toMatchObject({
+      action: null, reason: "model_error",
+    });
+    expect(await handleTurn(textRequest("Where is the gauze?", { state: active }), deps)).toMatchObject({
+      action: null, reason: "model_error",
+    });
+    expect(await handleTurn(textRequest("What if I wrap it too tightly?", { state: active }), deps)).toMatchObject({
+      action: null, reason: "model_error",
+    });
+    expect(await handleTurn(textRequest("Teach me how to use scissors", { state: active }), deps)).toMatchObject({
       action: null, reason: "model_error",
     });
   });

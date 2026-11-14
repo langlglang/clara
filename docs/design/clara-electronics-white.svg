@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1080" viewBox="0 0 2560 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Clara electronics system</title>
+  <desc id="desc">A 12 volt battery candidate feeds a fuse, switch and 5 volt converter, with separate unverified feeds to a Raspberry Pi 5 and powered USB hub. The Pi connects by USB to an ESP32, which reads the lid switch and MAX30102 and drives three compartment LEDs. The Pi also connects to the touchscreen, speaker, USB hub and cloud. The hub connects to the touchscreen touch input, microphone, movable camera and USB GPS receiver.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0 0 10 5 0 10" fill="none" stroke="#8b8e91" stroke-width="1.7" stroke-linejoin="round"/></marker>
+    <style>
+      .card{fill:#0b2943;stroke:#34495a;stroke-width:2}
+      .main{fill:#79bdf0;font:700 30px Arial,Helvetica,sans-serif;text-anchor:middle}
+      .sub{fill:#79bdf0;font:500 23px Arial,Helvetica,sans-serif;text-anchor:middle}
+      .wire{fill:none;stroke:#8b8e91;stroke-width:3;stroke-linejoin:round;stroke-linecap:round;marker-end:url(#arrow)}
+      .data{fill:none;stroke:#8b8e91;stroke-width:3;stroke-linecap:round;marker-start:url(#arrow);marker-end:url(#arrow)}
+      .candidate{fill:none;stroke:#8b8e91;stroke-width:3;stroke-dasharray:12 9;stroke-linejoin:round;stroke-linecap:round;marker-end:url(#arrow)}
+      .label{fill:#59636b;font:600 19px Arial,Helvetica,sans-serif;text-anchor:middle}
+    </style>
+  </defs>
+  <rect width="2560" height="1080" fill="#fff"/>
+
+  <!-- Power: the 12 V to 5 V battery branch is selected but not bench verified. -->
+  <path class="candidate" d="M350 128 H430"/>
+  <path class="candidate" d="M750 128 H830"/>
+  <path class="candidate" d="M990 185 V322 H1250 V430"/>
+  <path class="candidate" d="M1110 185 V197 H2145 V460 H2110"/>
+  <text class="label" x="1260" y="315">5 V candidate</text>
+  <text class="label" x="1955" y="190">separate 5 V candidate</text>
+
+  <!-- The ESP32 is powered and controlled by the Pi's USB host. -->
+  <path class="wire" d="M400 439 H465 V520 H510"/>
+  <path class="wire" d="M400 625 H510"/>
+  <path class="wire" d="M690 650 V848 H400"/>
+  <path class="data" d="M900 555 H1110"/>
+  <text class="label" x="1005" y="535">USB-C serial + power</text>
+
+  <!-- The Pi owns HDMI, cloud transport and the USB host. -->
+  <path class="wire" d="M1360 430 V280 H1750"/>
+  <text class="label" x="1575" y="268">micro-HDMI</text>
+  <path class="wire" d="M1540 555 H1760"/>
+  <text class="label" x="1650" y="538">USB</text>
+  <path class="wire" d="M1935 450 V340"/>
+  <text class="label" x="2025" y="390">USB touch</text>
+  <path class="wire" d="M2110 515 H2190"/>
+  <path class="wire" d="M2110 570 H2160 V650 H2190"/>
+  <path class="wire" d="M2110 625 H2140 V810 H2190"/>
+  <path class="wire" d="M1540 615 H1660 V910 H1760"/>
+  <path class="data" d="M1325 650 V850"/>
+  <text class="label" x="1385" y="780">Wi-Fi</text>
+
+  <rect class="card" x="80" y="70" width="270" height="115" rx="30"/>
+  <text class="main" x="215" y="123"><tspan x="215">12 V battery</tspan></text>
+  <text class="sub" x="215" y="157">specs to verify</text>
+
+  <rect class="card" x="430" y="70" width="320" height="115" rx="30"/>
+  <text class="main" x="590" y="123"><tspan x="590">Fuse + master</tspan><tspan x="590" dy="35">switch</tspan></text>
+
+  <rect class="card" x="830" y="70" width="350" height="115" rx="30"/>
+  <text class="main" x="1005" y="123">12 V → 5 V converter</text>
+  <text class="sub" x="1005" y="157">output unverified</text>
+
+  <rect class="card" x="70" y="380" width="330" height="118" rx="30"/>
+  <text class="main" x="235" y="429">Lid limit switch</text>
+  <text class="sub" x="235" y="464">COM + NC · GPIO33</text>
+
+  <rect class="card" x="70" y="565" width="330" height="120" rx="30"/>
+  <text class="main" x="235" y="614">MAX30102</text>
+  <text class="sub" x="235" y="651">3.3 V I²C · GPIO21/22</text>
+
+  <rect class="card" x="70" y="785" width="330" height="120" rx="30"/>
+  <text class="main" x="235" y="835">Three slot LEDs</text>
+  <text class="sub" x="235" y="869">GPIO18/19/23 · resistors</text>
+
+  <rect class="card" x="510" y="460" width="390" height="190" rx="32"/>
+  <text class="main" x="705" y="525">ESP32-WROOM-32</text>
+  <text class="sub" x="705" y="567">lid · pulse sensor · lights</text>
+  <text class="sub" x="705" y="601">USB-C to Pi</text>
+
+  <rect class="card" x="1110" y="430" width="430" height="220" rx="32"/>
+  <text class="main" x="1325" y="500">Raspberry Pi 5</text>
+  <text class="sub" x="1325" y="544">screen · audio · camera</text>
+  <text class="sub" x="1325" y="580">USB host · Wi-Fi</text>
+
+  <rect class="card" x="1750" y="210" width="370" height="130" rx="32"/>
+  <text class="main" x="1935" y="264">5-inch touchscreen</text>
+  <text class="sub" x="1935" y="302">HDMI video · USB touch</text>
+
+  <rect class="card" x="1760" y="450" width="350" height="220" rx="32"/>
+  <text class="main" x="1935" y="521">Powered USB hub</text>
+  <text class="sub" x="1935" y="565">four USB ports</text>
+  <text class="sub" x="1935" y="600">does not power Pi</text>
+
+  <rect class="card" x="2190" y="455" width="330" height="120" rx="30"/>
+  <text class="main" x="2355" y="505">USB microphone</text>
+  <text class="sub" x="2355" y="540">voice input</text>
+
+  <rect class="card" x="2190" y="590" width="330" height="120" rx="30"/>
+  <text class="main" x="2355" y="640">Movable camera</text>
+  <text class="sub" x="2355" y="675">USB video</text>
+
+  <rect class="card" x="2190" y="750" width="330" height="120" rx="30"/>
+  <text class="main" x="2355" y="800">USB GNSS receiver</text>
+  <text class="sub" x="2355" y="835">location fix</text>
+
+  <rect class="card" x="1110" y="850" width="430" height="120" rx="30"/>
+  <text class="main" x="1325" y="900">Clara cloud</text>
+  <text class="sub" x="1325" y="935">agent · speech · network</text>
+
+  <rect class="card" x="1760" y="850" width="350" height="120" rx="30"/>
+  <text class="main" x="1935" y="900">USB speaker</text>
+  <text class="sub" x="1935" y="935">audio output</text>
+</svg>

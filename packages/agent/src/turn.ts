@@ -149,7 +149,7 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   const shortAck = /^(?:got it|done|finished|ready|found it|have it|i have it)[.! ]*$/i.test(words);
   if (request.state.guided_active && request.state.scenario_id && nextSteps.length === 1 && (shortAck || armGauzeHelp)) {
     const presentation = { name: "select_step", step_id: nextSteps[0]!.step_id } as const;
-    const dispatchRequested = armGauzeHelp && /\b(?:call\s+(?:911|the dispatcher)|start\s+(?:the\s+)?dispatch|launch\s+(?:the\s+)?dispatch|send\s+(?:an?\s+)?sos)\b/i.test(words);
+    const dispatchRequested = armGauzeHelp && /\b(?:(?:call|contact|reach)\s+(?:(?:the|a)\s+)?(?:911|dispatcher|dispatch)|(?:start|launch)\s+(?:the\s+)?dispatch|send\s+(?:an?\s+)?sos)\b/i.test(words);
     const action: Action = dispatchRequested
       ? { name: "launch_tasks", background: [{ name: "suggest_sos" }], presentation }
       : presentation;

@@ -122,10 +122,14 @@ export function guidedStartAllowed(words: string): boolean {
 
 /** A question about applying gauze requests the next arm-guide panel, which contains the pressure illustration. */
 export function armGauzeNextRequested(words: string): boolean {
-  return /\b(?:i have|i've got|i got|we have|we got)\s+(?:the\s+)?(?:sterile\s+)?gauze\b/i.test(words) ||
-    (/\b(?:how|show|explain|tell|what)\b/i.test(words) &&
-      /\b(?:apply|use|put|place|hold|press|do with)\b/i.test(words) &&
-      /\b(?:gauze|it)\b/i.test(words));
+  if (/\b(?:i have|i've got|i got|we have|we got)\s+(?:the\s+)?(?:sterile\s+)?gauze\b/i.test(words)) return true;
+  const asksHow = /\bhow\b|\b(?:teach|show|explain|tell)\s+(?:me\s+)?(?:how|to)\b|\bwhat\s+(?:do|should)\s+(?:i|we)\b/i.test(words);
+  const asksTechnique = /\b(?:apply|use|put|place|hold|press|wrap|cover|dress|treat|do(?:\s+with)?)\b/i.test(words);
+  const refersToGauze = /\b(?:gauze|gause|gauss|it|this|that)\b/i.test(words);
+  // The active panel already names gauze, so an explicit request to be taught how to
+  // apply/press it can advance even when speech-to-text drops the object's name.
+  const impliedApplication = /\b(?:teach|show|explain)\b/i.test(words) && /\b(?:apply|place|press|wrap)\b/i.test(words);
+  return asksHow && asksTechnique && (refersToGauze || impliedApplication);
 }
 
 export function guidedAdvanceAllowed(words: string, currentStep?: string | null): boolean {

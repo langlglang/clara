@@ -3,10 +3,10 @@ import { z } from "zod";
 import { TriageObservationsSchema } from "./triage.js";
 
 /**
- * Voice turn API, `voice-turn/0.7`. The box sends one turn per utterance; the server answers
+ * Voice turn API, `voice-turn/0.8`. The box sends one turn per utterance; the server answers
  * with what it heard, a short reply and at most one action. See docs/contracts.md and docs/voice.md.
  */
-export const VOICE_TURN_VERSION = "voice-turn/0.7";
+export const VOICE_TURN_VERSION = "voice-turn/0.8";
 
 /** A clip is 16 kHz mono 16-bit PCM WAV: 32 bytes per millisecond. */
 export const CLIP_SAMPLE_RATE = 16_000;
@@ -42,6 +42,8 @@ export const CoreContextSchema = z.strictObject({
   reports: z.array(z.strictObject({ source_event_id: z.uuid(), at: z.iso.datetime({ offset: true }), text: z.string().max(500) })).max(4),
   actions: z.array(z.strictObject({ name: z.enum(["locate_item", "show_visual", "suggest_sos", "read_pulse", "request_camera", "capture_camera"]), id: z.string().max(80).nullable(), status: z.literal("requested"), at: z.iso.datetime({ offset: true }) })).max(6),
   emergency_task: z.strictObject({ task_id: z.uuid(), state: z.enum(["collecting_facts", "facts_ready"]) }).nullable(),
+  /** Server-owned, short-lived image-model observation. Never a clinical finding. */
+  camera: z.strictObject({ captured_at: z.iso.datetime({ offset: true }), observed_at: z.iso.datetime({ offset: true }), description: z.string().max(1400) }).nullable(),
 });
 
 export const TurnStateSchema = z.strictObject({
@@ -58,6 +60,8 @@ export const TurnStateSchema = z.strictObject({
   pending_emergency_question: PendingEmergencyQuestionSchema.optional(),
   pulse_available: z.boolean().optional(),
   camera_available: z.boolean().optional(),
+  /** The box is asking Core to answer the question that triggered the last camera frame; no new action. */
+  camera_answer_pending: z.boolean().optional(),
   pending_camera_consent: z.literal("cloud_interpretation").optional(),
   /** The box is in SOS and hasn't asked nearby boxes yet: request_nearby_kits may be chosen. */
   nearby_kits_available: z.literal(true).optional(),

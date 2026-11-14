@@ -136,6 +136,11 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   if (!words || (request.input.type === "audio" && isObviousNonRequestTranscript(words))) {
     return request.input.type === "audio" ? silentNotHeard() : fixed("not_heard", null);
   }
+  if (request.state.camera_answer_pending && !request.state.core_context?.camera) {
+    return fixed("invalid_reply", words, spanish
+      ? "No pude revisar esa foto. Dime qué ves."
+      : "I couldn't inspect that photo. Please tell me what you see.");
+  }
 
   // 2. The reply.
   if (!deps.assistant) return fixed("no_model", words);

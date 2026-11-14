@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { VISUALS, CAMERA_INSPECT_VERSION, actionAllowed, comingLine, guidedAdvanceAllowed, guidedStartAllowed, localizeScenario, minorCutVisualAllowed, startTriage, visualById, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type ScenarioTranslation, type TurnResponse, type TurnState } from "@clara/contracts";
+import { VISUALS, CAMERA_INSPECT_VERSION, VOICE_TURN_VERSION, actionAllowed, comingLine, guidedAdvanceAllowed, guidedStartAllowed, localizeScenario, minorCutVisualAllowed, startTriage, visualById, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type ScenarioTranslation, type TurnResponse, type TurnState } from "@clara/contracts";
 import { EventFactory, type EventBody } from "../engine/events.js";
 import { ScenarioEngine, type RecentTurn, type Source, type StepIntent } from "../engine/engine.js";
 import type { Kit } from "../engine/kit.js";
@@ -141,7 +141,7 @@ export class BoxSession {
   private emergencyTaskId: string | null = null;
   private readonly background = new Map<"pulse" | "camera", AbortController>();
   private latestPulse: PulseObservation | null = null;
-  private completedTasks: ScreenPresentation[] = [];
+  private completedTasks: { presentation: ScreenPresentation; wav?: Buffer }[] = [];
   private emergencyQuestion: { taskId: string; questionId: "situation" | "people_count" | "location"; prompt: string; wav: Buffer | null; expiresAt: number; prompted: boolean } | null = null;
   private emergencyQuestionExpiry: Cancel | null = null;
   private readonly heardByTurn = new Map<string, { eventId: string; sessionId: string; text: string }>();
@@ -154,6 +154,7 @@ export class BoxSession {
   private messages: { from: string; text: string; at: number }[] = [];
   private pendingUsage: { sku: string; name: string; qty: number }[] | null = null;
   private recent: RecentTurn[] = [];
+  private personTurnSequence = 0;
   private lit: { sku: string; slot: string } | null = null;
   private lightEpoch = 0;
   private lightExpiryCancel: Cancel | null = null;
@@ -297,6 +298,7 @@ export class BoxSession {
     this.cancelBackground();
     if (this.sessionId) this.o.camera?.endSession(this.sessionId);
     this.latestPulse = null;
+    for (const task of this.completedTasks) task.wav?.fill(0);
     this.completedTasks = [];
     this.clearLightCue();
     this.voiceStatus = "off";
@@ -598,6 +600,7 @@ export class BoxSession {
 
   remember(from: RecentTurn["from"], words: string): void {
     if (!words) return;
+    if (from === "person") this.personTurnSequence++;
     this.recent.push({ from, words: words.slice(0, 1000) });
     if (this.recent.length > MAX_RECENT) this.recent.splice(0, this.recent.length - MAX_RECENT);
   }
@@ -699,7 +702,7 @@ export class BoxSession {
         if (!this.o.camera || !this.sessionId || !report || report.sessionId !== this.sessionId || !response ||
           response.heard !== report.text || !this.o.camera.grantFromRequest(this.sessionId, report.text)) return false;
         this.heardByTurn.delete(response.client_turn_id);
-        this.startCameraTask(this.sessionId);
+        this.startCameraTask(this.sessionId, report.text);
         return true;
       }
       case "capture_camera":
@@ -874,6 +877,7 @@ export class BoxSession {
   close(): void {
     this.cancelBackground();
     if (this.sessionId) this.o.camera?.endSession(this.sessionId);
+    for (const task of this.completedTasks) task.wav?.fill(0);
     this.completedTasks = [];
     this.heartbeatCancel?.();
     this.heartbeatCancel = null;
@@ -1196,13 +1200,14 @@ export class BoxSession {
     }).finally(() => { if (this.background.get("pulse") === controller) this.background.delete("pulse"); });
   }
 
-  private startCameraTask(sessionId: string): void {
+  private startCameraTask(sessionId: string, originalQuestion: string): void {
     const camera = this.o.camera;
     const inspect = this.o.cloud.inspectCamera;
     if (!camera || !inspect) return;
     this.background.get("camera")?.abort();
     const controller = new AbortController();
     this.background.set("camera", controller);
+    const personTurns = this.personTurnSequence;
     if (this.sos) this.sos.overlay = false;
     this.presentation = { kind: "status", title: "Inspecting photo", body: "Clara is checking one consented camera frame. You can keep talking.", image_url: null, item: null, source_label: "USB camera" };
     this.publish();
@@ -1222,26 +1227,52 @@ export class BoxSession {
       } finally {
         frame.jpeg.fill(0);
       }
-    })().then((result) => {
+    })().then(async (result) => {
       if (controller.signal.aborted || !this.lidOpen || this.sessionId !== sessionId) return;
       this.log(`camera: cloud status ${result?.status ?? "not_sent"}`);
       if (!result) {
         this.queueCompletedTask({ kind: "status", title: "Camera unavailable", body: "I couldn't capture a photo. Please check the camera and try again.", image_url: null, item: null, source_label: "USB camera" });
         return;
       }
-      const text = result?.status === "observed" && result.observation
-        ? `${result.observation} ${result.limitation}`
-        : "I couldn't analyze that photo. Please tell me what you see.";
-      this.queueCompletedTask({ kind: result?.status === "observed" ? "answer" : "status", title: "Camera observation", body: text,
-        image_url: null, item: null, source_label: result?.status === "observed" ? `Single frame captured ${result.captured_at}` : "USB camera" });
+      if (result.status !== "observed" || !result.observation) {
+        this.queueCompletedTask({ kind: "status", title: "Camera unavailable", body: "I couldn't analyze that photo. Please tell me what you see.", image_url: null, item: null, source_label: "USB camera" });
+        return;
+      }
+      // A newer person turn takes priority; the image stays in short-lived Core context for their next question.
+      if (this.personTurnSequence !== personTurns) return;
+      const state = this.turnState();
+      if (!state) return;
+      let reply: TurnResponse;
+      try {
+        reply = await this.o.cloud.voiceTurn({
+          schema_version: VOICE_TURN_VERSION, client_turn_id: this.newId(), session_id: sessionId,
+          language: this.lang, input: { type: "text", text: originalQuestion.slice(0, 500) },
+          state: { ...state, camera_available: false, camera_answer_pending: true },
+        }, controller.signal);
+      } catch {
+        if (!controller.signal.aborted && this.sessionId === sessionId && this.personTurnSequence === personTurns) {
+          this.queueCompletedTask({ kind: "status", title: "Camera review", body: "I reviewed the photo, but couldn't answer from it. Tell me what you'd like to know.",
+            image_url: null, item: null, source_label: `Single frame captured ${result.captured_at}` });
+        }
+        return;
+      }
+      if (controller.signal.aborted || !this.lidOpen || this.sessionId !== sessionId ||
+        this.personTurnSequence !== personTurns) return;
+      const text = reply.action === null && reply.answered_by === "model" && reply.reply
+        ? reply.reply : "I reviewed the photo, but couldn't answer from it. Tell me what you'd like to know.";
+      this.remember("clara", text);
+      this.queueCompletedTask({ kind: "answer", title: "Camera review", body: text, image_url: null, item: null,
+        source_label: `Single frame captured ${result.captured_at}` }, reply.action === null && reply.answered_by === "model" && reply.reply && reply.speech
+        ? Buffer.from(reply.speech.data_base64, "base64") : undefined);
     }).catch((error: unknown) => {
       this.log(`camera: cloud request failed (${error instanceof CloudError ? error.kind : "unknown"})`);
       if (this.lidOpen && this.sessionId === sessionId) this.queueCompletedTask({ kind: "status", title: "Camera unavailable", body: "I couldn't inspect that photo. Please describe what you see.", image_url: null, item: null, source_label: "USB camera" });
     }).finally(() => { if (this.background.get("camera") === controller) this.background.delete("camera"); });
   }
 
-  private queueCompletedTask(presentation: ScreenPresentation): void {
-    this.completedTasks.push(presentation);
+  private queueCompletedTask(presentation: ScreenPresentation, wav?: Buffer): void {
+    this.completedTasks.push({ presentation, ...(wav ? { wav } : {}) });
+    for (const dropped of this.completedTasks.slice(0, -2)) dropped.wav?.fill(0);
     this.completedTasks = this.completedTasks.slice(-2);
     this.presentCompletedTask();
   }
@@ -1250,10 +1281,10 @@ export class BoxSession {
     if (!this.lidOpen || this.completedTasks.length === 0 || this.o.speech?.busy ||
       ["hearing", "thinking", "speaking"].includes(this.voiceStatus)) return;
     const next = this.completedTasks.shift()!;
-    this.presentation = next;
-    this.caption = next.body;
+    this.presentation = next.presentation;
+    this.caption = next.presentation.body;
     this.publish();
-    if (this.o.speech && !this.o.speech.muted) void this.o.speech.say({ text: next.body }).catch(() => {});
+    if (this.o.speech && !this.o.speech.muted) void this.o.speech.say({ text: next.presentation.body, ...(next.wav ? { wav: next.wav } : {}) }).catch(() => {});
     else if (this.completedTasks.length) queueMicrotask(() => this.presentCompletedTask());
   }
 

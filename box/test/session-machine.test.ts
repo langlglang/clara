@@ -176,7 +176,12 @@ describe("background sensor tasks", () => {
     Object.assign(enabled.cloud, { inspectCamera: async (request: { task_id: string; captured_at: string }) => ({
       schema_version: CAMERA_INSPECT_VERSION, task_id: request.task_id, status: "observed", observation: "This single photo may show an indoor setting. Please tell me what you see.",
       limitation: "One frame may miss details.", captured_at: request.captured_at, observed_at: new Date().toISOString(),
-    }) });
+    }), voiceTurn: async (request: { client_turn_id: string; input: { text: string }; state: { camera_answer_pending: boolean } }) => {
+      expect(request.input.text).toBe("Can you use the camera?");
+      expect(request.state.camera_answer_pending).toBe(true);
+      return { schema_version: VOICE_TURN_VERSION, client_turn_id: request.client_turn_id, heard: request.input.text,
+        reply: "I reviewed the photo. What would you like to know about it?", action: null, answered_by: "model", reason: null, speech: null };
+    } });
     enabled.session.lidOpened();
     expect(enabled.session.turnState()?.camera_available).toBe(true);
     const requestAction = { name: "request_camera" as const };
@@ -186,7 +191,7 @@ describe("background sensor tasks", () => {
     enabled.session.heard("Can you use the camera?", turnId);
     expect(enabled.session.applyAction(requestAction, "voice", requestResponse)).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(enabled.session.view().presentation).toMatchObject({ kind: "answer", title: "Camera observation" });
+    expect(enabled.session.view().presentation).toMatchObject({ kind: "answer", title: "Camera review", body: "I reviewed the photo. What would you like to know about it?" });
     expect(enabled.session.applyAction(requestAction, "voice", requestResponse)).toBe(false);
     const unrelatedId = uuid();
     enabled.session.heard("The camera is plugged in", unrelatedId);
@@ -210,6 +215,34 @@ describe("background sensor tasks", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(uploads).toBe(0);
     expect(session.view().presentation?.body).toContain("couldn't capture a photo");
+  });
+
+  it("does not speak an older camera answer after the person starts another turn", async () => {
+    let session!: BoxSession;
+    const frame = Buffer.concat([Buffer.from([0xff, 0xd8]), Buffer.alloc(128), Buffer.from([0xff, 0xd9])]);
+    const camera = new CameraCapture(() => session.sessionId, async () => Buffer.from(frame));
+    const setupResult = setup(undefined, { camera, cameraCloudEnabled: true });
+    session = setupResult.session;
+    let finishInspection!: (value: unknown) => void;
+    let coreCalls = 0;
+    Object.assign(setupResult.cloud, {
+      inspectCamera: () => new Promise((resolve) => { finishInspection = resolve; }),
+      voiceTurn: async () => { coreCalls++; throw new Error("stale camera answer must not run"); },
+    });
+    session.lidOpened();
+    const turnId = uuid();
+    const response: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: turnId, heard: "Take a photo",
+      reply: "I'll take one photo.", action: { name: "request_camera" }, answered_by: "model", reason: null, speech: null };
+    session.remember("person", "Take a photo");
+    session.heard("Take a photo", turnId);
+    expect(session.applyAction({ name: "request_camera" }, "voice", response)).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    session.remember("person", "Where are the scissors?");
+    finishInspection({ schema_version: CAMERA_INSPECT_VERSION, task_id: uuid(), status: "observed", observation: "A hand is visible.",
+      limitation: "One frame may miss details.", captured_at: new Date().toISOString(), observed_at: new Date().toISOString() });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(coreCalls).toBe(0);
+    expect(session.view().presentation?.title).not.toBe("Camera review");
   });
 });
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** One consented frame, never a continuous feed. The JPEG is transient and is not an event-log field. */
-export const CAMERA_INSPECT_VERSION = "camera-inspect/0.1" as const;
+export const CAMERA_INSPECT_VERSION = "camera-inspect/0.2" as const;
 export const CAMERA_MAX_BASE64_CHARS = 1_100_000;
 
 export const CameraInspectRequestSchema = z.strictObject({
@@ -19,8 +19,8 @@ export const CameraInspectResponseSchema = z.strictObject({
   schema_version: z.literal(CAMERA_INSPECT_VERSION),
   task_id: z.uuid(),
   status: z.enum(["observed", "unavailable"]),
-  /** Cautious one-frame description, never diagnosis or care instructions. */
-  observation: z.string().max(240).nullable(),
+  /** Detailed visual-only observation from one multimodal model call; never a diagnosis or care instruction. */
+  observation: z.string().max(1400).nullable(),
   limitation: z.string().max(160),
   captured_at: z.iso.datetime({ offset: true }),
   observed_at: z.iso.datetime({ offset: true }),

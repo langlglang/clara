@@ -79,5 +79,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     captured_at: request.captured_at,
     observed_at: new Date().toISOString(),
   };
+  if (observation) rt.core.recordCamera(id, request.session_id, {
+    captured_at: request.captured_at, observed_at: response.observed_at, description: observation,
+  });
   return json(response);
 }

@@ -31,6 +31,12 @@ describe("replyJsonSchema", () => {
     expect(named("capture_camera", camera)).toBeUndefined();
     expect(replyZodSchema(camera).safeParse({ transcript: "take a photo", reply: "", action: { name: "capture_camera" } }).success).toBe(false);
   });
+  it("allows only a spoken answer when Core processes the completed camera frame", () => {
+    const pending = { ...state, camera_answer_pending: true, camera_available: true };
+    expect((replyJsonSchema(pending) as { properties: { action: unknown } }).properties.action).toEqual({ type: "null" });
+    expect(replyZodSchema(pending).safeParse({ transcript: "look at this", reply: "What do you see?", action: null }).success).toBe(true);
+    expect(replyZodSchema(pending).safeParse({ transcript: "look at this", reply: "", action: { name: "suggest_sos" } }).success).toBe(false);
+  });
 
   it("leaves out actions with nothing to choose from, and triage when unavailable", () => {
     const empty = { ...state, allowed_steps: [], questions: [], manifest: [] };

@@ -12,6 +12,20 @@ const state: TurnRequest["state"] = { scenario_id: null, step_id: null, allowed_
 const request = (id = randomUUID()): TurnRequest => ({ schema_version: VOICE_TURN_VERSION, client_turn_id: id, session_id, language: "en", input: { type: "text", text: "Where are the scissors?" }, state });
 
 describe("Core Clara session context", () => {
+  it("keeps one camera description only briefly in its own lid session", () => {
+    let time = Date.parse(at);
+    const network = createNetwork();
+    network.seedDemo();
+    const emergency = createEmergencyWorker({ network, emit: () => {} });
+    const book = createCoreSessionBook(network, emergency, () => time);
+    book.prepare(box_id, request());
+    book.recordCamera(box_id, session_id, { captured_at: at, observed_at: at, description: "A red line is visible on one finger." });
+    expect(book.prepare(box_id, request()).state.core_context?.camera?.description).toContain("red line");
+    expect(book.prepare(box_id, { ...request(), session_id: randomUUID() }).state.core_context?.camera).toBeNull();
+    time += 121_000;
+    expect(book.prepare(box_id, request()).state.core_context?.camera).toBeNull();
+    emergency.stop();
+  });
   it("reconstructs a source-labeled older report after the Pi's recent turns are empty", () => {
     const network = createNetwork();
     network.seedDemo();
@@ -22,6 +36,9 @@ describe("Core Clara session context", () => {
     const first = request();
     const prepared = book.prepare(box_id, first);
     expect(prepared.state.core_context?.reports).toEqual([{ source_event_id: reportId, at, text: "A person fell near the box." }]);
+    expect(prepared.state.core_context?.camera).toBeNull();
+    book.recordCamera(box_id, session_id, { captured_at: at, observed_at: at, description: "A hand is near the camera. A red line is visible on one finger." });
+    expect(book.prepare(box_id, request()).state.core_context?.camera?.description).toContain("red line");
     const response: TurnResponse = { schema_version: VOICE_TURN_VERSION, client_turn_id: first.client_turn_id, heard: "Where are the scissors?", reply: "The screen shows the location.", action: { name: "locate_item", sku: "SCISSORS" }, answered_by: "model", reason: null, speech: null };
     book.finish(box_id, prepared, response);
     const second = book.prepare(box_id, request());
@@ -37,8 +54,8 @@ describe("Core Clara session context", () => {
     const emergency = createEmergencyWorker({ network, emit: () => {} });
     const book = createCoreSessionBook(network, emergency, () => Date.parse(at));
     const first = request();
-    const prepared = book.prepare(box_id, { ...first, state: { ...state, core_context: { reports: [], actions: [], emergency_task: null } } });
-    expect(prepared.state.core_context).toEqual({ reports: [], actions: [], emergency_task: null });
+    const prepared = book.prepare(box_id, { ...first, state: { ...state, core_context: { reports: [], actions: [], emergency_task: null, camera: null } } });
+    expect(prepared.state.core_context).toEqual({ reports: [], actions: [], emergency_task: null, camera: null });
     book.finish(box_id, prepared, { schema_version: VOICE_TURN_VERSION, client_turn_id: first.client_turn_id, heard: "private", reply: "reply", action: null, answered_by: "model", reason: null, speech: null }, true);
     expect(book.prepare(box_id, request()).state.recent_turns).toEqual([]);
     emergency.stop();

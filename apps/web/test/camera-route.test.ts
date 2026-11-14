@@ -45,6 +45,7 @@ describe("consented camera route", () => {
   });
 
   it("rejects malformed, stale, and repeated frames; no model key returns unavailable", async () => {
+    expect((await post(body({ schema_version: "camera-inspect/0.1" }))).status).toBe(400);
     expect((await post(body({ image_base64: Buffer.alloc(130).toString("base64") }))).status).toBe(400);
     expect((await post(body({ captured_at: new Date(Date.now() - 60_000).toISOString() }))).status).toBe(400);
     const once = body();

@@ -62,7 +62,7 @@ export function replyJsonSchema(state: TurnState): Record<string, unknown> {
         type: "string",
         description: `What Clara says aloud: at most two short sentences, under ${MAX_REPLY - 50} characters. Empty with select_step.`,
       },
-      action: { anyOf: variants, description: "At most one action, chosen only from the options offered." },
+      action: state.camera_answer_pending ? { type: "null" } : { anyOf: variants, description: "At most one action, chosen only from the options offered." },
     },
   };
 }
@@ -71,6 +71,11 @@ const oneOf = (values: string[]) => z.enum(values as [string, ...string[]]);
 
 /** The zod twin of replyJsonSchema; `reply` is tidied before its length is checked. */
 export function replyZodSchema(state: TurnState) {
+  if (state.camera_answer_pending) return z.strictObject({
+    transcript: z.string().max(MAX_HEARD),
+    reply: z.string().transform(tidy).pipe(z.string().max(MAX_REPLY)),
+    action: z.null(),
+  });
   const { stepIds, questionIds, skus, visualIds, guideIds, triage, pendingEmergencyQuestion, pulseAvailable, cameraAvailable, nearbyKits } = allowedOptions(state);
   const variants: z.ZodType[] = [];
   if (stepIds.length > 0) variants.push(z.strictObject({ name: z.literal("select_step"), step_id: oneOf(stepIds) }));

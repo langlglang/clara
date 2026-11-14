@@ -8,6 +8,7 @@ interface Session {
   turns: TurnState["recent_turns"];
   actions: ActionRecord[];
   replies: Map<string, TurnResponse>;
+  camera: NonNullable<TurnState["core_context"]>["camera"];
 }
 
 /** One Core Clara context per lid session. Raw audio/images never enter this book. */
@@ -20,7 +21,7 @@ export function createCoreSessionBook(network: Network, emergency: EmergencyWork
     let session = sessions.get(id);
     if (!session) {
       if (sessions.size >= 64) sessions.delete(sessions.keys().next().value!);
-      session = { updated: now(), turns: request.state.recent_turns.slice(-12), actions: [], replies: new Map() };
+      session = { updated: now(), turns: request.state.recent_turns.slice(-12), actions: [], replies: new Map(), camera: null };
       sessions.set(id, session);
     }
     session.updated = now();
@@ -39,11 +40,17 @@ export function createCoreSessionBook(network: Network, emergency: EmergencyWork
         reports,
         actions: session.actions.slice(-6),
         emergency_task: task && !task.cancelled ? { task_id: task.task_id, state: task.ready ? "facts_ready" : "collecting_facts" } : null,
+        camera: session.camera && now() - Date.parse(session.camera.observed_at) <= 120_000 ? session.camera : null,
       };
       return { ...request, state: { ...request.state, recent_turns: session.turns.slice(-12), core_context } };
     },
     cached(boxId: string, request: TurnRequest): TurnResponse | null {
       return get(boxId, request).replies.get(request.client_turn_id) ?? null;
+    },
+    recordCamera(boxId: string, sessionId: string, camera: NonNullable<Session["camera"]>): void {
+      const session = sessions.get(key(boxId, sessionId));
+      // The first voice turn that requested the image must already have opened this Core session.
+      if (session && now() - Date.parse(camera.observed_at) <= 120_000) session.camera = camera;
     },
     finish(boxId: string, request: TurnRequest, response: TurnResponse, cancelled = false): void {
       if (cancelled || response.client_turn_id !== request.client_turn_id) return;

@@ -20,6 +20,12 @@ const assistantFor = (...outputs: Parameters<typeof scriptedModel>[0]) => create
 afterEach(() => vi.useRealTimers());
 
 describe("handleTurn", () => {
+  it("does not claim to review a photo when the server has no matching image observation", async () => {
+    const response = await handleTurn(textRequest("Look at this photo", { state: { ...state, camera_answer_pending: true } }), {
+      assistant: assistantFor(json({ transcript: "x", reply: "I can see a hand.", action: null })), ears: null, voice: null,
+    });
+    expect(response).toMatchObject({ action: null, reply: "I couldn't inspect that photo. Please tell me what you see.", answered_by: "fixed" });
+  });
   it("asks about severity instead of showing the severe-bleeding panel for an unspecified finger cut", async () => {
     const severe = { ...state, scenario_id: "severe_bleeding", allowed_steps: [
       { step_id: "start", label: "Tell me what happened" }, { step_id: "safety", label: "Check safety" },
@@ -100,6 +106,7 @@ describe("handleTurn", () => {
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.1" }).success).toBe(false);
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.5" }).success).toBe(false);
     expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.6" }).success).toBe(false);
+    expect(TurnResponseSchema.safeParse({ ...response, schema_version: "voice-turn/0.7" }).success).toBe(false);
   });
 
   it("refuses selected guidance missing from the server bundle", async () => {

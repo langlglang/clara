@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Volunteer } from "@clara/contracts";
 import { ApiError, api, postJson } from "../../lib/client";
 import { isIos, isStandalone, registerSw, useInstallPrompt } from "../../lib/pushClient";
+import { ClaraMark, IconBell, IconCar, IconChevronLeft, IconPerson, IconPin } from "../ClaraIcons";
 import { AlertsSetup } from "./AlertsSetup";
 import { VOLUNTEER_KEY } from "./CompanionApp";
 import { AvailabilityFields, HelpFields, NameFields, SkillsFields, VehicleFields, WhereFields, draftToBody, emptyDraft, problemIn, type Draft, type Section } from "./ProfileFields";
@@ -19,7 +20,7 @@ import { AvailabilityFields, HelpFields, NameFields, SkillsFields, VehicleFields
 type StepId = "welcome" | "help" | "name" | "skills" | "vehicle" | "where" | "availability" | "alerts" | "install";
 
 const TITLES: Record<StepId, string> = {
-  welcome: "Help your neighbors in an emergency",
+  welcome: "Be the help that’s already nearby",
   help: "How can you help?",
   name: "Your name and phone",
   skills: "Your first-aid skills",
@@ -123,49 +124,81 @@ export function Onboarding() {
   };
 
   return (
-    <section className="stack onboarding" aria-labelledby="ob-h" style={{ gap: 16 }}>
-      <div className="row between">
-        {index > 0 ? (
-          <button type="button" className="btn small ghost" onClick={back} aria-label="Back to the previous step">
-            ← Back
-          </button>
-        ) : (
-          <Link href="/" className="brand">
-            Clara
-          </Link>
-        )}
-        <span className="lbl" aria-hidden="true">
-          Step {index + 1} of {steps.length}
-        </span>
+    <section className="onboarding" aria-labelledby="ob-h">
+      <div className="ob-top">
+        <div className="ob-bar">
+          {index > 0 ? (
+            <button type="button" className="ob-back" onClick={back} aria-label="Back to the previous step">
+              <IconChevronLeft />
+              Back
+            </button>
+          ) : (
+            <Link href="/" className="ob-brand">
+              <ClaraMark size={24} />
+              <span>Clara</span>
+            </Link>
+          )}
+          <span className="ob-count" aria-hidden="true">
+            Step {index + 1} of {steps.length}
+          </span>
+        </div>
+        <div
+          className="ob-progress"
+          role="progressbar"
+          aria-label="Sign-up progress"
+          aria-valuemin={1}
+          aria-valuemax={steps.length}
+          aria-valuenow={index + 1}
+          aria-valuetext={`Step ${index + 1} of ${steps.length}: ${TITLES[step]}`}
+          style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+        >
+          {steps.map((s, i) => (
+            <span key={s} data-done={i <= index || undefined} />
+          ))}
+        </div>
       </div>
-      <div className="progress" role="progressbar" aria-label="Sign-up progress" aria-valuemin={1} aria-valuemax={steps.length} aria-valuenow={index + 1} aria-valuetext={`Step ${index + 1} of ${steps.length}: ${TITLES[step]}`}>
-        <span style={{ width: `${((index + 1) / steps.length) * 100}%` }} />
+
+      {step === "welcome" ? <AlertPreview /> : null}
+
+      <div className="ob-head">
+        <h1 id="ob-h" ref={heading} tabIndex={-1}>
+          {TITLES[step]}
+        </h1>
+        {step === "welcome" ? <p className="ob-sub">When someone near you opens a Clara box and asks for help, your phone gets an alert. You choose each time whether to go.</p> : null}
+        {step === "help" ? <p className="ob-sub">Pick one or both.</p> : null}
       </div>
-      <h1 id="ob-h" ref={heading} tabIndex={-1}>
-        {TITLES[step]}
-      </h1>
 
       {step === "welcome" ? (
-        <div className="stack" style={{ gap: 12 }}>
+        <div className="stack" style={{ gap: 16 }}>
           {existing && !volunteerId ? (
             <p className="notice">
               This phone is already signed up. <Link href="/app">Open the app</Link>, or continue to join again as someone new.
             </p>
           ) : null}
-          <p>
-            Clara is a network of first-aid boxes. When someone opens a box and asks for help, Clara alerts trained neighbors nearby, and drivers who can take a patient to
-            hospital.
-          </p>
-          <div className="card">
-            <span className="lbl">What we&apos;ll ask</span>
-            <ul className="ticks">
-              <li>Your name, and a phone number if you want a call as a backup</li>
-              <li>How you can help: first aid, driving, or both</li>
-              <li>Roughly where you are, and how far you&apos;d go</li>
-              <li>Permission to send you loud alerts</li>
+          <section aria-labelledby="ask-h" className="stack" style={{ gap: 10 }}>
+            <h2 id="ask-h" className="ob-h2">
+              We&apos;ll ask for
+            </h2>
+            <ul className="ask-grid">
+              <li>
+                <IconPerson />
+                Name and phone
+              </li>
+              <li>
+                <IconCar />
+                First aid, driving, or both
+              </li>
+              <li>
+                <IconPin />
+                Where you usually are
+              </li>
+              <li>
+                <IconBell />
+                Permission for loud alerts
+              </li>
             </ul>
-            <span className="small muted">You choose each time whether to go. You can change everything later in Profile.</span>
-          </div>
+            <p className="small muted">Takes about two minutes. You can change everything later in Profile.</p>
+          </section>
           <p className="notice">HackPrinceton demo. Clara never replaces emergency services: in a real emergency, call your local emergency number.</p>
         </div>
       ) : null}
@@ -194,16 +227,46 @@ export function Onboarding() {
       ) : null}
       {step === "install" ? <InstallStep install={install} /> : null}
 
-      {error ? (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      ) : null}
-      <button type="button" className="btn primary block huge" aria-disabled={busy || undefined} onClick={() => void next()}>
-        {primary[step]}
-      </button>
-      {step === "availability" ? <p className="small muted">Your name, skills, vehicle and rough location are shared with this demo&apos;s dispatch console.</p> : null}
+      <div className="ob-actions">
+        {error ? (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <button type="button" className="btn primary block huge" aria-disabled={busy || undefined} onClick={() => void next()}>
+          {primary[step]}
+        </button>
+        {step === "availability" ? <p className="small muted">Your name, skills, vehicle and rough location are shared with this demo&apos;s dispatch console.</p> : null}
+      </div>
     </section>
+  );
+}
+
+/** What an alert looks like, on the welcome screen. A picture, not controls: the buttons do nothing here. */
+function AlertPreview() {
+  return (
+    <figure className="alert-preview">
+      <div className="alert-preview-stack" aria-hidden="true">
+        <div className="alert-preview-card">
+          <div className="alert-preview-head">
+            <span className="alert-preview-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square" focusable="false">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </span>
+            <span className="stack" style={{ gap: 1, minWidth: 0 }}>
+              <span className="alert-preview-title">Someone nearby needs first aid</span>
+              <span className="alert-preview-where">Clinic tent box, a short walk from you</span>
+            </span>
+          </div>
+          <div className="alert-preview-btns">
+            <span data-primary="">I’m coming</span>
+            <span>Can’t go</span>
+          </div>
+        </div>
+      </div>
+      <figcaption>This is what an alert looks like</figcaption>
+    </figure>
   );
 }
 

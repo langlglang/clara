@@ -96,8 +96,16 @@ export type Incident = z.infer<typeof IncidentSchema>;
 export const AlertResponseSchema = z.strictObject({ action: z.enum(["shown", "coming", "declined", "arrived"]) });
 export type AlertResponse = z.infer<typeof AlertResponseSchema>;
 
+/** Short code for the EMS report link (`<base>/r/AB12CD`): six upper-case letters and digits. */
+export const ReportCodeSchema = z.string().regex(/^[A-Z0-9]{6}$/);
+
 /** Messages the server pushes to a box over its live stream. */
 export const BoxPushSchema = z.discriminatedUnion("type", [
+  /**
+   * The box's own incident opened (replayed when the box stream reconnects while it is open). `report_url` is the
+   * absolute EMS scene report link; `report_code` is the short code behind `<base>/r/<code>`.
+   */
+  z.strictObject({ type: z.literal("incident.opened"), incident_id: Id, report_url: z.url().max(300), report_code: ReportCodeSchema }),
   z.strictObject({ type: z.literal("alert.update"), incident_id: Id, alert: AlertSchema }),
   z.strictObject({ type: z.literal("responder.message"), incident_id: Id, from: z.string().max(60), text: z.string().max(300) }),
   z.strictObject({ type: z.literal("nearby.emergency"), incident_id: Id, from_box_id: Id, from_box_name: z.string().max(80), directions: z.string().max(200) }),

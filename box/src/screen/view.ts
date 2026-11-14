@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Id } from "@clara/contracts";
 
 export type ScreenPhase = "idle" | "guiding" | "countdown" | "sos";
-export const SCREEN_VIEW_VERSION = "screen-view/1.2" as const;
+export const SCREEN_VIEW_VERSION = "screen-view/1.3" as const;
 export type ScreenVoiceState = "off" | "starting" | "ready" | "listening" | "processing" | "speaking" | "unavailable";
 
 export interface ScreenStep {
@@ -67,8 +67,17 @@ export interface ScreenView {
   speech_muted: boolean;
   /** Actual voice-loop activity; the lid and hands-free capability gate the displayed state. */
   voice_state: ScreenVoiceState;
-  /** The scene report link for the QR code; null until the server gives one. */
+  /** The scene report link (shown as text, never a QR code); null until the server gives one. */
   report_url: string | null;
+  /** Additive in 1.3: the short link as shown on screen, e.g. "clara.living/r/AB12CD". */
+  report_link: string | null;
+  /** Additive in 1.3: the current scenario and the ones the start-screen picker offers. */
+  scenario_id: string | null;
+  scenarios: { scenario_id: string; title: string }[];
+  /** Additive in 1.3: a running CPR rhythm coach; the page derives the compression count from started_at and bpm. */
+  coach: { kind: "cpr"; bpm: number; started_at: number } | null;
+  /** Additive in 1.3: the no-pulse question is open (NOT BREATHING / BREATHING buttons). */
+  pulse_prompt: boolean;
 }
 
 /** What the page may send (POST /screen/press). Anything else is refused with 400. */
@@ -91,9 +100,14 @@ export const ScreenPressSchema = z.union([
       "confirm_usage",
       "dismiss_usage",
       "dismiss_notice",
+      "stop_coach",
+      "read_summary",
+      "pulse_not_breathing",
+      "pulse_breathing",
     ]),
   }),
   z.strictObject({ action: z.literal("goto"), step_id: Id }),
+  z.strictObject({ action: z.literal("pick_scenario"), scenario_id: Id }),
   z.strictObject({ action: z.enum(["bringing_kit", "dismiss_nearby"]), incident_id: Id }),
 ]);
 export type ScreenPress = z.infer<typeof ScreenPressSchema>;

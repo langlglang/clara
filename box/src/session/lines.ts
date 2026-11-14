@@ -14,6 +14,7 @@ export const LINES = {
   helperWithdrew: "The person who accepted can no longer come. The SOS stays open.",
   responderMessage: (from: string, text: string) => `Message from ${from}: ${text}`,
   usageConfirmed: "Supply count updated.",
+  noPulse: "I can't detect a pulse. Is the person responding? Are they breathing normally?",
 } as const;
 
 /** What the mock-911 screen coaches the bystander to say. Phrasing for the call only, never medical advice. */

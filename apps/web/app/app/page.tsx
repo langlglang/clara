@@ -11,7 +11,6 @@ export default function AppPage() {
         <Link href="/" className="brand">
           Clara
         </Link>
-        <span className="lbl">Demo · fictional site</span>
       </div>
       <CompanionApp />
     </main>

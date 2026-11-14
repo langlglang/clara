@@ -1,0 +1,58 @@
+{
+  "scenario_id": "not_breathing",
+  "version": "draft-1",
+  "title": "Not breathing",
+  "status": "draft",
+  "sources": [
+    "https://cpr.heart.org/en/resources/what-is-cpr",
+    "https://cpr.heart.org/en/courses/hands-only-cpr",
+    "https://www.redcross.org/take-a-class/cpr/performing-cpr/hands-only-cpr"
+  ],
+  "start": "check_response",
+  "steps": [
+    {
+      "step_id": "check_response",
+      "label": "Check if they respond",
+      "text": "Make sure it is safe. Tap their shoulder and shout, \"Are you OK?\"",
+      "next": ["get_help"]
+    },
+    {
+      "step_id": "get_help",
+      "label": "Shout for help and call",
+      "text": "If they do not respond, shout for help. Ask someone to call emergency services and bring an AED. This screen can guide an emergency call.",
+      "sos": true,
+      "next": ["check_breathing"]
+    },
+    {
+      "step_id": "check_breathing",
+      "label": "Check breathing",
+      "text": "Look at their chest for no more than 10 seconds. If they are not breathing, or only gasping, start CPR.",
+      "next": ["hand_position"]
+    },
+    {
+      "step_id": "hand_position",
+      "label": "Hands on the center of the chest",
+      "text": "Lay them on their back on a firm surface. Put the heel of one hand on the center of the chest. Put your other hand on top.",
+      "next": ["compressions"]
+    },
+    {
+      "step_id": "compressions",
+      "label": "Push hard and fast",
+      "text": "Push hard and fast, at least 2 inches deep, with the beat. Let the chest come back up after each push.",
+      "coach": { "kind": "cpr", "bpm": 110 },
+      "next": ["keep_going"]
+    },
+    {
+      "step_id": "keep_going",
+      "label": "Keep going until help or an AED arrives",
+      "text": "Keep pushing with the beat. Do not stop until help takes over, an AED is ready, or they start breathing.",
+      "coach": { "kind": "cpr", "bpm": 110 },
+      "next": []
+    }
+  ],
+  "questions": [
+    { "question_id": "responds", "text": "Do they respond when you tap them and shout?" },
+    { "question_id": "breathing", "text": "Are they breathing normally?" }
+  ],
+  "triage_available": false
+}

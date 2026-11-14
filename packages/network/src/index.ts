@@ -5,6 +5,7 @@ import { randomIds, type Clock, type Ids } from "./config.js";
 import { ingest, type IngestResult } from "./events.js";
 import type { Candidate } from "./matching.js";
 import { buildSceneReport, type ReportOptions, type SceneReport } from "./report.js";
+import { incidentByShortCode, incidentOpenedPush, normalizeBaseUrl } from "./report-link.js";
 import { DEMO_BOXES, DEMO_VOLUNTEERS } from "./seed.js";
 import { createMemoryStore, type Store, type StoreChange } from "./store.js";
 import { supplyLedger, type MaintainerAlert, type SupplyLedger } from "./supplies.js";
@@ -15,6 +16,7 @@ export * from "./config.js";
 export * from "./events.js";
 export * from "./matching.js";
 export * from "./report.js";
+export * from "./report-link.js";
 export * from "./seed.js";
 export * from "./store.js";
 export * from "./supplies.js";
@@ -38,12 +40,15 @@ export interface NetworkOptions {
   store?: Store;
   clock?: Clock;
   ids?: Ids;
+  /** Base of the EMS report links sent to boxes (PUBLIC_BASE_URL; default https://clara.living). */
+  publicBaseUrl?: string;
 }
 
 export function createNetwork(options: NetworkOptions = {}) {
   const store = options.store ?? createMemoryStore();
   const clock = options.clock ?? (() => new Date());
   const ids = options.ids ?? randomIds;
+  const baseUrl = normalizeBaseUrl(options.publicBaseUrl);
   const ctx = { store, ids };
   const listeners = new Set<(change: NetworkChange) => void>();
 
@@ -95,9 +100,24 @@ export function createNetwork(options: NetworkOptions = {}) {
     /** A batch the box posted. Re-sending is harmless. */
     ingest(batch: unknown): IngestResult {
       const result = ingest(ctx, batch, clock());
-      if (result.ok) publish(result.pushes, result.maintainer);
+      if (result.ok) {
+        // The opening box gets its EMS report link first, before alert updates.
+        const opened: Push[] = result.opened.map((incident) => ({ box_id: incident.box_id, push: incidentOpenedPush(incident, baseUrl) }));
+        result.pushes.unshift(...opened);
+        publish(result.pushes, result.maintainer);
+      }
       return result;
     },
+    /** The `incident.opened` push for the box's open incident (sent again when the box stream reconnects). */
+    incidentOpenedFor(boxId: string): Push["push"] | undefined {
+      const entry = store.openIncidentForBox(boxId);
+      return entry ? incidentOpenedPush(entry.incident, baseUrl) : undefined;
+    },
+    /** The report token behind a short code (`/r/AB12CD`), or undefined when unknown or ambiguous. */
+    reportTokenByCode(code: string): string | undefined {
+      return incidentByShortCode(store, code)?.incident.report_token;
+    },
+    publicBaseUrl: baseUrl,
     /** The only sentence the box may say about who is coming (null until a real accept). */
     comingLine: (boxId: string): string | null => comingLineForBox(store, boxId),
 

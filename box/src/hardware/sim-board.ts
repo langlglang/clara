@@ -12,7 +12,7 @@ import { createLogger, type Logger } from "./log.js";
  */
 export type SimCommand =
   | { t: "led"; ch: number; ms: number; mode: "solid" | "blink" | "pulse" }
-  | { t: "rhythm"; bpm: number }
+  | { t: "rhythm"; bpm: number; pattern?: "beat" | "sos" }
   | { t: "buzz"; pattern: "chime" | "alert" | "off" }
   | { t: "pulse.start" }
   | { t: "pulse.stop" };
@@ -156,11 +156,11 @@ export class SimBoard implements Board {
     return true;
   }
 
-  async rhythm(bpm: number): Promise<boolean> {
+  async rhythm(bpm: number, pattern?: "beat" | "sos"): Promise<boolean> {
     if (!this.accepting() || !Number.isInteger(bpm) || bpm < 0 || bpm > 200) return false;
-    this.history.push({ t: "rhythm", bpm });
+    this.history.push(pattern && bpm > 0 ? { t: "rhythm", bpm, pattern } : { t: "rhythm", bpm });
     this.rhythmBpm = bpm;
-    this.log.info(bpm === 0 ? "rhythm stopped" : `all LEDs: rhythm at ${bpm} bpm`);
+    this.log.info(bpm === 0 ? "rhythm stopped" : `all LEDs: rhythm at ${bpm} bpm${pattern ? ` (${pattern})` : ""}`);
     return true;
   }
 

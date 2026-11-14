@@ -40,6 +40,11 @@ const view = (revision: number): ScreenView => ({
   voice_state: "off",
   speech_muted: false,
   report_url: null,
+  report_link: null,
+  scenario_id: null,
+  scenarios: [],
+  coach: null,
+  pulse_prompt: false,
 });
 
 /** Loopback only: the server under test. */
@@ -127,7 +132,7 @@ describe("screen server", () => {
       req.end();
     });
     expect(chunks.join("")).toContain("event: view");
-    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.2"');
+    expect(chunks.join("")).toContain('"schema_version":"screen-view/1.3"');
     expect(chunks.join("")).toContain('"speech_muted":false');
     expect(chunks.join("")).toContain('"presentation":null');
     expect(chunks.join("")).toContain('"step":null');

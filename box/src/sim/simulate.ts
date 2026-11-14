@@ -18,6 +18,8 @@ const HELP = `Clara box SIMULATOR. Type a line and press Enter.
   n / b / r      Next / Back / Repeat (touch)
   s / x          SOS / cancel the countdown
   t              Talk button
+  :pick <scenario_id>        start-screen scenario picker (e.g. :pick not_breathing)
+  :summary  :stopcoach       read the handoff summary / stop the CPR coach
   :accept [name] [minutes]   a volunteer accepts (fake cloud)
   :arrive  :decline          that volunteer arrives / withdraws (fake cloud)
   :msg <text>    a responder message (fake cloud)
@@ -45,6 +47,15 @@ export async function runSim(input: BoxConfig): Promise<number> {
   session.onEvent((event) => print(`  event ${event.type}${"step_id" in event ? ` ${event.step_id}` : ""}`));
   board?.onEvent((event) => {
     if ("t" in event && event.t === "lid") print(`  board: lid ${event.open ? "open" : "closed"}`);
+  });
+  // The fake cloud stands in for the server's incident.opened push (a placeholder link, not a real report).
+  if (fake) session.onEvent((event) => {
+    if (event.type === "sos.opened") setTimeout(() => fake.push({ type: "incident.opened", incident_id: "inc-sim-1", report_url: "https://clara.living/report/sim-placeholder-token", report_code: "SIM234" }), 0);
+  });
+  let reportShown: string | null = null;
+  session.onView((view) => {
+    if (view.report_link && view.report_link !== reportShown) print(`  screen: PARAMEDICS: ${view.report_link}`);
+    reportShown = view.report_link;
   });
   if (box.screen) print(`Box screen: ${box.screen.url} (open it in a browser)`);
   print(HELP);
@@ -107,6 +118,12 @@ export async function runSim(input: BoxConfig): Promise<number> {
             return session.press({ action: "cancel_sos" });
           case "t":
             return session.press({ action: "talk" });
+          case ":pick":
+            return session.press({ action: "pick_scenario", scenario_id: rest[0] ?? "not_breathing" });
+          case ":summary":
+            return session.press({ action: "read_summary" });
+          case ":stopcoach":
+            return session.press({ action: "stop_coach" });
           case ":accept":
             return setAlert("coming", rest[0], rest[1] ? Number(rest[1]) : 6);
           case ":arrive":
@@ -125,7 +142,7 @@ export async function runSim(input: BoxConfig): Promise<number> {
             return fake.setOnline(command === ":online");
           case ":state": {
             const v = session.view();
-            return print(`  phase ${v.phase}; step ${v.step?.step_id ?? "-"}; online ${v.online}; coming ${v.coming ?? "-"}; countdown ${v.countdown?.seconds_left ?? "-"}`);
+            return print(`  phase ${v.phase}; scenario ${v.scenario_id ?? "-"}; step ${v.step?.step_id ?? "-"}; online ${v.online}; coming ${v.coming ?? "-"}; countdown ${v.countdown?.seconds_left ?? "-"}; coach ${v.coach ? `${v.coach.bpm} bpm` : "-"}; report ${v.report_link ?? "-"}`);
           }
           case ":help":
             return print(HELP);

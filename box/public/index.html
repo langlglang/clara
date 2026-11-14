@@ -20,6 +20,7 @@
   <div id="banners">
     <div id="coming" class="banner coming" hidden><i class="dot"></i><span id="coming-text"></span></div>
     <div id="notice" class="banner notice" hidden><span id="notice-text"></span></div>
+    <div id="paramedics" class="banner paramedics" hidden><span id="paramedics-text"></span><button data-action="read_summary" class="small">SHOW / READ SUMMARY</button></div>
   </div>
 
   <main id="main">
@@ -42,8 +43,11 @@
         </div>
         <div id="caption"></div>
         <div id="visual-source" class="lbl"></div>
+        <div id="picker" hidden><button data-action="pick_scenario" data-scenario="severe_bleeding" class="strong">BLEEDING</button><button data-action="pick_scenario" data-scenario="not_breathing" class="strong">NOT BREATHING</button></div>
       </div>
-      <div id="picture"><img id="visual-image" alt=""><div id="no-image">NO PICTURE</div></div>
+      <div id="picture"><img id="visual-image" alt=""><div id="no-image">NO PICTURE</div>
+        <div id="coach" hidden><div id="coach-ring"><span id="coach-count">0</span><small>PUSHES</small></div><div id="coach-bpm" class="lbl"></div><button data-action="stop_coach" class="small">STOP CPR COACH</button></div>
+      </div>
     </section>
   </main>
 
@@ -70,7 +74,15 @@
       <ol id="coaching"></ol>
       <div id="call-network"></div>
       <div id="call-coming"></div>
-      <div class="row"><button data-action="hide_911" class="strong">BACK TO CLARA</button></div>
+      <div class="row"><button data-action="read_summary">SHOW / READ SUMMARY</button><button data-action="hide_911" class="strong">BACK TO CLARA</button></div>
+    </div>
+  </div>
+
+  <div id="pulse-prompt" class="overlay danger" hidden>
+    <div class="card center">
+      <h2>NO PULSE DETECTED BY THE SENSOR</h2>
+      <p>Is the person responding? Are they breathing normally?</p>
+      <div class="row"><button data-action="pulse_not_breathing" class="big cancel">NOT BREATHING</button><button data-action="pulse_breathing" class="big">BREATHING</button></div>
     </div>
   </div>
 

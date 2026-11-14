@@ -29,6 +29,8 @@ export interface BoxConfig {
   gpsPort: string | null;
   token: string | null;
   scenarioPath: string | null;
+  /** Scenarios the box may switch to (start-screen picker, "not breathing"). Missing files are skipped. */
+  extraScenarioPaths: string[];
   kitPath: string | null;
   contentDir: string;
   stateDir: string;
@@ -67,6 +69,8 @@ export function readConfig(env: NodeJS.ProcessEnv, argv: readonly string[]): Box
     gpsPort: sim ? null : env.CLARA_GPS_PORT ?? null,
     token: env.CLARA_BOX_TOKEN ?? null,
     scenarioPath: flag(argv, "scenario") ?? env.CLARA_SCENARIO ?? resolve(REPO_ROOT, "content/scenarios/severe-bleeding.json"),
+    extraScenarioPaths: (env.CLARA_EXTRA_SCENARIOS ?? resolve(REPO_ROOT, "content/scenarios/not-breathing.json"))
+      .split(",").map((p) => p.trim()).filter((p) => p && p.toLowerCase() !== "none"),
     kitPath: flag(argv, "kit") ?? env.CLARA_KIT ?? resolve(REPO_ROOT, "content/kits/clara-3slot-v1.json"),
     contentDir: resolve(env.CLARA_CONTENT_DIR ?? resolve(REPO_ROOT, "content")),
     stateDir: resolve(env.CLARA_STATE_DIR ?? (sim ? ".box-state/sim" : ".box-state")),
@@ -101,6 +105,17 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
   if (config.kitPath) kit = loadKit(config.kitPath);
   else log("no kit manifest (CLARA_KIT): no compartment will light");
   if (scenario.status !== "checked") log(`scenario ${scenario.scenario_id} is a DRAFT: not checked against its sources`);
+  const extras = [];
+  for (const path of config.extraScenarioPaths ?? []) {
+    if (!existsSync(path)) continue;
+    try {
+      const extra = loadScenario(path);
+      if (extra.status !== "checked") log(`scenario ${extra.scenario_id} is a DRAFT: not checked against its sources`);
+      extras.push(extra);
+    } catch (error) {
+      log(`extra scenario ${path} not loaded: ${(error as Error).message}`);
+    }
+  }
 
   let cloud = o.cloud;
   let http: HttpCloudLink | null = null;
@@ -129,7 +144,15 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
     configuredAddress: config.configuredAddress,
     location,
     scenario,
+    scenarios: extras,
     kit,
+    tick: !audio ? null
+      : config.audio === "silent"
+        ? (wav) => {
+            log(`[audio] metronome segment ${(wav.length / 32_000).toFixed(1)} s`);
+            return { done: Promise.resolve(), stop: () => {} };
+          }
+        : (wav) => audio.speaker.playWav(wav),
     cloud,
     board,
     pulseReader,

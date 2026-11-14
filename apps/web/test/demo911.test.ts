@@ -47,7 +47,7 @@ describe("demo 911 call", () => {
     const twiml = params.get("Twiml")!;
     expect(twiml).toContain("simulated 911 call");
     expect(twiml).toContain("1455 California Ave");
-    expect(twiml).toContain("not a live GPS fix");
+    expect(twiml).toContain("It has no GPS fix right now.");
     expect(twiml).not.toMatch(/Room 101|Clinic tent/);
     expect(twiml).toContain("his leg is bleeding a lot");
     expect(twiml).toContain("tourniquet guidance timer");
@@ -234,5 +234,19 @@ describe("bystander talks to the dispatcher", () => {
     let last = "";
     for (let i = 0; i < 30 && !last.includes("<Hangup/></Response>") || last.includes("<Gather"); i++) last = await d.reply(token, "");
     expect(last).toContain("No more questions heard");
+  });
+});
+
+describe("location on the call", () => {
+  it("reads the GPS position and the address when the SOS carried a fix", () => {
+    const network = createNetwork();
+    network.seedDemo();
+    const session = randomUUID();
+    const at = new Date().toISOString();
+    const opened = { event_id: randomUUID(), box_id: "box-clinic", session_id: session, occurred_at: at, type: "sos.opened" as const, need: "bleeding" as const, source: "touch" as const };
+    network.ingest({ schema_version: EVENTS_VERSION, events: [opened, { event_id: randomUUID(), box_id: "box-clinic", session_id: session, occurred_at: at, type: "emergency.context", task_id: opened.event_id, location: { kind: "gps_fix", latitude: 40.350123, longitude: -74.659876, observed_at: at, address: "1455 California Ave" } }] });
+    const text = briefing(network, "box-clinic")!;
+    expect(text).toContain("latitude 40.35012, longitude -74.65988");
+    expect(text).toContain("The box's address is 1455 California Ave.");
   });
 });

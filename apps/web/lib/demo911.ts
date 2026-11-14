@@ -78,8 +78,10 @@ export function briefingLines(network: Network, incidentId: string, timeZone = "
   const coming = incident.alerts.filter((a) => a.state === "coming" || a.state === "arrived").map((a) => a.volunteer_name);
   const lines: Array<BriefingLine | null> = [
     { kind: "intro", text: "This is Clara, an automated first-aid box. This is a simulated 911 call for a hackathon demo." },
-    { kind: "location", text: context?.type === "emergency.context" && context.location.kind === "configured_address"
-      ? `The box's configured address is ${context.location.address}; it is not a live GPS fix.`
+    { kind: "location", text: context?.type === "emergency.context" && context.location.kind === "gps_fix"
+      ? `The box's GPS position is latitude ${context.location.latitude.toFixed(5)}, longitude ${context.location.longitude.toFixed(5)}, from a fix at ${time(context.location.observed_at)}.${context.location.address ? ` The box's address is ${context.location.address}.` : ""}`
+      : context?.type === "emergency.context" && context.location.kind === "configured_address"
+      ? `The box's address is ${context.location.address}. It has no GPS fix right now.`
       : "The box has no configured address available; ask the bystander for their location." },
     { kind: "need", text: `${NEED_WORDS[incident.need] ?? "First aid"}.` },
     heard?.text ? { kind: "reported", text: `The bystander reported: ${heard.text}` } : null,

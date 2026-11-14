@@ -370,12 +370,13 @@ describe("BoxSession lid", () => {
 });
 
 describe("BoxSession SOS", () => {
-  it("sends a correlated public address to the emergency worker while keeping measured GPS local", () => {
-    const fix = { latitude: 37.4, longitude: -122.1, observedAt: Date.now(), accuracyM: null };
+  it("sends a recent GPS fix and the address with the SOS, so the call can say where it is right away", () => {
+    let fixAt = 0;
     const { session, cloud, clock } = setup(undefined, {
       configuredAddress: "1455 California Ave",
-      location: { current: () => fix },
+      location: { current: () => ({ latitude: 37.4012345, longitude: -122.1, observedAt: fixAt, accuracyM: null }) },
     });
+    fixAt = clock.now();
     session.lidOpened();
     session.press({ action: "sos" });
     clock.advance(5_000);
@@ -383,9 +384,21 @@ describe("BoxSession SOS", () => {
     expect(cloud.events.find((e) => e.type === "emergency.context")).toMatchObject({
       session_id: session.sessionId,
       task_id: opened.event_id,
-      location: { kind: "configured_address", address: "1455 California Ave" },
+      location: { kind: "gps_fix", latitude: 37.401235, longitude: -122.1, address: "1455 California Ave" },
     });
     expect(session.view().sos?.coaching.join(" ")).toContain("GPS coordinates");
+  });
+
+  it("sends only the address when the GPS fix is stale or missing", () => {
+    const { session, cloud, clock } = setup(undefined, {
+      configuredAddress: "1455 California Ave",
+      location: { current: () => ({ latitude: 37.4, longitude: -122.1, observedAt: 0, accuracyM: null }) },
+    });
+    clock.advance(10 * 60_000);
+    session.lidOpened();
+    session.press({ action: "sos" });
+    clock.advance(5_000);
+    expect(cloud.events.find((e) => e.type === "emergency.context")).toMatchObject({ location: { kind: "configured_address", address: "1455 California Ave" } });
   });
 
   it("routes a worker question through Clara and emits only a correlated user report", () => {

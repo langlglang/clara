@@ -438,11 +438,17 @@ export class BoxSession {
     const opened = this.emit("sos.opened", { need: this.currentNeed(), source });
     this.emergencyTaskId = opened?.event_id ?? null;
     if (opened) {
-      // No per-session consent exists for cloud GPS sharing. The measured fix stays on this box.
+      // Sent once, with the SOS, so the emergency call can say where the box is right away: a GPS fix from the last
+      // few minutes when the receiver has one (with the configured address too), else the configured address.
       const address = this.o.configuredAddress?.trim();
+      const known = address && address.length <= 200 ? address : null;
+      const fix = this.o.location?.current() ?? null;
+      const fresh = fix && this.clock.now() - fix.observedAt <= GPS_FRESH_MS;
       this.emit("emergency.context", {
         task_id: opened.event_id,
-        location: address && address.length <= 200 ? { kind: "configured_address", address } : { kind: "unavailable" },
+        location: fresh
+          ? { kind: "gps_fix", latitude: Number(fix.latitude.toFixed(6)), longitude: Number(fix.longitude.toFixed(6)), observed_at: new Date(fix.observedAt).toISOString(), address: known }
+          : known ? { kind: "configured_address", address: known } : { kind: "unavailable" },
       });
     }
     this.board((b) => b.buzz("alert"));
@@ -1352,6 +1358,8 @@ export class BoxSession {
 }
 
 /** Raw IR at or above this means a finger is on the clip (MAX30102 ambient readings sit far below). Bench-check. */
+/** A GPS fix older than this isn't sent with an SOS. */
+const GPS_FRESH_MS = 5 * 60_000;
 const FINGER_IR_MIN = 50_000;
 const FINGER_RECENT_MS = 5_000;
 const PULSE_REPROMPT_MS = 60_000;

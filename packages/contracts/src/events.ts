@@ -19,9 +19,19 @@ const base = {
 
 export const SourceSchema = z.enum(["touch", "voice", "device", "system"]);
 
-/** Only the configured public box address may leave the Pi in this version; GPS stays local. */
+/**
+ * Where the SOS is, sent once when it opens: the box's GPS fix when it has a recent one (with its configured address
+ * too, if set), else the configured address. GPS leaves the box only here, for the emergency call.
+ */
 export const EmergencyLocationSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("configured_address"), address: z.string().trim().min(1).max(200) }),
+  z.strictObject({
+    kind: z.literal("gps_fix"),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    observed_at: z.iso.datetime(),
+    address: z.string().trim().min(1).max(200).nullable(),
+  }),
   z.strictObject({ kind: z.literal("unavailable") }),
 ]);
 export type EmergencyLocation = z.infer<typeof EmergencyLocationSchema>;

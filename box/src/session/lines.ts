@@ -66,7 +66,7 @@ export function coachingLines(o: { directions: string | null; multipleInjured: b
     const donde = o.location
       ? `Coordenadas GPS: ${o.location.latitude.toFixed(5)}, ${o.location.longitude.toFixed(5)} (lectura ${new Date(o.location.observedAt).toISOString()}).`
       : o.configuredAddress
-        ? `GPS no disponible. Dirección configurada de la caja: ${o.configuredAddress}.`
+        ? `Dirección de la caja: ${o.configuredAddress}.`
         : "GPS no disponible. Dile al operador dónde estás.";
     return [
       `Di dónde estás. ${donde}${o.directions ? ` Indicaciones: ${o.directions}.` : ""}`,
@@ -78,7 +78,7 @@ export function coachingLines(o: { directions: string | null; multipleInjured: b
   const where = o.location
     ? `GPS coordinates: ${o.location.latitude.toFixed(5)}, ${o.location.longitude.toFixed(5)} (fix ${new Date(o.location.observedAt).toISOString()}).`
     : o.configuredAddress
-      ? `GPS unavailable. Configured box address: ${o.configuredAddress}.`
+      ? `Box address: ${o.configuredAddress}.`
       : "GPS unavailable. Tell the dispatcher your location.";
   return [
     `Say where you are. ${where}${o.directions ? ` Additional directions: ${o.directions}.` : ""}`,

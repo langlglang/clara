@@ -17,7 +17,7 @@ function sos(network: ReturnType<typeof createNetwork>, boxId = "box-clinic") {
       { event_id: randomUUID(), box_id: boxId, session_id: session, occurred_at: at(1), type: "report.heard", text: "his leg is bleeding a lot" },
       { event_id: randomUUID(), box_id: boxId, session_id: session, occurred_at: at(2), type: "timer.started", timer: "tourniquet", step_id: "tighten" },
       opened,
-      { event_id: randomUUID(), box_id: boxId, session_id: session, occurred_at: at(4), type: "emergency.context", task_id: opened.event_id, location: { kind: "configured_address", address: "1455 California Ave" } },
+      { event_id: randomUUID(), box_id: boxId, session_id: session, occurred_at: at(4), type: "emergency.context", task_id: opened.event_id, location: { kind: "configured_address", address: "Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544" } },
     ],
   });
 }
@@ -47,7 +47,7 @@ describe("demo 911 call", () => {
     const twiml = params.get("Twiml")!;
     expect(twiml).toContain("A bystander opened SOS.");
     expect(twiml).not.toMatch(/simulat|hackathon|demo|fallback/i);
-    expect(twiml).not.toContain("1455 California Ave");
+    expect(twiml).not.toContain("Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544");
     expect(twiml).not.toMatch(/Room 101|Clinic tent/);
     expect(twiml).toContain("his leg is bleeding a lot");
     expect(twiml).toContain("tourniquet guidance timer");
@@ -67,8 +67,8 @@ describe("demo 911 call", () => {
     ] });
     const text = briefing(network, "box-clinic", new Date())!;
     const page = briefingLines(network, open.incident.incident_id)!;
-    expect(text).not.toContain("1455 California Ave");
-    expect(page.lines.find((line) => line.kind === "location")?.text).toContain("1455 California Ave");
+    expect(text).not.toContain("Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544");
+    expect(page.lines.find((line) => line.kind === "location")?.text).toContain("Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544");
     expect(page.lines.find((line) => line.kind === "timer")?.text).toContain("application is unconfirmed");
     expect(text).not.toContain("Wrong address");
     expect(text).not.toMatch(/Room 101|Clinic tent/);
@@ -85,7 +85,7 @@ describe("demo 911 call", () => {
     ] });
     const text = briefing(network, "box-clinic", new Date())!;
     expect(text).not.toContain("location");
-    expect(text).not.toMatch(/Room 101|Clinic tent|1455 California Ave/);
+    expect(text).not.toMatch(/Room 101|Clinic tent|Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544/);
   });
 
   it("only logs when the number or Twilio is missing", async () => {
@@ -243,9 +243,9 @@ describe("location on the call", () => {
     const session = randomUUID();
     const at = new Date().toISOString();
     const opened = { event_id: randomUUID(), box_id: "box-clinic", session_id: session, occurred_at: at, type: "sos.opened" as const, need: "bleeding" as const, source: "touch" as const };
-    network.ingest({ schema_version: EVENTS_VERSION, events: [opened, { event_id: randomUUID(), box_id: "box-clinic", session_id: session, occurred_at: at, type: "emergency.context", task_id: opened.event_id, location: { kind: "gps_fix", latitude: 40.350123, longitude: -74.659876, observed_at: at, address: "1455 California Ave" } }] });
+    network.ingest({ schema_version: EVENTS_VERSION, events: [opened, { event_id: randomUUID(), box_id: "box-clinic", session_id: session, occurred_at: at, type: "emergency.context", task_id: opened.event_id, location: { kind: "gps_fix", latitude: 40.350123, longitude: -74.659876, observed_at: at, address: "Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544" } }] });
     const text = briefing(network, "box-clinic")!;
-    expect(text).not.toMatch(/latitude|longitude|1455 California Ave/);
+    expect(text).not.toMatch(/latitude|longitude|Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544/);
     const { sceneFacts, answerDispatcher } = await import("../lib/dispatchTalk");
     const incidentId = network.openIncidentForBox("box-clinic")!.incident.incident_id;
     const scene = sceneFacts(network, incidentId)!;

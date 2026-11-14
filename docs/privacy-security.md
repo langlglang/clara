@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | Microphone | Off while the lid is closed | Opening the lid starts a demo voice session; the screen shows mic state. A dedicated mute/consent control is proposed. | Live transcription and response |
 | Camera | Covered/off | Explicitly ask Clara to take a photo or use the camera; that request authorizes one frame sent to Clara's cloud in the current lid session | Visual tool demonstration |
-| Box location | Local USB GNSS reading or configured address fallback | No outbound location use in the mock SOS path; any future upload needs separate consent | Show a source-labeled location in mock SOS coaching |
+| Box location | Local USB GNSS reading or configured site address | The current demo sends `emergency.context` to its cloud after SOS; a future real deployment needs an explicit location-sharing decision | Show “Box address” when GPS has no fresh fix, while retaining internal provenance |
 | Nearby responder preview | Fictional profiles and sites only | Open mock preview after mock SOS | Explain the proposed matching flow without notifying anyone |
 | Handoff card | Fictional scenario facts; volunteer observations omitted by default | Show handoff on box; separate explicit consent for any volunteer observation | Inform a newly arrived helper in the demo |
 | Sensor data | No read | Start the connected cuff or sensor measurement | Show a real hardware result |

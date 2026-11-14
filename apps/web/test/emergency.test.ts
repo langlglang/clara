@@ -29,8 +29,8 @@ describe("simulated caller fact worker", () => {
     const t = setup();
     const incidentId = t.open();
     expect(t.worker.pendingForBox(box_id)).toBeNull();
-    t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "configured_address", address: "1455 California Ave" } }));
-    expect(t.worker.state(incidentId)).toMatchObject({ task_id: t.sos.event_id, pending: "situation", location: { kind: "configured_address", address: "1455 California Ave" } });
+    t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "configured_address", address: "Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544" } }));
+    expect(t.worker.state(incidentId)).toMatchObject({ task_id: t.sos.event_id, pending: "situation", location: { kind: "configured_address", address: "Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544" } });
     expect(t.worker.pendingForBox(box_id)).toMatchObject({ type: "emergency.question", question_id: "situation", task_id: t.sos.event_id });
     t.worker.stop();
   });
@@ -39,7 +39,7 @@ describe("simulated caller fact worker", () => {
     const t = setup();
     t.ingest(event("box.opened", {}), event("report.heard", { text: "I have a cut on my arm." }), t.sos);
     const incidentId = t.network.openIncidentForBox(box_id)!.incident.incident_id;
-    t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "configured_address", address: "1455 California Ave" } }));
+    t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "configured_address", address: "Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544" } }));
     expect(t.worker.state(incidentId)).toMatchObject({ pending: null, ready: true });
     expect(t.pushes).not.toContainEqual(expect.objectContaining({ type: "emergency.question" }));
     t.worker.stop();
@@ -48,7 +48,7 @@ describe("simulated caller fact worker", () => {
   it("accepts only the pending question with exact same-session report provenance", () => {
     const t = setup();
     const incidentId = t.open();
-    t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "configured_address", address: "1455 California Ave" } }));
+    t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "configured_address", address: "Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544" } }));
     const report = event("report.heard", { text: "Someone fell and hurt their arm." });
     t.ingest(event("emergency.answer", { task_id: t.sos.event_id, question_id: "situation", answer: report.text, source_event_id: report.event_id }));
     expect(t.worker.state(incidentId)?.pending).toBe("situation");
@@ -86,7 +86,7 @@ describe("simulated caller fact worker", () => {
     const t = setup();
     const incidentId = t.open();
     expect(t.network.openIncidentForBox(box_id)?.incident.alerts.length).toBeGreaterThan(0);
-    t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "configured_address", address: "1455 California Ave" } }));
+    t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "configured_address", address: "Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544" } }));
     const saved = t.worker.exportState();
     t.worker.stop();
     const pushes: BoxPush[] = [];
@@ -108,7 +108,7 @@ describe("simulated caller fact worker", () => {
       speak: async () => ({ mime: "audio/wav", sample_rate: 16_000, data_base64: "A".repeat(190_000) }),
     });
     t.open();
-    t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "configured_address", address: "1455 California Ave" } }));
+    t.ingest(event("emergency.context", { task_id: t.sos.event_id, location: { kind: "configured_address", address: "Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544" } }));
     await vi.waitFor(() => expect(worker.pendingForBox(box_id)).toMatchObject({ type: "emergency.question" }));
     const push = worker.pendingForBox(box_id);
     expect(push).not.toHaveProperty("speech");

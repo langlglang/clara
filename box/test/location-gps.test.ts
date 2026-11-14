@@ -62,12 +62,16 @@ describe("USB GPS NMEA", () => {
 });
 
 describe("mock SOS location wording", () => {
-  const base = { boxName: "Test Box", directions: null, multipleInjured: false, configuredAddress: "1455 California Ave" };
+  const base = { boxName: "Test Box", directions: null, multipleInjured: false, configuredAddress: "Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544" };
 
-  it("uses a clearly labeled configured address when GPS is unavailable", () => {
+  it("shows the box address without presenting it as a GPS fix", () => {
     const line = coachingLines(base)[0]!;
-    expect(line).toContain("GPS unavailable. Configured box address: 1455 California Ave.");
+    expect(line).toContain("Box address: Julis Romo Rabinowitz Building, 20 Washington Road, Princeton, NJ 08544.");
+    expect(line).not.toMatch(/fallback|GPS unavailable/i);
     expect(line).not.toContain("coordinates");
+    const spanish = coachingLines({ ...base, language: "es" })[0]!;
+    expect(spanish).toContain(`Dirección de la caja: ${base.configuredAddress}.`);
+    expect(spanish).not.toContain("GPS no disponible");
   });
 
   it("uses actual fresh coordinates and their UTC fix time when supplied", () => {
@@ -76,6 +80,6 @@ describe("mock SOS location wording", () => {
     const line = coachingLines({ ...base, location: result.fix })[0]!;
     expect(line).toContain("GPS coordinates: 37.41792, -122.15134");
     expect(line).toContain("2026-11-14T05:36:45.000Z");
-    expect(line).not.toContain("1455 California Ave");
+    expect(line).not.toContain(base.configuredAddress);
   });
 });

@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1020" viewBox="0 0 1600 1020" role="img" aria-labelledby="title description">
+  <title id="title">Clara multi-agent system</title>
+  <desc id="description">A person speaks to the Clara box. Core Clara keeps one conversation and launches parallel guidance, camera and sensor, and dispatch tasks. The dispatch task uses a LangChain response coordinator with responder, logistics, and time-to-care specialists. Results return through Core Clara.</desc>
+  <defs>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; fill: #142332; }
+      .title { font-size: 48px; font-weight: 700; letter-spacing: -1.5px; }
+      .subtitle { font-size: 23px; fill: #526477; }
+      .eyebrow { font-size: 17px; font-weight: 700; letter-spacing: 1.5px; fill: #557084; }
+      .node-title { font-size: 28px; font-weight: 700; }
+      .node-detail { font-size: 20px; fill: #526477; }
+      .task-title { font-size: 27px; font-weight: 700; }
+      .task-detail { font-size: 20px; fill: #526477; }
+      .pill { font-size: 19px; font-weight: 600; }
+      .arrow { fill: none; stroke: #56778b; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .branch { fill: none; stroke: #56778b; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1020" fill="#ffffff"/>
+  <text class="eyebrow" x="130" y="71">CLARA / SYSTEM OVERVIEW</text>
+  <text class="title" x="130" y="133">One conversation. Parallel specialist work.</text>
+  <text class="subtitle" x="130" y="177">Clara stays available to answer while independent tasks work in the background.</text>
+
+  <path class="arrow" d="M370 288 H419"/>
+  <path class="arrow" d="M675 288 H724"/>
+  <path class="arrow" d="M1070 288 H1119"/>
+  <path fill="#56778b" d="M419 281 L430 288 L419 295 Z M724 281 L735 288 L724 295 Z M1119 281 L1130 288 L1119 295 Z"/>
+
+  <rect x="130" y="220" width="240" height="136" rx="22" fill="#f5f8fa" stroke="#d5e0e7" stroke-width="2"/>
+  <text class="eyebrow" x="158" y="260">USER</text>
+  <text class="node-title" x="158" y="305">Person</text>
+  <text class="node-detail" x="158" y="333">Speaks naturally</text>
+
+  <rect x="430" y="220" width="245" height="136" rx="22" fill="#f5f8fa" stroke="#d5e0e7" stroke-width="2"/>
+  <text class="eyebrow" x="458" y="260">PHYSICAL BOX</text>
+  <text class="node-title" x="458" y="305">Clara box</text>
+  <text class="node-detail" x="458" y="333">Mic · screen · speaker</text>
+
+  <rect x="735" y="205" width="335" height="166" rx="24" fill="#e6f6f3" stroke="#42a994" stroke-width="3"/>
+  <text class="eyebrow" x="765" y="249" fill="#227967">SINGLE USER-FACING AGENT</text>
+  <text class="node-title" x="765" y="300">Core Clara</text>
+  <text class="node-detail" x="765" y="332">Continuous conversation</text>
+
+  <rect x="1130" y="220" width="340" height="136" rx="22" fill="#edf3fa" stroke="#8eaed1" stroke-width="2"/>
+  <text class="eyebrow" x="1158" y="260">PARALLEL WORK</text>
+  <text class="node-title" x="1158" y="305">Task launcher</text>
+  <text class="node-detail" x="1158" y="333">Starts scoped tasks</text>
+
+  <path class="branch" d="M1300 356 V443 H310"/>
+  <path class="arrow" d="M310 443 V499"/>
+  <path class="arrow" d="M800 443 V499"/>
+  <path class="arrow" d="M1300 443 V499"/>
+  <path fill="#56778b" d="M303 499 L310 510 L317 499 Z M793 499 L800 510 L807 499 Z M1293 499 L1300 510 L1307 499 Z"/>
+
+  <rect x="130" y="510" width="360" height="160" rx="22" fill="#f4f7fb" stroke="#d5e0e7" stroke-width="2"/>
+  <text class="eyebrow" x="158" y="550">PRESENTATION</text>
+  <text class="task-title" x="158" y="594">Guidance + visuals</text>
+  <text class="task-detail" x="158" y="627">Screen · kit map · LEDs</text>
+
+  <rect x="620" y="510" width="360" height="160" rx="22" fill="#f4f7fb" stroke="#d5e0e7" stroke-width="2"/>
+  <text class="eyebrow" x="648" y="550">OBSERVATION</text>
+  <text class="task-title" x="648" y="594">Camera + sensors</text>
+  <text class="task-detail" x="648" y="627">On-request hardware tools</text>
+
+  <rect x="1110" y="510" width="360" height="160" rx="22" fill="#fff7eb" stroke="#e8bc72" stroke-width="2"/>
+  <text class="eyebrow" x="1138" y="550">BACKGROUND CONTACT</text>
+  <text class="task-title" x="1138" y="594">Dispatch task</text>
+  <text class="task-detail" x="1138" y="627">Call and status updates</text>
+
+  <path class="arrow" d="M1290 670 V724"/>
+  <path fill="#56778b" d="M1283 724 L1290 735 L1297 724 Z"/>
+  <rect x="1050" y="735" width="420" height="132" rx="22" fill="#eaf2fb" stroke="#7da4cf" stroke-width="2"/>
+  <text class="eyebrow" x="1080" y="777">RESPONSE COORDINATION</text>
+  <text class="node-title" x="1080" y="821">LangChain coordinator</text>
+  <text class="node-detail" x="1080" y="849">Delegates to specialists</text>
+
+  <path class="branch" d="M1260 867 V896 H1045"/>
+  <path class="branch" d="M1260 896 H1475"/>
+  <path class="arrow" d="M1045 896 V914"/>
+  <path class="arrow" d="M1260 896 V914"/>
+  <path class="arrow" d="M1475 896 V914"/>
+  <path fill="#56778b" d="M1038 914 L1045 925 L1052 914 Z M1253 914 L1260 925 L1267 914 Z M1468 914 L1475 925 L1482 914 Z"/>
+  <rect x="965" y="925" width="160" height="62" rx="16" fill="#f5f8fc" stroke="#ccdae8" stroke-width="2"/>
+  <text class="pill" x="1045" y="963" text-anchor="middle">Responder scout</text>
+  <rect x="1180" y="925" width="160" height="62" rx="16" fill="#f5f8fc" stroke="#ccdae8" stroke-width="2"/>
+  <text class="pill" x="1260" y="963" text-anchor="middle">Logistics</text>
+  <rect x="1395" y="925" width="160" height="62" rx="16" fill="#f5f8fc" stroke="#ccdae8" stroke-width="2"/>
+  <text class="pill" x="1475" y="963" text-anchor="middle">Time to care</text>
+
+</svg>

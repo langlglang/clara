@@ -17,6 +17,14 @@ describe("replyJsonSchema", () => {
     expect(named("record_usage")).toBeUndefined();
   });
 
+  it("offers only visual IDs supplied by the box", () => {
+    const offered = { ...state, available_visuals: [{ visual_id: "kit_overview", label: "Clara kit layout" }] };
+    expect(named("show_visual", offered)).toBeDefined();
+    expect(replyZodSchema(offered).safeParse({ transcript: "show me", reply: "", action: { name: "show_visual", visual_id: "kit_overview" } }).success).toBe(true);
+    expect(replyZodSchema(offered).safeParse({ transcript: "show me", reply: "", action: { name: "show_visual", visual_id: "https://example.com/evil.svg" } }).success).toBe(false);
+    expect(named("show_visual")).toBeUndefined();
+  });
+
   it("leaves out actions with nothing to choose from, and triage when unavailable", () => {
     const empty = { ...state, allowed_steps: [], questions: [], manifest: [] };
     expect(variants(empty).map((v) => v.properties.name.enum[0])).toEqual(["suggest_sos"]);
@@ -29,6 +37,14 @@ describe("replyJsonSchema", () => {
     expect(schema.additionalProperties).toBe(false);
     expect(schema.required).toEqual(["transcript", "reply", "action"]);
     for (const v of variants()) expect((v as unknown as { additionalProperties: boolean }).additionalProperties).toBe(false);
+  });
+
+  it("offers the caller answer action only for the pending task and question", () => {
+    const pending = { task_id: "7f1c2a4e-1b2c-4d3e-8f90-0a1b2c3d4e5f", question_id: "people_count" as const, prompt: "How many people need help?" };
+    expect(named("answer_emergency_question")).toBeUndefined();
+    expect(named("answer_emergency_question", { ...state, pending_emergency_question: pending })).toBeDefined();
+    expect(replyZodSchema({ ...state, pending_emergency_question: pending }).safeParse({ transcript: "Two people", reply: "", action: { name: "answer_emergency_question", task_id: pending.task_id, question_id: pending.question_id } }).success).toBe(true);
+    expect(replyZodSchema({ ...state, pending_emergency_question: pending }).safeParse({ transcript: "Two people", reply: "", action: { name: "answer_emergency_question", task_id: pending.task_id, question_id: "situation" } }).success).toBe(false);
   });
 });
 

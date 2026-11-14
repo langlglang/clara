@@ -145,7 +145,7 @@
       const img = $("visual-image");
       if (p.image_url) {
         if (img.getAttribute("src") !== p.image_url) img.setAttribute("src", p.image_url);
-        img.alt = p.title;
+        img.alt = p.kind === "diagram" || p.kind === "guidance" ? p.body : p.title;
         show(img, true);
         show($("no-image"), false);
       } else {
@@ -155,7 +155,7 @@
         show($("no-image"), true);
       }
       $("presentation").classList.toggle("no-pic", !p.image_url);
-      $("presentation").classList.toggle("kit-visual", Boolean(p.item && p.image_url?.startsWith("/content/kits/layout-3slot-v1-")));
+      $("presentation").classList.toggle("hero-visual", Boolean(p.image_url && (p.kind === "diagram" || (p.kind === "guidance" && p.image_url.startsWith("/content/visuals/")) || (p.item && p.image_url.startsWith("/content/kits/layout-3slot-v1-")))));
       // Compartment callout only when the presentation names an item.
       const item = $("item");
       show(item, Boolean(p.item));

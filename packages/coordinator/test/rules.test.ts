@@ -34,7 +34,7 @@ describe("rules planner", () => {
     expect(h.net.comingLine("box-clinic")).toBeNull(); // nobody accepted, nothing said
   });
 
-  it("proposes a ride when a tourniquet is on, asks for a kit after escalation, and holds once someone is coming", async () => {
+  it("does not propose a ride from a guidance timer, asks for a kit after escalation, and holds once someone is coming", async () => {
     const h = harness();
     heartbeat(h, "box-clinic", "box-room-101", "box-water-point");
     const rides = fakeRides();
@@ -45,15 +45,14 @@ describe("rules planner", () => {
     await vi.advanceTimersByTimeAsync(3_100);
     let log = c.getLog(id)!;
     expect(log.actions.find((a) => a.tool === "request_kit")).toMatchObject({ ok: true, args: "box-room-101" });
-    expect(log.actions.find((a) => a.tool === "propose_ride")).toMatchObject({ ok: true, result: expect.stringMatching(/Proposed Samir/) });
-    expect(log.notes.at(-1)!.text).toMatch(/needs your approval/);
+    expect(log.actions.find((a) => a.tool === "propose_ride")).toBeUndefined();
     const yusuf = h.net.incident(id)!.incident.alerts.find((a) => a.volunteer_name === "Yusuf")!;
     h.net.respond(yusuf.alert_id, yusuf.volunteer_id, "coming");
     c.trigger(id, "manual");
     await vi.advanceTimersByTimeAsync(3_100);
     log = c.getLog(id)!;
-    expect(log.actions.filter((a) => a.tool === "propose_ride")).toHaveLength(1); // proposed once
-    expect(rides.forIncident(id)!.offers).toEqual([]); // still waiting for the dispatcher
+    expect(log.actions.filter((a) => a.tool === "propose_ride")).toHaveLength(0);
+    expect(rides.forIncident(id)?.offers ?? []).toEqual([]);
     expect(log.notes.at(-1)!.text).toMatch(/^Run 2: Yusuf is responding. No action needed.$/);
   });
 

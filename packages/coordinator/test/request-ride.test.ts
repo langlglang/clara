@@ -119,7 +119,7 @@ describe("rules planner and triggers", () => {
   beforeEach(() => void vi.useFakeTimers());
   afterEach(() => void vi.useRealTimers());
 
-  it("rules: requests the ride when the verdict qualifies, and doesn't also propose one after the tourniquet", async () => {
+  it("rules: requests the ride when the verdict qualifies, without using the guidance timer as treatment proof", async () => {
     const h = harness();
     const rides = careRides();
     const c = createCoordinator({ network: h.net, rides, ambulanceEtaMin: 35, env: { CLARA_COORDINATOR: "rules" }, timers: false, debounceMs: 0, log: () => undefined });
@@ -134,7 +134,7 @@ describe("rules planner and triggers", () => {
     c.stop();
   });
 
-  it("rules: without the ambulance setting nothing is requested (and the tourniquet still gets a proposal)", async () => {
+  it("rules: without the ambulance setting a guidance timer alone does not prompt a ride", async () => {
     const h = harness();
     const rides = careRides();
     const c = createCoordinator({ network: h.net, rides, ambulanceEtaMin: null, env: { CLARA_COORDINATOR: "rules" }, timers: false, debounceMs: 0, log: () => undefined });
@@ -144,11 +144,11 @@ describe("rules planner and triggers", () => {
     const log = c.getLog(id)!;
     expect(log.time_to_care?.verdict).toBe("unknown");
     expect(rides.calls.filter((x) => x.startsWith("requestNow"))).toHaveLength(0);
-    expect(log.actions.filter((a) => a.tool === "propose_ride" && a.ok)).toHaveLength(1);
+    expect(log.actions.filter((a) => a.tool === "propose_ride" && a.ok)).toHaveLength(0);
     c.stop();
   });
 
-  it("re-runs when a tourniquet goes on or the SOS is sent again", async () => {
+  it("re-runs when a tourniquet guidance timer starts or the SOS is opened again", async () => {
     const h = harness();
     const runs: RunInput[] = [];
     const c = createCoordinator({ network: h.net, runner: async (i) => void runs.push(i), timers: false, debounceMs: 100 });
@@ -160,7 +160,7 @@ describe("rules planner and triggers", () => {
     h.net.ingest({ schema_version: EVENTS_VERSION, events: [mk("timer.started", { timer: "tourniquet", step_id: "tighten" })] });
     await vi.advanceTimersByTimeAsync(200);
     expect(runs).toHaveLength(2);
-    expect(runs[1]!.trigger).toEqual(["tourniquet on"]);
+    expect(runs[1]!.trigger).toEqual(["tourniquet timer started"]);
     h.net.ingest({ schema_version: EVENTS_VERSION, events: [mk("sos.opened", { need: "bleeding", source: "touch" })] });
     await vi.advanceTimersByTimeAsync(200);
     expect(runs).toHaveLength(3);

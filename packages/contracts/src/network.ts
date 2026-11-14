@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { Id } from "./scenario.js";
+import { EmergencyQuestionIdSchema } from "./events.js";
+import { SpeechSchema } from "./voice.js";
 
 /**
  * The response network: volunteers, incidents and alerts. The alert lifecycle follows Sophi's help
@@ -100,6 +102,8 @@ export const BoxPushSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("responder.message"), incident_id: Id, from: z.string().max(60), text: z.string().max(300) }),
   z.strictObject({ type: z.literal("nearby.emergency"), incident_id: Id, from_box_id: Id, from_box_name: z.string().max(80), directions: z.string().max(200) }),
   z.strictObject({ type: z.literal("nearby.clear"), incident_id: Id }),
+  z.strictObject({ type: z.literal("emergency.question"), incident_id: Id, task_id: z.uuid(), session_id: z.uuid(), question_id: EmergencyQuestionIdSchema, prompt: z.string().min(1).max(200), speech: SpeechSchema.optional() }),
+  z.strictObject({ type: z.literal("emergency.status"), incident_id: Id, task_id: z.uuid(), session_id: z.uuid(), state: z.enum(["collecting_facts", "facts_ready", "cancelled"]) }),
 ]);
 export type BoxPush = z.infer<typeof BoxPushSchema>;
 

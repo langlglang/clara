@@ -35,7 +35,7 @@ export interface SceneReport {
   /** Always shown: Clara never places a real call. */
   notice: string;
   mist: { mechanism: ReportLine[]; injuries: ReportLine[]; signs: ReportLine[]; treatment: ReportLine[] };
-  /** When the tourniquet went on (the first tourniquet timer), or null. */
+  /** When the box started its first tourniquet guidance timer; this does not confirm application. */
   tourniquet: ReportLine | null;
   timeline: ReportLine[];
   triage: ReportLine[];
@@ -87,9 +87,9 @@ function timelineLine(e: BoxEvent, opts: ReportOptions): ReportLine | null {
     case "step.shown":
       return line(`Screen showed step: ${step(e.step_id)}`, "observed");
     case "step.done":
-      return line(`Step done: ${step(e.step_id)}`, "done");
+      return line(`Guide advanced past: ${step(e.step_id)}`, "done");
     case "timer.started":
-      return line(e.timer === "tourniquet" ? "Tourniquet applied" : "Direct pressure started", "done");
+      return line(e.timer === "tourniquet" ? "Tourniquet timer started" : "Direct pressure timer started", "done");
     case "report.heard":
       return line(`Bystander said: "${e.text}"`, "reported");
     case "sos.countdown":
@@ -97,7 +97,11 @@ function timelineLine(e: BoxEvent, opts: ReportOptions): ReportLine | null {
     case "sos.cancelled":
       return line("SOS cancelled", "done");
     case "sos.opened":
-      return line(`SOS sent, need: ${e.need} (simulated 911 call shown)`, "done");
+      return line(`Mock SOS opened, need: ${e.need} (simulated 911 call shown)`, "done");
+    case "emergency.context":
+    case "emergency.answer":
+      // Caller-task metadata stays out of the scene report; the cited user report is already on its timeline.
+      return null;
     case "supply.used":
       return e.confirmed ? line(`Used: ${humanize(e.sku)} x ${e.qty}`, "done") : null;
     case "sensor.pulse":
@@ -122,8 +126,6 @@ export function buildSceneReport(store: Store, entry: IncidentEntry, opts: Repor
   const events = incidentEvents(store, entry);
   const t = (e: BoxEvent) => clockTime(e.occurred_at, opts.timeZone);
   const cite = (e: BoxEvent, text: string, label: ReportLabel): ReportLine => ({ text, label, at: e.occurred_at, event_ids: [e.event_id] });
-  const step = (id: string) => opts.stepLabels?.[id] ?? humanize(id);
-
   const mechanism: ReportLine[] = [];
   const injuries: ReportLine[] = [];
   const signs: ReportLine[] = [];
@@ -140,17 +142,11 @@ export function buildSceneReport(store: Store, entry: IncidentEntry, opts: Repor
       case "sos.opened":
         injuries.push(cite(e, `Need chosen at SOS: ${e.need}`, "reported"));
         break;
-      case "scenario.started":
-        injuries.push(cite(e, `Guide followed: ${opts.scenarioLabels?.[e.scenario_id] ?? humanize(e.scenario_id)}`, "reported"));
-        break;
       case "sensor.pulse":
         signs.push(cite(e, `${pulseText(e)} ${t(e)}`, "observed"));
         break;
       case "timer.started":
-        treatment.push(cite(e, `${e.timer === "tourniquet" ? "Tourniquet applied" : "Direct pressure started"} ${t(e)}`, "done"));
-        break;
-      case "step.done":
-        treatment.push(cite(e, `${step(e.step_id)} ${t(e)}`, "done"));
+        treatment.push(cite(e, `${e.timer === "tourniquet" ? "Tourniquet timer started" : "Direct pressure timer started"} ${t(e)}`, "done"));
         break;
       case "supply.used":
         if (e.confirmed) supplies.push(cite(e, `${humanize(e.sku)} x ${e.qty}`, "done"));
@@ -184,7 +180,7 @@ export function buildSceneReport(store: Store, entry: IncidentEntry, opts: Repor
     closed: incident.closed,
     notice: SIMULATION_NOTICE,
     mist: { mechanism, injuries, signs, treatment },
-    tourniquet: tq ? cite(tq, `Tourniquet applied ${t(tq)}`, "done") : null,
+    tourniquet: tq ? cite(tq, `Tourniquet timer started ${t(tq)}`, "done") : null,
     timeline: events.map((e) => timelineLine(e, opts)).filter((l): l is ReportLine => l !== null),
     triage: [...latestTag.values()].sort((a, b) => a.patient - b.patient).map((e) => cite(e, `Patient ${e.patient}: ${e.tag} (${t(e)})`, "done")),
     supplies_used: supplies,

@@ -1,12 +1,12 @@
 # Conversation and presentation runtime
 
-**Status:** proposed agent architecture with a limited presentation surface implemented. The current demo handles one voice turn at a time and can render answer, question, inventory-item, and preauthored-guidance cards through `screen-view/1.2`; inventory lights and mock SOS also exist. It does **not** implement a persistent cloud agent, generated diagrams, sensor reading cards, camera tools, or background agents. Clara is a proof of concept for fictional scenarios; no real emergency call is placed.
+**Status:** a bounded Core Clara action loop is implemented in code, with server-owned source-labeled context across turns, approved visual and kit actions, and independent mock emergency, pulse, and camera tasks; physical end-to-end verification of the new tasks is pending. A general multi-call planner and real 911 caller remain proposed. The current demo handles one voice turn at a time and can render answer, question, inventory-item, approved-illustration, and preauthored-guidance cards through `screen-view/1.2`; inventory lights and mock SOS also exist. A separate mock emergency worker can request fixed facts through the same Clara voice; this bridge is implemented in code but not physically verified. The dispatch coordinator has responder-scout, logistics, and time-to-care subagents when enabled with a model key. Core Clara now keeps bounded in-memory session turns and reconstructs older reported context from the event log; the current box can display fresh pulse results and consented one-frame camera observations. It does **not** have an unrestricted multi-call planner, a general task bus, a real caller, generated treatment diagrams, or synchronized speech segments. Clara is a proof of concept for fictional scenarios; no real emergency call is placed.
 
 ## The interaction
 
 The Pi stays powered. A closed lid means the microphone is stopped and no conversation is available. Opening the lid starts a local session, enables listening, and shows an idle screen. **Opening the lid is not a model request.** A final spoken utterance, an explicit SOS press, or a relevant device event starts work. Silence produces no cloud turns. The user speaks only to **Core Clara**, which maintains one continuous conversation for the open session. The screen displays information when it helps: a diagram, an item location, a reading with provenance, a short answer, a question, a handoff summary, or a versioned guidance panel. It has no Next, Back, Repeat, Talk, or branch buttons. A large simulated SOS control is available even with the lid closed, without login or network.
 
-The current demo's scenario engine is a constrained content adapter, not the definition of the agent. Its `ScreenView.presentation` is an additive local snapshot field: answer/question text, item lookup, and versioned guidance can populate it now. A future presentation service must add validated assets, reading provenance, and synchronized speech segments while retaining source-linked guidance packages and inventory checks. Do not turn an arbitrary model sentence into medical instruction or a purported reading.
+The current demo's scenario engine is a constrained content adapter, not the definition of the agent. Its `ScreenView.presentation` is an additive local snapshot field: answer/question text, item lookup, original approved illustrations, and versioned guidance can populate it now. A future presentation service must add validated assets, reading provenance, and synchronized speech segments while retaining source-linked guidance packages and inventory checks. Do not turn an arbitrary model sentence into medical instruction or a purported reading.
 
 ```mermaid
 flowchart LR
@@ -16,7 +16,7 @@ flowchart LR
   Core --> Policy[Protocol and evidence gate]
   Core --> Tools[Camera, sensor, inventory, presentation]
   Core --> Jobs[Background task supervisor]
-  Jobs --> SOS[Emergency workflow worker]
+  Jobs --> SOS[Local mock SOS / future caller task]
   Jobs --> Responders[Responder network worker]
   Jobs --> Handoff[Handoff worker]
   Core --> Presenter[Pi presentation coordinator]
@@ -61,11 +61,49 @@ The supervisor may run specialized workers while Core Clara keeps talking. Worke
 | Worker | Trigger | Authority in this demo |
 | --- | --- | --- |
 | Emergency coordinator | Direct SOS press or explicit user emergency request; urgent reported state can offer/start mock countdown | Local **mock** 911 flow only. No dialing or claim that 911 was reached. |
-| Responder coordinator | Mock SOS opened and network available | Uses the existing demo network's actual `sent`, `shown`, `accepted`, `arrived` states. Only confirmed acceptance may produce “is coming.” No assumed delivery. |
+| Mock emergency fact worker | `sos.opened` incident, independent of the voice turn | **Demo implemented, not physically verified.** Collects configured-address context and asks fixed `situation`, `people_count`, or `location` questions through Clara; verifies the answer comes from a prior `report.heard`. Never calls 911. |
+| Dispatch coordinator and responder-scout/logistics/time-to-care subagents | An incident and subsequent network/status changes | **Implemented separately from Core Clara.** With `CLARA_COORDINATOR=on` and a model key it runs the deep agent and its three specialist subagents; `rules` mode is a deterministic alternative and no key leaves it off. It cannot speak to the box user or contact 911. Its tool layer constrains volunteer, kit, and ride actions. |
+| Future emergency caller subagent | Explicit human SOS or authorized dispatch trigger after a real emergency integration exists | **Proposed only.** Independently starts/maintains a real contact attempt while Core Clara continues the box conversation. It requests missing facts through Core Clara, never takes the microphone or speaks as a second user-facing agent. A phone attempt is not proof of dispatcher contact. |
 | Handoff compiler | User asks for context for someone arriving | Drafts a source-labeled card; deterministic validator checks each fact against events. Remote sharing needs separate consent and a verified recipient. |
 | Evidence worker | User asks to look/read, or Core Clara needs one specific missing observation | Calls consented camera or hardware tools and returns uncertainty, provenance and freshness. It cannot select care. |
 
-The coordinator launches a job only from a recorded trigger. Jobs do not repeatedly poll the model during silence. A new user request may cancel a turn without cancelling an already authorized SOS job; the supervisor records this distinction. Closing the lid cancels the conversation and media capture. Direct mock SOS remains available independently of the model, mic, camera, and network. For any future real calling or responder messaging, explicit authorization, integration, delivery verification, legal review, and service testing are unresolved; this design grants no such capability today.
+The supervisor launches a job only from a recorded trigger. Jobs do not repeatedly poll the model during silence. A new user request may cancel a turn without cancelling an already authorized SOS job; the supervisor records this distinction. Closing the lid cancels the conversation and media capture but must not silently cancel a future externally connected emergency call. Direct mock SOS remains available independently of the model, mic, camera, and network. For any future real calling, explicit authorization, telephony/dispatch integration, delivery verification, legal review, and service testing are unresolved; this design grants no such capability today.
+
+### Future caller ↔ Core Clara question routing
+
+The proposed real caller task receives only a scoped, source-labeled incident snapshot: the human SOS trigger, box ID, configured public box address, and user-reported facts with times. A fresh GPS fix may be shared beyond the Pi **only after explicit per-session location-sharing consent**; the current GPS path is local to mock SOS coaching and does not send precise coordinates to the cloud. The caller starts its contact attempt immediately using available facts; a missing detail never delays the attempt. A deterministic caller adapter owns call status. If a dispatcher or script needs a missing fact, the caller emits `caller.fact_needed(task_id, question_id, field, prompt, deadline_at)` to the task supervisor. Core Clara may ask that one question in the ongoing conversation and display it on the screen. Its next relevant finalized answer is sent back as `caller.fact_answer` with the same IDs, `input_seq`, source `user_report`, and time. An unrelated utterance stays in the conversation and is **not** forwarded as the answer. Ambiguous speech leads to a clarification or `unavailable`, never a guessed fact. The caller can keep working while it waits; Core Clara can answer other requests. If the lid closes or the question expires, Core Clara returns `unavailable` instead of waiting for a reply. The supervisor deduplicates answers and rejects late, wrong-task, wrong-question, or post-cancel results.
+
+Task lifecycle is `queued → running → needs_fact → running → completed`, with `failed`, `cancelled`, and `unknown` terminal/error outcomes. Each transition has `task_id`, `incident_id`, monotonic sequence, time, and evidence reference. A telephony `connected` signal proves only a transport connection, not that a 911 dispatcher answered. Only a verified external acknowledgment may support a “contacted” claim. A user interruption cancels the current spoken turn, not the caller task. Network loss leaves status `unknown` until reconciled; no stale success is replayed. Cancellation of an actual call needs a separately authorized, explicit action and verified result. In the current demo the local mock SOS does not implement this task protocol; it only opens a simulated flow.
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant Pi as Pi / screen
+  participant C as Core Clara (only voice)
+  participant T as Task supervisor
+  participant E as Future caller subagent
+  participant P as Telephony/dispatch adapter
+  U->>Pi: Explicit SOS
+  Pi->>T: Authorized intent + configured address; GPS only with separate consent
+  T->>E: caller.task.start(task_id, incident_id, source-labeled facts)
+  par Caller works independently
+    E->>P: Start contact attempt immediately
+    P-->>E: Transport state with evidence
+  and Core Clara keeps talking
+    U->>C: “Where is the gauze?”
+    C-->>U: Spoken answer + item visual
+  end
+  E->>T: caller.fact_needed(task_id, question_id, location_detail)
+  T->>C: Scoped question request
+  C-->>U: “What room or landmark are you near?”
+  U->>C: “By the north entrance.”
+  C->>T: caller.fact_answer(same IDs, user_report, input_seq)
+  T->>E: Route answer once; reject stale/ambiguous replies
+  E->>P: Provide reported detail if call is active
+  P-->>E: Verified status or unknown
+  E-->>T: Task result with evidence
+  T-->>C: Status for truthful user update
+```
 
 ## Timing, disconnects, and examples
 

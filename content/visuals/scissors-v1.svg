@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" role="img" aria-labelledby="title desc">
+<title id="title">Scissors illustration</title>
+<desc id="desc">A simple pair of scissors with two metal blades and two dark handles; actual scissors may look different.</desc>
+<rect width="800" height="520" fill="#1f1f23"/>
+<text x="42" y="52" fill="#f4f4f4" font-family="sans-serif" font-size="34" font-weight="700">SCISSORS</text>
+<path d="M385 270 L701 116 L718 133 L415 304 Z" fill="#cbd5dc" stroke="#f5f5f5" stroke-width="5"/>
+<path d="M382 296 L701 428 L715 405 L417 266 Z" fill="#aab5bd" stroke="#f5f5f5" stroke-width="5"/>
+<circle cx="402" cy="284" r="18" fill="#d9f45b" stroke="#1f1f23" stroke-width="7"/>
+<path d="M389 272 L248 199" fill="none" stroke="#d9f45b" stroke-width="26" stroke-linecap="round"/>
+<path d="M388 296 L246 366" fill="none" stroke="#d9f45b" stroke-width="26" stroke-linecap="round"/>
+<ellipse cx="194" cy="174" rx="65" ry="48" fill="none" stroke="#d9f45b" stroke-width="24" transform="rotate(25 194 174)"/>
+<ellipse cx="194" cy="391" rx="65" ry="48" fill="none" stroke="#d9f45b" stroke-width="24" transform="rotate(-25 194 391)"/>
+<text x="42" y="483" fill="#bfc0c4" font-family="sans-serif" font-size="20">ILLUSTRATION · ACTUAL ITEM MAY DIFFER</text>
+</svg>

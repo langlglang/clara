@@ -1,0 +1,64 @@
+import { describe, expect, it } from "vitest";
+import { CameraCapture } from "../src/camera/capture.js";
+
+const frame = () => Buffer.from([0xff, 0xd8, 1, 2, 0xff, 0xd9]);
+
+describe("CameraCapture", () => {
+  it("requires an explicit reply to a pending per-session question and consumes consent once", async () => {
+    let session: string | null = "s1";
+    let captures = 0;
+    const camera = new CameraCapture(() => session, async () => { captures++; return frame(); });
+    const signal = new AbortController().signal;
+    expect(await camera.captureOnce("s1", "inspect_scene", signal)).toBeNull();
+    expect(camera.requestConsent("s1", "inspect_scene")).toContain("Yes, use the camera");
+    expect(camera.acceptConsent("s1", "inspect_scene", "yes")).toBe(false);
+    expect(camera.acceptConsent("s1", "inspect_scene", "Yes, use the camera.")).toBe(true);
+    const captured = await camera.captureOnce("s1", "inspect_scene", signal);
+    expect(captured).toMatchObject({ purpose: "inspect_scene", device: "USB camera" });
+    expect(captured?.jpeg).toEqual(frame());
+    expect(await camera.captureOnce("s1", "inspect_scene", signal)).toBeNull();
+    expect(captures).toBe(1);
+    session = null;
+  });
+
+  it("rejects expired, denied and previous-session consent", async () => {
+    let session: string | null = "s1";
+    let now = 1_000;
+    const camera = new CameraCapture(() => session, async () => frame(), () => now);
+    const signal = new AbortController().signal;
+    camera.requestConsent("s1", "inspect_scene");
+    now += 60_001;
+    expect(camera.acceptConsent("s1", "inspect_scene", "yes use the camera")).toBe(false);
+    camera.requestConsent("s1", "inspect_scene");
+    expect(camera.acceptConsent("s1", "inspect_scene", "no thanks")).toBe(false);
+    expect(await camera.captureOnce("s1", "inspect_scene", signal)).toBeNull();
+    camera.requestConsent("s1", "inspect_scene");
+    camera.acceptConsent("s1", "inspect_scene", "yes use the camera");
+    session = "s2";
+    expect(await camera.captureOnce("s1", "inspect_scene", signal)).toBeNull();
+    expect(camera.requestConsent("s1", "inspect_scene")).toBeNull();
+    camera.endSession("s1");
+  });
+
+  it("does not return a frame after cancellation or a failed capture", async () => {
+    const controller = new AbortController();
+    const camera = new CameraCapture(() => "s1", async () => { controller.abort(); return frame(); });
+    camera.requestConsent("s1", "inspect_scene");
+    camera.acceptConsent("s1", "inspect_scene", "yes use the camera");
+    expect(await camera.captureOnce("s1", "inspect_scene", controller.signal)).toBeNull();
+    expect(await camera.captureOnce("s1", "inspect_scene", new AbortController().signal)).toBeNull();
+  });
+
+  it("keeps local preview permission separate from one cloud upload", async () => {
+    const camera = new CameraCapture(() => "s1", async () => frame());
+    const signal = new AbortController().signal;
+    const prompt = camera.requestConsent("s1", "cloud_interpretation");
+    expect(prompt).toContain("send it to Clara's cloud");
+    expect(camera.acceptConsent("s1", "cloud_interpretation", "Yes, use the camera")).toBe(false);
+    expect(camera.acceptConsent("s1", "cloud_interpretation", "Yes, send the photo.")).toBe(true);
+    expect(await camera.captureOnce("s1", "inspect_scene", signal)).toBeNull();
+    const captured = await camera.captureOnce("s1", "cloud_interpretation", signal);
+    expect(captured).toMatchObject({ purpose: "cloud_interpretation", consentId: expect.any(String) });
+    expect(await camera.captureOnce("s1", "cloud_interpretation", signal)).toBeNull();
+  });
+});

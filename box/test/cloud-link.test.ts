@@ -69,6 +69,16 @@ describe("SseParser", () => {
       { event: "message", data: "x" },
     ]);
   });
+
+  it("accepts multiple bounded messages in one chunk but rejects one oversized message", () => {
+    const parser = new SseParser();
+    const payload = "x".repeat(180_000);
+    expect(parser.feed(`data: ${payload}\n\ndata: ${payload}\n\n`)).toEqual([
+      { event: "message", data: payload },
+      { event: "message", data: payload },
+    ]);
+    expect(() => parser.feed(`data: ${"x".repeat(256 * 1024)}\n\n`)).toThrow("event stream message too large");
+  });
 });
 
 describe("HttpCloudLink events", () => {

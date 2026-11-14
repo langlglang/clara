@@ -7,6 +7,7 @@ import { DEFAULT_BACKUP_MODEL, DEFAULT_MAIN_MODEL, createClaudeModel, createKeyw
 import { TURN_BUDGET_MS, handleTurn, type TurnDeps } from "./turn.js";
 
 export { handleTurn, FIXED_LINES, TURN_BUDGET_MS, type TurnDeps } from "./turn.js";
+export { createAnthropicVisionInspector, parseVisibleObservation, type VisionInspector } from "./vision.js";
 export { createAssistant, parseReply, RejectedReply, type Assistant, type AssistantResult } from "./assistant.js";
 export { createHedgedAssistant, BACKUP_AFTER_MS } from "./hedge.js";
 export { createClaudeModel, createKeywordStubModel, DEFAULT_MAIN_MODEL, DEFAULT_BACKUP_MODEL, type ReplyModel, type ModelRequest, type ModelOutput } from "./model.js";
@@ -41,7 +42,7 @@ export interface ClaraAgentOptions {
 }
 
 export interface ClaraAgent {
-  handleTurn(request: TurnRequest, receivedAt?: number): Promise<TurnResponse>;
+  handleTurn(request: TurnRequest, receivedAt?: number, signal?: AbortSignal): Promise<TurnResponse>;
   readonly deps: TurnDeps;
   /** One line for the startup log; never contains a key. */
   readonly describe: string;
@@ -82,6 +83,6 @@ export function createClaraAgent(env: ClaraAgentEnv, options: ClaraAgentOptions 
   return {
     deps,
     describe: `model: ${describeModel}; speech: ${cartesiaKey ? "Cartesia" : "none (audio turns get a fixed line; text turns work)"}`,
-    handleTurn: (request, receivedAt) => handleTurn(request, deps, receivedAt),
+    handleTurn: (request, receivedAt, signal) => handleTurn(request, deps, receivedAt, signal),
   };
 }

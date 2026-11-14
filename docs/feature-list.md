@@ -10,9 +10,11 @@ Clara is a network of AI-assisted first-aid boxes for places where professional 
 
 ## Current interaction direction (2026-11-13)
 
-**Demo implemented:** the Pi receives the ESP32 lid event; the lid shows and plays a fixed Cartesia greeting, then opens a voice session without contacting the model. A final utterance requests a cloud turn. Closing the lid stops voice and blanks the screen to black; touching the black screen reveals SOS and Mute Clara for 15 seconds. The local screen can render answer, question, item-location, and versioned-guidance cards; item light and mock SOS are implemented. The screen exposes visuals, voice status, a 911 Guide button, and speaker mute, with no step navigation or Talk button. The nearby-emergency banner and interruptive alert are hidden. **Demo verified on Pi:** the owner heard the exact greeting and the item light cue, saw the larger item diagram and 911 Guide label, and observed the top-left light after asking for scissors. The box/kiosk services and ESP32 hello are active at `3023a0a`; black-screen wake and mute still need a focused physical check.
+**Demo implemented:** the Pi receives the ESP32 lid event; the lid shows and plays a fixed Cartesia greeting, then opens a voice session without contacting the model. A final utterance requests a cloud turn. Closing the lid stops voice and blanks the screen to black; touching the black screen reveals SOS and Mute Clara for 15 seconds. The local screen can render answer, question, item-location, approved-illustration, and versioned-guidance cards; item light and mock SOS are implemented. The screen exposes visuals, voice status, a 911 Guide button, and speaker mute, with no step navigation or Talk button. The nearby-emergency banner and interruptive alert are hidden. **Demo verified on Pi:** the owner heard the exact greeting and the item light cue, saw the larger item diagram and 911 Guide label, and observed the top-left light after asking for scissors. The box/kiosk services and ESP32 hello are active at `3023a0a`; black-screen wake and mute still need a focused physical check.
 
-**Proposed:** Core Clara is one continuous user-facing conversation while the lid is open. It invokes tools and launches background emergency, responder, handoff, and evidence jobs only after real triggers. The screen shows whichever approved visual helps the current request, not a required sequence of steps. Generated diagrams, reading and handoff cards, synchronized speech segments, and background agents are not yet implemented; see [conversation runtime](conversation-runtime.md).
+**Demo implemented:** a separate response coordinator can delegate to responder-scout, logistics, and time-to-care subagents when `CLARA_COORDINATOR=on` and a model key is available. It serves the dispatch console and never speaks to the box user or calls 911. A separate mock emergency worker collects fixed facts after SOS; it asks through the existing Clara voice and accepts only a same-session, source-linked answer. This bridge still needs physical verification. **Demo implemented in code:** one Core Clara voice uses a bounded cross-turn context and launches scoped mock emergency, pulse, and camera tasks from user requests or direct SOS. **Proposed:** a broader task supervisor could launch a dedicated real caller only after an authorized 911 integration. If that caller needs a fact, Core Clara asks it in the same conversation and routes the answer by `task_id`/`question_id`; the caller never opens a second voice. Generated treatment diagrams, handoff cards, synchronized speech segments, and the broader Core Clara task bus remain unimplemented; see [conversation runtime](conversation-runtime.md).
+
+**Demo implemented in code, physical check pending:** Core Clara now keeps bounded server-side turn context and source-labeled prior reports, selects one validated action per spoken turn, and can start independent pulse and consented single-frame camera jobs on the Pi. These jobs return screen results without blocking the conversation; mock emergency fact collection and responder coordination remain separate workers. The camera route requires matching `CLARA_BOX_TOKEN` on Pi and server plus an Anthropic key. A general multi-call planner and real 911 dialing remain future work.
 
 ## Request-driven core loop
 
@@ -23,7 +25,7 @@ Someone opens the box → the mic becomes available without automatically contac
 **The box**
 1. **Lid opens → conversation becomes available.** ESP32 limit switch tells the always-on Pi over USB serial; a closed lid means voice is off. Opening alone never requests an agent turn.
 2. **Hands-free conversation.** Mic listens while the lid is open; voice-activity detection ends each utterance. There is no on-screen Talk control.
-3. **Approved guidance and flexible visuals.** Current code can select a versioned scenario panel. The proposed core agent can present a relevant answer, question, diagram, item location, reading, or handoff card, within source and provenance checks.
+3. **Approved guidance and flexible visuals.** Current code can select a versioned scenario panel, eight original kit/equipment illustrations, or the guarded `minor-cut-demo-v1/rinse_cover` visual by ID. The minor-cut visual is offered only for an explicitly described superficial cut or scrape and awaits teammate content review. The Core can present an answer, question, diagram, item location, or hardware reading within source and provenance checks; a general handoff card remains future work.
 4. **Lit compartments.** When a verified item is requested, its mapped LED can light; guidance may also locate an item.
 5. **Minimal touchscreen.** It displays agent-selected visuals, captions and status, with **simulated SOS** and **Mute Clara** controls. The closed-lid screen is black and wakes to reveal SOS on touch. No Next / Back / Repeat or branch controls are shown.
 6. **Runs on the 12 V battery** (power path to the Pi still needs a bench test; keep the official Pi supply as backup).
@@ -37,7 +39,7 @@ Someone opens the box → the mic becomes available without automatically contac
 
 **Dashboards**
 12. **Clinic / dispatch dashboard.** Map, live timeline, triage board, responder status.
-13. **Scene report for EMS.** MIST summary (Mechanism, Injuries, Signs, Treatment), tourniquet time, timeline, photos. Paramedics scan a QR code on the box screen. Every fact is labeled reported / observed / done; code checks each line against the event log.
+13. **Scene report for EMS.** MIST summary (Mechanism, Injuries, Signs, Treatment), guidance timer time, timeline, photos. Paramedics scan a QR code on the box screen. Every fact is labeled reported / observed / done; code checks each line against the event log. `timer.started` only means the box started a guidance timer, and `step.done` only means navigation advanced; neither confirms treatment.
 14. **On-box handoff card** for whoever walks up.
 15. **Maintainer backend.** Box status and heartbeat, restock alerts, supply counts, anti-theft flags, boxes that went offline.
 
@@ -56,7 +58,7 @@ Someone opens the box → the mic becomes available without automatically contac
 ## Stretch
 26. Ride matching for patient transport (one accept wins).
 27. Phone calls to helpers without smartphones (Twilio + Cartesia).
-28. deepagents coordinator (LangChain prize).
+28. **Demo implemented:** deepagents response coordinator with responder-scout, logistics, and time-to-care specialists, subject to its configuration and tool limits. It is distinct from the proposed emergency caller and Core Clara task supervisor.
 29. ~~Driver fuel reimbursement through Nessie (Capital One prize)~~ — dropped, not targeting Capital One.
 30. CoStar kit-placement agent (only with a free person after a one-hour data check).
 31. Anti-theft: open chime, snapshot, wall-mount alert.

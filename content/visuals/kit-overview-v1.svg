@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" role="img" aria-labelledby="title desc">
+<title id="title">Clara kit layout</title>
+<desc id="desc">A three-compartment first-aid box with a small top-left slot, a medium top-right slot, and a large bottom slot.</desc>
+<rect width="800" height="520" fill="#1f1f23"/>
+<text x="40" y="48" fill="#f5f5f5" font-family="sans-serif" font-size="30" font-weight="700">CLARA KIT · LID AT TOP</text>
+<rect x="38" y="72" width="724" height="414" rx="24" fill="#2a2a30" stroke="#888890" stroke-width="8"/>
+<rect x="60" y="94" width="260" height="150" rx="14" fill="#34343b" stroke="#d9f45b" stroke-width="6"/>
+<text x="80" y="151" fill="#d9f45b" font-family="sans-serif" font-size="27" font-weight="700">TOP LEFT</text>
+<text x="80" y="191" fill="#f5f5f5" font-family="sans-serif" font-size="23">SMALL SLOT</text>
+<rect x="340" y="94" width="400" height="150" rx="14" fill="#34343b" stroke="#d9f45b" stroke-width="6"/>
+<text x="362" y="151" fill="#d9f45b" font-family="sans-serif" font-size="27" font-weight="700">TOP RIGHT</text>
+<text x="362" y="191" fill="#f5f5f5" font-family="sans-serif" font-size="23">MEDIUM SLOT</text>
+<rect x="60" y="264" width="680" height="200" rx="14" fill="#34343b" stroke="#d9f45b" stroke-width="6"/>
+<text x="82" y="333" fill="#d9f45b" font-family="sans-serif" font-size="32" font-weight="700">BOTTOM</text>
+<text x="82" y="377" fill="#f5f5f5" font-family="sans-serif" font-size="26">LARGE SLOT</text>
+<text x="82" y="433" fill="#bfbfc5" font-family="sans-serif" font-size="19">ASK CLARA FOR AN ITEM TO LIGHT ITS SLOT</text>
+</svg>

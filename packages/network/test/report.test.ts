@@ -39,13 +39,16 @@ describe("EMS scene report", () => {
   it("builds MIST from the events, with labels", () => {
     const { report } = scene();
     expect(report.mist.mechanism).toEqual([expect.objectContaining({ label: "reported", text: `Bystander reported: "He cut his leg on the fence, it's bleeding a lot" (2:00 PM)` })]);
-    expect(texts(report.mist.injuries)).toEqual(["Guide followed: severe bleeding", "Need chosen at SOS: bleeding"]);
+    expect(texts(report.mist.injuries)).toEqual(["Need chosen at SOS: bleeding"]);
     expect(report.mist.injuries.every((l) => l.label === "reported")).toBe(true);
     expect(texts(report.mist.signs)).toEqual(["Pulse 112 bpm (device reading) 2:02 PM", "Pulse unavailable (device reading) 2:02 PM"]);
     expect(report.mist.signs.every((l) => l.label === "observed")).toBe(true);
-    expect(texts(report.mist.treatment)).toEqual(["Direct pressure started 2:00 PM", "Tourniquet applied 2:14 PM", "apply tourniquet 2:14 PM"]);
+    expect(texts(report.mist.treatment)).toEqual(["Direct pressure timer started 2:00 PM", "Tourniquet timer started 2:14 PM"]);
     expect(report.mist.treatment.every((l) => l.label === "done")).toBe(true);
-    expect(report.tourniquet?.text).toBe("Tourniquet applied 2:14 PM");
+    expect(report.tourniquet?.text).toBe("Tourniquet timer started 2:14 PM");
+    expect(texts(report.timeline)).toContain("2:14 PM Guide advanced past: apply tourniquet");
+    expect(texts(report.timeline)).toContain("2:00 PM Mock SOS opened, need: bleeding (simulated 911 call shown)");
+    expect(JSON.stringify(report)).not.toMatch(/tourniquet applied|tourniquet on|direct pressure started/i);
     expect(report.notice).toMatch(/simulation/);
   });
 
@@ -99,6 +102,6 @@ describe("EMS scene report", () => {
   it("uses approved step labels when given", () => {
     const { h, incident } = scene();
     const r = h.net.report(incident.incident_id, { stepLabels: { apply_tourniquet: "Tourniquet tightened" } })!;
-    expect(texts(r.mist.treatment)).toContain("Tourniquet tightened 2:14 PM");
+    expect(texts(r.timeline)).toContain("2:14 PM Guide advanced past: Tourniquet tightened");
   });
 });

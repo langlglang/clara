@@ -19,6 +19,7 @@
  * --close sends box.closed at the end. Nothing here contacts a real person or emergency service.
  */
 import { randomUUID } from "node:crypto";
+import { EVENTS_VERSION } from "@clara/contracts";
 
 type Alert = { alert_id: string; volunteer_id: string; volunteer_name: string; state: string; eta_minutes: number | null };
 type Ride = { ride_id: string; state: string; offers: Array<{ driver_id: string; driver_name: string; state: string }>; winner: { driver_id: string; driver_name: string; pickup_minutes: number } | null; hospital: { name: string } };
@@ -63,7 +64,7 @@ async function boxEvents(events: Array<Record<string, unknown>>): Promise<void> 
   await api(`/api/boxes/${BOX_ID}/events`, {
     method: "POST",
     body: JSON.stringify({
-      schema_version: "events/0.1",
+      schema_version: EVENTS_VERSION,
       events: events.map((e, i) => ({
         event_id: randomUUID(),
         box_id: BOX_ID,

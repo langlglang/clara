@@ -40,7 +40,9 @@ export type VoiceFailure = "timeout" | "unreachable" | "invalid_reply";
 
 export type VoiceLoopEvent =
   | { type: "status"; status: VoiceStatus }
-  | { type: "turn"; heard: string | null; reply: string; action: Action | null; answeredBy: TurnResponse["answered_by"] }
+  /** Final transcript is recorded before a source-linked action is applied. */
+  | { type: "heard"; clientTurnId: string; heard: string }
+  | { type: "turn"; clientTurnId: string; heard: string | null; reply: string; action: Action | null; answeredBy: TurnResponse["answered_by"] }
   | { type: "failed"; reason: VoiceFailure }
   /** The server named an action that wasn't offered; it was ignored. */
   | { type: "ignored_action"; action: Action };
@@ -61,7 +63,7 @@ export interface VoiceLoopOptions {
    * An allowed action from the server. For select_step, the owner verifies canonical text, moves to the
    * step, and queues its WAV or local fallback; this loop must not speak the reply again.
    */
-  onAction?: (action: Action, response: TurnResponse) => void | Promise<void>;
+  onAction?: (action: Action, response: TurnResponse) => boolean | Promise<boolean>;
   /** Cue sounds: "listening" when the mic opens, "done" when a clip is sent (Speaker.playCue). */
   playCue?: (name: CueName) => Promise<void>;
   onEvent?: (event: VoiceLoopEvent) => void;
@@ -247,26 +249,34 @@ class VoiceLoopImpl implements VoiceLoop {
       this.emit({ type: "ignored_action", action });
       action = null;
     }
-    this.log.info("voice turn", { answered_by: reply.answered_by, reason: reply.reason, action: action?.name ?? "none", ms: Math.round(this.clock.now() - started) });
-    this.emit({ type: "turn", heard: reply.heard, reply: reply.reply, action, answeredBy: reply.answered_by });
-
+    if (reply.heard?.trim()) this.emit({ type: "heard", clientTurnId: request.client_turn_id, heard: reply.heard });
+    let actionRefused = false;
     if (action && this.o.onAction) {
       try {
-        await this.o.onAction(action, reply);
+        actionRefused = !(await this.o.onAction(action, reply));
       } catch (error) {
         this.log.error("voice action handler failed", { action: action.name, error: (error as Error).message });
+        actionRefused = true;
       }
       if (this.turn !== turn) return;
     }
+    if (actionRefused) {
+      this.log.warn("voice action refused locally", { action: action?.name });
+      if (action) this.emit({ type: "ignored_action", action });
+      action = null;
+    }
+    const spokenReply = actionRefused ? "I couldn't complete that request. Please try again." : reply.reply;
+    this.log.info("voice turn", { answered_by: reply.answered_by, reason: reply.reason, action: action?.name ?? "none", ms: Math.round(this.clock.now() - started) });
+    this.emit({ type: "turn", clientTurnId: request.client_turn_id, heard: reply.heard, reply: spokenReply, action, answeredBy: reply.answered_by });
     if (action?.name !== "select_step") {
       // The server can silently reject an obvious noise/filler transcript. Do not turn that
       // deliberate empty reply into the local "didn't catch that" fallback.
       const silentNotHeard = reply.answered_by === "fixed" && reply.reason === "not_heard" && reply.heard === null
         && !action && reply.speech === null && !reply.reply.trim();
-      const text = reply.reply.trim() || (action || silentNotHeard ? "" : this.lines.notCaught);
+      const text = spokenReply.trim() || (action || silentNotHeard ? "" : this.lines.notCaught);
       if (text) {
         this.setStatus("speaking");
-        const wav = reply.speech ? Buffer.from(reply.speech.data_base64, "base64") : undefined;
+        const wav = !actionRefused && reply.speech ? Buffer.from(reply.speech.data_base64, "base64") : undefined;
         await this.o.queue.say(wav ? { text, wav } : { text });
         if (this.turn !== turn) return;
       }

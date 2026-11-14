@@ -1,5 +1,5 @@
 // Adapted from Sophi (github.com/mzhao1599/sophi), services/cloud-api/src/walker/service.ts (turn(): transcribe, model, fixed lines, voice, time budget).
-import { VOICE_TURN_VERSION, actionAllowed, type FixedReason, type TurnRequest, type TurnResponse } from "@clara/contracts";
+import { VOICE_TURN_VERSION, actionAllowed, minorCutVisualAllowed, visualById, type FixedReason, type TurnRequest, type TurnResponse } from "@clara/contracts";
 import { deadline, type Assistant } from "./assistant.js";
 import type { Ears, Voice } from "./cartesia.js";
 import { isObviousNonRequestTranscript } from "./utterance-filter.js";
@@ -37,18 +37,18 @@ export const FIXED_LINES: Record<FixedReason, string> = {
   refusal: "I can't help with that request. The simulated SOS button is available.",
 };
 
-export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedAt = Date.now()): Promise<TurnResponse> {
+export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedAt = Date.now(), cancel?: AbortSignal): Promise<TurnResponse> {
   const budget = deps.budgetMs ?? TURN_BUDGET_MS;
   const left = () => budget - (Date.now() - receivedAt);
   const base = { schema_version: VOICE_TURN_VERSION, client_turn_id: request.client_turn_id } as const;
   const timings = { stt_ms: 0, model_ms: 0, tts_ms: 0 };
 
   const say = async (reply: string): Promise<TurnResponse["speech"]> => {
-    if (!deps.voice || !reply || left() <= 50) return null;
+    if (!deps.voice || !reply || left() <= 50 || cancel?.aborted) return null;
     const started = Date.now();
     const limit = deadline(left());
     try {
-      const wav = await deps.voice.speak(reply, request.language, limit.signal);
+      const wav = await deps.voice.speak(reply, request.language, cancel ? AbortSignal.any([limit.signal, cancel]) : limit.signal);
       return wav ? { mime: "audio/wav", sample_rate: deps.voice.sampleRate, data_base64: wav.toString("base64") } : null;
     } catch {
       return null;
@@ -83,7 +83,7 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
     const started = Date.now();
     const limit = deadline(Math.min(STT_MAX_MS, left()));
     try {
-      words = await deps.ears.transcribe(clip, request.language, limit.signal);
+      words = await deps.ears.transcribe(clip, request.language, cancel ? AbortSignal.any([limit.signal, cancel]) : limit.signal);
     } catch {
       words = null;
     } finally {
@@ -101,7 +101,7 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
   if (!deps.assistant) return fixed("no_model", words);
   const modelLimit = left() - (deps.voiceReserveMs ?? VOICE_RESERVE_MS);
   if (modelLimit <= 0) return fixed("timeout", words);
-  const result = await deps.assistant.reply(request.state, request.language, words, modelLimit).catch(
+  const result = await deps.assistant.reply(request.state, request.language, words, modelLimit, cancel).catch(
     (): Awaited<ReturnType<Assistant["reply"]>> => ({ ok: false, reason: "model_error", attempts: 0, ms: 0, model: "unknown" }),
   );
   timings.model_ms = result.ms;
@@ -122,9 +122,22 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
     if (!item) return fixed("invalid_reply", words);
     reply = `The screen shows where to find ${item.name}. Look for the compartment light in the box.`;
   }
+  if (action?.name === "show_visual") {
+    const visual = visualById(action.visual_id);
+    if (!visual) return fixed("invalid_reply", words);
+    if (visual.id === "minor_cut_rinse_cover" && !minorCutVisualAllowed(words)) return fixed("invalid_reply", words);
+    reply = visual.line;
+  }
   if (!reply && action?.name === "ask_clarifying") {
     reply = request.state.questions.find((q) => q.question_id === action.question_id)?.text ?? "";
   }
+  if (action?.name === "answer_emergency_question") {
+    // The model supplies only IDs; the Pi sends this turn's exact heard transcript as the user report.
+    reply = "Got it. You can keep talking with me.";
+  }
+  if (action?.name === "read_pulse") reply = "I'll read the pulse sensor now. Keep a finger steady on it while I continue listening.";
+  if (action?.name === "request_camera") reply = "May I take one photo and send it to Clara's cloud to help describe what it shows? Say 'Yes, send the photo' if you agree.";
+  if (action?.name === "capture_camera") reply = "I'll take and inspect one photo now. You can keep talking with me.";
   const response: TurnResponse = {
     ...base,
     heard: words,

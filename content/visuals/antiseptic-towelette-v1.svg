@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" role="img" aria-labelledby="title desc">
+<title id="title">Antiseptic towelette illustration</title>
+<desc id="desc">A small sealed square packet beside an unfolded wipe; actual packaging may look different.</desc>
+<rect width="800" height="520" fill="#1f1f23"/>
+<text x="40" y="53" fill="#f5f5f5" font-family="sans-serif" font-size="33" font-weight="700">ANTISEPTIC TOWELETTE</text>
+<rect x="112" y="142" width="335" height="270" rx="18" fill="#e8eff0" stroke="#d9f45b" stroke-width="7"/>
+<path d="M128 170h303M128 385h303" stroke="#a8b9bb" stroke-width="5" stroke-dasharray="8 8"/>
+<path d="M365 142l82 82h-82z" fill="#b8cbcd" stroke="#d9f45b" stroke-width="5"/>
+<text x="149" y="271" fill="#263035" font-family="sans-serif" font-size="28" font-weight="700">TOWELETTE</text>
+<text x="149" y="311" fill="#526267" font-family="sans-serif" font-size="20">SEALED PACKET</text>
+<path d="M483 235l175-32 31 164-184 30z" fill="#f8faf7" stroke="#b8c9c8" stroke-width="7"/>
+<path d="M513 270l131-24M520 307l131-24M527 344l131-24" stroke="#d4dfdc" stroke-width="4"/>
+<text x="40" y="484" fill="#bfc0c4" font-family="sans-serif" font-size="20">ILLUSTRATION · ACTUAL ITEM MAY DIFFER</text>
+</svg>

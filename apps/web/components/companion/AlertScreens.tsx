@@ -97,7 +97,7 @@ export function AlertScreen({ item, volunteerId, refresh, announce, now }: { ite
         {item.eta ? ` · ${Math.max(1, item.eta.minutes)} min ${item.eta.mode === "driving" ? "drive" : "walk"}` : ""}
       </span>
       <div className="tiles">
-        <Tile label="Tourniquet on" value={s.tourniquet_at ? clockShort(s.tourniquet_at) : "—"} tone={s.tourniquet_at ? "red" : undefined} />
+        <Tile label="TQ timer started" value={s.tourniquet_at ? clockShort(s.tourniquet_at) : "—"} tone={s.tourniquet_at ? "red" : undefined} />
         <Tile label="Pulse (sensor)" value={s.pulse?.bpm ?? "—"} tone={s.pulse?.bpm ? "red" : undefined} />
         <Tile label="Also alerted" value={Math.max(0, s.alerted - 1)} />
         <Tile label="Ambulance" value={ambulanceWords(s.ambulance_eta_min)} />

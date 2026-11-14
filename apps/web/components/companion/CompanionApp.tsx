@@ -309,7 +309,7 @@ function MapTab({ inbox, goAlerts }: { inbox: InboxResponse; goAlerts(): void })
             </h2>
             <span className="muted">
               {active.distance_km !== null ? km(active.distance_km) : ""}
-              {active.scene.tourniquet_at ? ` · tourniquet on since ${new Date(active.scene.tourniquet_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}
+              {active.scene.tourniquet_at ? ` · tourniquet guidance timer started ${new Date(active.scene.tourniquet_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}
             </span>
             <div className="chips">
               <span className="chip-static">{active.scene.coming + active.scene.arrived} helpers going</span>

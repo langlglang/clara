@@ -65,7 +65,7 @@ export function DispatchConsole() {
                   </b>
                   <span className="small muted">
                     {i.incident.closed ? `Closed (${i.incident.closed.how})` : i.coming_line ?? (i.escalation.flag ? "No reply: escalated to everyone" : "Waiting for a helper")}
-                    {i.scene.tourniquet_at ? ` · TQ ${clockShort(i.scene.tourniquet_at)}` : ""} · {agoWords(i.incident.opened_at, now)}
+                    {i.scene.tourniquet_at ? ` · TQ timer ${clockShort(i.scene.tourniquet_at)}` : ""} · {agoWords(i.incident.opened_at, now)}
                   </span>
                 </button>
               </li>
@@ -150,7 +150,7 @@ function IncidentPanel({ d, now, announce, refresh }: { d: IncidentDetail; now: 
         </span>
       ) : null}
       <div className="tiles">
-        <Tile label="TQ on" value={scene.tourniquet_at ? clockShort(scene.tourniquet_at) : "—"} tone={scene.tourniquet_at ? "red" : undefined} />
+        <Tile label="TQ timer started" value={scene.tourniquet_at ? clockShort(scene.tourniquet_at) : "—"} tone={scene.tourniquet_at ? "red" : undefined} />
         <Tile label="Pulse (sensor)" value={scene.pulse?.bpm ?? "—"} />
         <Tile label="Alerted" value={scene.alerted} />
         <Tile label="Ambulance" value={scene.ambulance_eta_min === null ? "?" : `${scene.ambulance_eta_min}+ min`} />

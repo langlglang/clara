@@ -3,7 +3,7 @@
  * ESP32 link, the screen and the cloud link can be written in parallel and swapped for simulators.
  * Shapes follow Sophi's Pi runtime (github.com/mzhao1599/sophi, devices/pi/src).
  */
-import type { BoxEvent, BoxPush, FromBoard, TurnRequest, TurnResponse } from "@clara/contracts";
+import type { BoxEvent, BoxPush, CameraInspectRequest, CameraInspectResponse, FromBoard, TurnRequest, TurnResponse } from "@clara/contracts";
 
 // ---------- Audio (box/src/audio) ----------
 
@@ -101,6 +101,8 @@ export interface CloudLink {
   onPush(listener: (push: BoxPush) => void): void;
   /** One voice turn; rejects on timeout or no link. */
   voiceTurn(request: TurnRequest, signal: AbortSignal): Promise<TurnResponse>;
+  /** One consented camera frame; absent in the offline simulator. */
+  inspectCamera?(request: CameraInspectRequest, signal: AbortSignal): Promise<CameraInspectResponse>;
   readonly online: boolean;
   onOnlineChange(listener: (online: boolean) => void): void;
   close(): void;

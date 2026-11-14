@@ -1,11 +1,13 @@
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { actionAllowed, comingLine, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type TurnResponse, type TurnState } from "@clara/contracts";
+import { VISUALS, CAMERA_INSPECT_VERSION, actionAllowed, comingLine, minorCutVisualAllowed, visualById, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type TurnResponse, type TurnState } from "@clara/contracts";
 import { EventFactory, type EventBody } from "../engine/events.js";
 import { ScenarioEngine, type RecentTurn, type Source, type StepIntent } from "../engine/engine.js";
 import type { Kit } from "../engine/kit.js";
 import type { LocationProvider } from "../location/gps.js";
+import type { CameraCapture } from "../camera/capture.js";
+import type { PulseReader, PulseObservation } from "../sensors/pulse-reader.js";
 import type { Board, CloudLink, CueName, SpeechQueue } from "../ports.js";
 import { SCREEN_VIEW_VERSION, type ScreenPresentation, type ScreenPress, type ScreenView, type ScreenVoiceState } from "../screen/view.js";
 import type { VoiceStatus } from "../voice/voice-loop.js";
@@ -56,6 +58,9 @@ export interface BoxSessionOptions {
   kit: Kit;
   cloud: CloudLink;
   board?: Board | null;
+  pulseReader?: PulseReader | null;
+  camera?: CameraCapture | null;
+  cameraCloudEnabled?: boolean;
   speech?: SpeechQueue | null;
   cue?: ((name: CueName) => void) | null;
   clock?: Clock;
@@ -80,6 +85,12 @@ interface Countdown {
 
 const MAX_MESSAGES = 5;
 const MAX_RECENT = 12;
+const EMERGENCY_QUESTION_TTL_MS = 120_000;
+const EMERGENCY_PROMPTS = {
+  situation: "Can you briefly tell me what happened?",
+  people_count: "How many people need help?",
+  location: "Where are you? I do not have a verified box address.",
+} as const;
 const GREETING = "I'm Clara, I'm here to help. Let me know what happened and I can guide you through treatment, diagnosis, or call for help.";
 const GREETING_AUDIO = "audio/clara-greeting-v3.wav";
 const SLOT_IMAGES: Record<string, string> = {
@@ -106,6 +117,14 @@ export class BoxSession {
   private presentation: ScreenPresentation | null = null;
   private countdown: Countdown | null = null;
   private sos: { need: Need; openedAt: number; overlay: boolean } | null = null;
+  private emergencyTaskId: string | null = null;
+  private cameraPending: { sessionId: string; expiresAt: number } | null = null;
+  private readonly background = new Map<"pulse" | "camera", AbortController>();
+  private latestPulse: PulseObservation | null = null;
+  private completedTasks: ScreenPresentation[] = [];
+  private emergencyQuestion: { taskId: string; questionId: "situation" | "people_count" | "location"; prompt: string; wav: Buffer | null; expiresAt: number; prompted: boolean } | null = null;
+  private emergencyQuestionExpiry: Cancel | null = null;
+  private readonly heardByTurn = new Map<string, { eventId: string; sessionId: string; text: string }>();
   private readonly alerts = new Map<string, Alert>();
   private lastComing: string | null = null;
   private readonly nearby = new Map<string, { incident_id: string; from_box_name: string; directions: string; bringing: boolean }>();
@@ -137,6 +156,7 @@ export class BoxSession {
     this.events = new EventFactory(o.boxId, () => this.clock.now(), this.newId, this.log);
     this.engine = new ScenarioEngine(o.scenario, o.kit, { events: this.events, emit: (e) => this.record(e), now: () => this.clock.now() });
     this.online = o.cloud.online;
+    o.speech?.onIdle(() => { this.presentEmergencyQuestion(); this.presentCompletedTask(); });
     o.cloud.onPush((push) => this.onPush(push));
     o.cloud.onOnlineChange((online) => {
       this.online = online;
@@ -169,6 +189,7 @@ export class BoxSession {
     if (!this.lidOpen || this.voiceStatus === status) return;
     this.voiceStatus = status;
     this.publish();
+    if (status === "listening") { this.presentEmergencyQuestion(); this.presentCompletedTask(); }
   }
 
   onView(listener: (view: ScreenView) => void): () => void {
@@ -196,12 +217,18 @@ export class BoxSession {
       this.o.speech?.say({ text: "", file: audio }).catch(() => {});
     }
     this.voice?.start();
+    this.presentEmergencyQuestion();
     this.publish();
   }
 
   lidClosed(): void {
     if (!this.lidOpen) return;
     this.lidOpen = false;
+    this.cancelBackground();
+    if (this.sessionId) this.o.camera?.endSession(this.sessionId);
+    this.cameraPending = null;
+    this.latestPulse = null;
+    this.completedTasks = [];
     this.clearLightCue();
     this.voiceStatus = "off";
     if (!this.active) {
@@ -220,6 +247,9 @@ export class BoxSession {
     this.engine.reset();
     this.events.sessionId = null;
     this.sos = null;
+    this.clearEmergencyQuestion();
+    this.emergencyTaskId = null;
+    this.heardByTurn.clear();
     this.alerts.clear();
     this.lastComing = null;
     this.multipleInjured = false;
@@ -326,7 +356,16 @@ export class BoxSession {
   private openSos(source: Source): void {
     this.countdown = null;
     this.sos = { need: this.need, openedAt: this.clock.now(), overlay: true };
-    this.emit("sos.opened", { need: this.need, source });
+    const opened = this.emit("sos.opened", { need: this.need, source });
+    this.emergencyTaskId = opened?.event_id ?? null;
+    if (opened) {
+      // No per-session consent exists for cloud GPS sharing. The measured fix stays on this box.
+      const address = this.o.configuredAddress?.trim();
+      this.emit("emergency.context", {
+        task_id: opened.event_id,
+        location: address && address.length <= 200 ? { kind: "configured_address", address } : { kind: "unavailable" },
+      });
+    }
     this.board((b) => b.buzz("alert"));
     this.o.cue?.("sos");
     this.o.speech?.stopAll();
@@ -420,7 +459,22 @@ export class BoxSession {
   /** The state a voice turn offers the model, or null outside a session. */
   turnState(): TurnState | null {
     if (!this.active || !this.lidOpen) return null;
-    return this.engine.turnState(this.recent);
+    const state = { ...this.engine.turnState(this.recent),
+      pulse_available: Boolean(this.o.pulseReader),
+      camera_available: Boolean(this.o.camera && this.o.cloud.inspectCamera && this.o.cameraCloudEnabled),
+      ...(this.cameraPending?.sessionId === this.sessionId && this.clock.now() < this.cameraPending.expiresAt
+        ? { pending_camera_consent: "cloud_interpretation" as const } : {}),
+      available_visuals: VISUALS.filter((visual) => {
+      if (visual.id === "kit_overview" && this.o.kit.layoutRevision !== "3slot-v1") return false;
+      if (visual.sku && (this.o.kit.get(visual.sku)?.on_hand ?? 0) <= 0) return false;
+      const file = this.o.contentDir && join(this.o.contentDir, visual.image_url.slice("/content/".length));
+      return Boolean(file && (this.o.fileExists ?? existsSync)(file));
+    }).map((visual) => ({ visual_id: visual.id, label: visual.title })) };
+    const question = this.emergencyQuestion;
+    if (question && this.clock.monotonic() < question.expiresAt) {
+      return { ...state, pending_emergency_question: { task_id: question.taskId, question_id: question.questionId, prompt: question.prompt } };
+    }
+    return state;
   }
 
   remember(from: RecentTurn["from"], words: string): void {
@@ -430,9 +484,14 @@ export class BoxSession {
   }
 
   /** What the bystander said, as heard: recorded as a report, never as a fact. */
-  heard(text: string): void {
+  heard(text: string, clientTurnId?: string): void {
     if (!this.active || !text.trim()) return;
-    this.emit("report.heard", { text: text.slice(0, 1000) });
+    const words = text.slice(0, 1000);
+    const event = this.emit("report.heard", { text: words });
+    if (event && clientTurnId && this.sessionId) {
+      this.heardByTurn.set(clientTurnId, { eventId: event.event_id, sessionId: this.sessionId, text: words });
+      if (this.heardByTurn.size > MAX_RECENT) this.heardByTurn.delete(this.heardByTurn.keys().next().value!);
+    }
   }
 
   /**
@@ -477,6 +536,45 @@ export class BoxSession {
         this.apply(this.engine.locate(action.sku), false);
         return true;
       }
+      case "show_visual": {
+        const visual = visualById(action.visual_id);
+        if (!visual || (response && response.reply !== visual.line)) return false;
+        if (visual.id === "minor_cut_rinse_cover" && (!response?.heard || !minorCutVisualAllowed(response.heard))) return false;
+        if (this.sos) this.sos.overlay = false;
+        this.clearLightCue();
+        this.board((board) => board.clearLights());
+        this.presentation = { kind: "diagram", title: visual.title, body: visual.line, image_url: visual.image_url,
+          item: null, source_label: "Illustration" };
+        this.publish();
+        return true;
+      }
+      case "read_pulse":
+        if (!this.o.pulseReader || !this.sessionId) return false;
+        this.startPulseTask(this.sessionId);
+        return true;
+      case "request_camera": {
+        if (!this.o.camera || !this.sessionId || !response) return false;
+        const prompt = this.o.camera.requestConsent(this.sessionId, "cloud_interpretation");
+        if (!prompt || response.reply !== prompt) {
+          this.o.camera.endSession(this.sessionId);
+          return false;
+        }
+        this.cameraPending = { sessionId: this.sessionId, expiresAt: this.clock.now() + 60_000 };
+        if (this.sos) this.sos.overlay = false;
+        this.presentation = { kind: "question", title: "Camera permission", body: prompt, image_url: null, item: null, source_label: null };
+        this.publish();
+        return true;
+      }
+      case "capture_camera": {
+        const report = response ? this.heardByTurn.get(response.client_turn_id) : null;
+        if (!this.o.camera || !this.sessionId || !report || report.sessionId !== this.sessionId || !response || response.heard !== report.text ||
+          !this.cameraPending || this.cameraPending.sessionId !== this.sessionId || this.clock.now() >= this.cameraPending.expiresAt ||
+          !this.o.camera.acceptConsent(this.sessionId, "cloud_interpretation", report.text)) return false;
+        this.cameraPending = null;
+        this.heardByTurn.delete(response.client_turn_id);
+        this.startCameraTask(this.sessionId);
+        return true;
+      }
       case "record_usage":
         // Proposed only: the count changes after a tap on Confirm.
         this.pendingUsage = action.items.map((item) => ({ ...item, name: this.o.kit.get(item.sku)?.name ?? item.sku }));
@@ -489,6 +587,21 @@ export class BoxSession {
       case "suggest_sos":
         this.requestSos(source);
         return true;
+      case "answer_emergency_question": {
+        const question = this.emergencyQuestion;
+        const report = response ? this.heardByTurn.get(response.client_turn_id) : null;
+        if (!this.sos || !question || !response || !report || !this.sessionId ||
+          question.taskId !== action.task_id || question.questionId !== action.question_id ||
+          this.clock.monotonic() >= question.expiresAt || report.sessionId !== this.sessionId ||
+          response.answered_by !== "model" || !response.heard?.trim() || response.heard.length > 500 || response.heard !== report.text) return false;
+        this.emit("emergency.answer", {
+          task_id: question.taskId, question_id: question.questionId,
+          answer: report.text, source_event_id: report.eventId,
+        });
+        this.heardByTurn.delete(response.client_turn_id);
+        this.clearEmergencyQuestion();
+        return true;
+      }
     }
   }
 
@@ -503,6 +616,7 @@ export class BoxSession {
   /** Shows a line someone else is already speaking (the voice loop's reply), without saying it again. */
   showCaption(text: string, showAsAnswer = true): void {
     if (!this.lidOpen) return;
+    if (this.sos && showAsAnswer) this.sos.overlay = false;
     this.caption = text;
     if (showAsAnswer && text.trim()) this.presentation = { kind: "answer", title: "Clara", body: text, image_url: null, item: null, source_label: null };
     this.publish();
@@ -526,6 +640,9 @@ export class BoxSession {
   }
 
   close(): void {
+    this.cancelBackground();
+    if (this.sessionId) this.o.camera?.endSession(this.sessionId);
+    this.completedTasks = [];
     this.heartbeatCancel?.();
     this.heartbeatCancel = null;
     this.countdown?.cancelTick();
@@ -533,6 +650,8 @@ export class BoxSession {
     this.voice?.stop();
     this.o.speech?.stopAll();
     this.clearLightCue();
+    this.clearEmergencyQuestion();
+    this.heardByTurn.clear();
   }
 
   // ---------- Pushes ----------
@@ -571,6 +690,34 @@ export class BoxSession {
       }
       case "nearby.clear":
         this.nearby.delete(push.incident_id);
+        this.publish();
+        return;
+      case "emergency.question": {
+        if (!this.sos || push.session_id !== this.sessionId || push.task_id !== this.emergencyTaskId) return;
+        const previous = this.emergencyQuestion;
+        if (previous?.taskId === push.task_id && previous.questionId === push.question_id) return;
+        this.clearEmergencyQuestion();
+        const expiresAt = this.clock.monotonic() + EMERGENCY_QUESTION_TTL_MS;
+        // The push is transport data, not an instruction to Clara. Render only our fixed question text.
+        const prompt = EMERGENCY_PROMPTS[push.question_id];
+        const encoded = push.prompt === prompt ? push.speech?.data_base64 : undefined;
+        const wav = encoded && encoded.length <= 1_500_000 ? Buffer.from(encoded, "base64") : null;
+        this.emergencyQuestion = { taskId: push.task_id, questionId: push.question_id,
+          prompt, wav: wav && wav.length <= 1_000_000 && wav.toString("ascii", 0, 4) === "RIFF" && wav.toString("ascii", 8, 12) === "WAVE" ? wav : null,
+          expiresAt, prompted: false };
+        this.emergencyQuestionExpiry = this.clock.setTimeout(() => {
+          if (this.emergencyQuestion?.taskId !== push.task_id || this.emergencyQuestion?.questionId !== push.question_id) return;
+          this.clearEmergencyQuestion();
+          this.publish();
+        }, EMERGENCY_QUESTION_TTL_MS);
+        this.presentEmergencyQuestion();
+        this.publish();
+        return;
+      }
+      case "emergency.status":
+        if (push.session_id !== this.sessionId || push.task_id !== this.emergencyTaskId) return;
+        if (push.state === "facts_ready" || push.state === "cancelled") this.clearEmergencyQuestion();
+        if (push.state === "cancelled") this.emergencyTaskId = null;
         this.publish();
         return;
     }
@@ -658,6 +805,7 @@ export class BoxSession {
     for (const intent of intents) {
       switch (intent.kind) {
         case "show":
+          if (this.sos) this.sos.overlay = false;
           this.clearLightCue();
           if (!intent.step.item) this.board((b) => b.clearLights());
           this.missing = null;
@@ -762,9 +910,113 @@ export class BoxSession {
     this.publish();
   }
 
-  private emit<T extends BoxEvent["type"]>(type: T, body: EventBody<T>): void {
+  private cancelBackground(): void {
+    for (const controller of this.background.values()) controller.abort();
+    this.background.clear();
+  }
+
+  private startPulseTask(sessionId: string): void {
+    const reader = this.o.pulseReader;
+    if (!reader) return;
+    this.background.get("pulse")?.abort();
+    const controller = new AbortController();
+    this.background.set("pulse", controller);
+    if (this.sos) this.sos.overlay = false;
+    this.presentation = { kind: "status", title: "Reading pulse", body: "Keep a finger steady on the sensor. Clara is still listening.", image_url: null, item: null, source_label: "MAX30102 via ESP32" };
+    this.publish();
+    void reader.read(controller.signal).then((reading) => {
+      if (controller.signal.aborted || !this.lidOpen || this.sessionId !== sessionId) return;
+      this.latestPulse = reading?.quality === "valid" && reading.bpm !== null ? reading : null;
+      const text = this.latestPulse
+        ? `The MAX30102 returned ${this.latestPulse.bpm} beats per minute at ${this.latestPulse.observedAt}.`
+        : "The pulse sensor did not return a usable reading.";
+      this.queueCompletedTask({ kind: "reading", title: "Pulse sensor", body: text, image_url: null, item: null, source_label: "MAX30102 via ESP32" });
+    }).catch(() => {
+      if (this.lidOpen && this.sessionId === sessionId) this.queueCompletedTask({ kind: "status", title: "Pulse unavailable", body: "The pulse sensor could not be read.", image_url: null, item: null, source_label: "MAX30102 via ESP32" });
+    }).finally(() => { if (this.background.get("pulse") === controller) this.background.delete("pulse"); });
+  }
+
+  private startCameraTask(sessionId: string): void {
+    const camera = this.o.camera;
+    const inspect = this.o.cloud.inspectCamera;
+    if (!camera || !inspect) return;
+    this.background.get("camera")?.abort();
+    const controller = new AbortController();
+    this.background.set("camera", controller);
+    if (this.sos) this.sos.overlay = false;
+    this.presentation = { kind: "status", title: "Inspecting photo", body: "Clara is checking one consented camera frame. You can keep talking.", image_url: null, item: null, source_label: "USB camera" };
+    this.publish();
+    void (async () => {
+      const frame = await camera.captureOnce(sessionId, "cloud_interpretation", controller.signal);
+      if (!frame) return null;
+      try {
+        return await inspect.call(this.o.cloud, {
+          schema_version: CAMERA_INSPECT_VERSION,
+          session_id: sessionId,
+          task_id: this.newId(),
+          consent_id: frame.consentId,
+          consent_scope: "capture_and_send_once",
+          captured_at: frame.capturedAt,
+          image_base64: frame.jpeg.toString("base64"),
+        }, controller.signal);
+      } finally {
+        frame.jpeg.fill(0);
+      }
+    })().then((result) => {
+      if (controller.signal.aborted || !this.lidOpen || this.sessionId !== sessionId) return;
+      const text = result?.status === "observed" && result.observation
+        ? `${result.observation} ${result.limitation}`
+        : "I couldn't make out enough from that photo. Please tell me what you see.";
+      this.queueCompletedTask({ kind: result?.status === "observed" ? "answer" : "status", title: "Camera observation", body: text,
+        image_url: null, item: null, source_label: result?.status === "observed" ? `Single frame captured ${result.captured_at}` : "USB camera" });
+    }).catch(() => {
+      if (this.lidOpen && this.sessionId === sessionId) this.queueCompletedTask({ kind: "status", title: "Camera unavailable", body: "I couldn't inspect that photo. Please describe what you see.", image_url: null, item: null, source_label: "USB camera" });
+    }).finally(() => { if (this.background.get("camera") === controller) this.background.delete("camera"); });
+  }
+
+  private queueCompletedTask(presentation: ScreenPresentation): void {
+    this.completedTasks.push(presentation);
+    this.completedTasks = this.completedTasks.slice(-2);
+    this.presentCompletedTask();
+  }
+
+  private presentCompletedTask(): void {
+    if (!this.lidOpen || this.completedTasks.length === 0 || this.o.speech?.busy ||
+      ["hearing", "thinking", "speaking"].includes(this.voiceStatus)) return;
+    const next = this.completedTasks.shift()!;
+    this.presentation = next;
+    this.caption = next.body;
+    this.publish();
+    if (this.o.speech && !this.o.speech.muted) void this.o.speech.say({ text: next.body }).catch(() => {});
+    else if (this.completedTasks.length) queueMicrotask(() => this.presentCompletedTask());
+  }
+
+  private clearEmergencyQuestion(): void {
+    const question = this.emergencyQuestion;
+    this.emergencyQuestionExpiry?.();
+    this.emergencyQuestionExpiry = null;
+    this.emergencyQuestion = null;
+    if (question && this.presentation?.kind === "question" && this.presentation.body === question.prompt) this.presentation = null;
+    if (question && this.caption === question.prompt) this.caption = null;
+  }
+
+  private presentEmergencyQuestion(): void {
+    const question = this.emergencyQuestion;
+    if (!question || question.prompted || !this.lidOpen || this.clock.monotonic() >= question.expiresAt ||
+      this.o.speech?.busy || ["hearing", "thinking", "speaking"].includes(this.voiceStatus)) return;
+    question.prompted = true;
+    if (this.sos) this.sos.overlay = false;
+    this.caption = question.prompt;
+    this.presentation = { kind: "question", title: "Clara asks", body: question.prompt, image_url: null, item: null, source_label: null };
+    // The existing Clara speech queue serializes this prompt with the main conversation.
+    this.o.speech?.say(question.wav ? { text: question.prompt, wav: question.wav } : { text: question.prompt }).catch(() => {});
+    this.publish();
+  }
+
+  private emit<T extends BoxEvent["type"]>(type: T, body: EventBody<T>): BoxEvent | null {
     const event = this.events.make(type, body);
     if (event) this.record(event);
+    return event;
   }
 
   private record(event: BoxEvent): void {

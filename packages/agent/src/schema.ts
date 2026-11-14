@@ -20,12 +20,17 @@ export function allowedOptions(state: TurnState) {
     stepIds: state.allowed_steps.map((s) => s.step_id),
     questionIds: state.questions.map((q) => q.question_id),
     skus: state.manifest.filter((m) => m.on_hand > 0).map((m) => m.sku),
+    visualIds: state.available_visuals?.map((visual) => visual.visual_id) ?? [],
     triage: state.triage_available,
+    pendingEmergencyQuestion: state.pending_emergency_question,
+    pulseAvailable: state.pulse_available === true,
+    cameraAvailable: state.camera_available === true && !state.pending_camera_consent,
+    pendingCameraConsent: state.pending_camera_consent === "cloud_interpretation",
   };
 }
 
 export function replyJsonSchema(state: TurnState): Record<string, unknown> {
-  const { stepIds, questionIds, skus, triage } = allowedOptions(state);
+  const { stepIds, questionIds, skus, visualIds, triage, pendingEmergencyQuestion, pulseAvailable, cameraAvailable, pendingCameraConsent } = allowedOptions(state);
   const variants: Record<string, unknown>[] = [{ type: "null" }];
   const obj = (name: string, props: Record<string, unknown> = {}) => ({
     type: "object",
@@ -38,7 +43,12 @@ export function replyJsonSchema(state: TurnState): Record<string, unknown> {
   if (skus.length > 0) {
     variants.push(obj("locate_item", { sku: { type: "string", enum: skus } }));
   }
+  if (visualIds.length > 0) variants.push(obj("show_visual", { visual_id: { type: "string", enum: visualIds } }));
+  if (pulseAvailable) variants.push(obj("read_pulse"));
+  if (cameraAvailable) variants.push(obj("request_camera"));
+  if (pendingCameraConsent) variants.push(obj("capture_camera"));
   if (triage) variants.push(obj("start_triage"));
+  if (pendingEmergencyQuestion) variants.push(obj("answer_emergency_question", { task_id: { type: "string", enum: [pendingEmergencyQuestion.task_id] }, question_id: { type: "string", enum: [pendingEmergencyQuestion.question_id] } }));
   variants.push(obj("suggest_sos"));
   return {
     type: "object",
@@ -59,14 +69,19 @@ const oneOf = (values: string[]) => z.enum(values as [string, ...string[]]);
 
 /** The zod twin of replyJsonSchema; `reply` is tidied before its length is checked. */
 export function replyZodSchema(state: TurnState) {
-  const { stepIds, questionIds, skus, triage } = allowedOptions(state);
+  const { stepIds, questionIds, skus, visualIds, triage, pendingEmergencyQuestion, pulseAvailable, cameraAvailable, pendingCameraConsent } = allowedOptions(state);
   const variants: z.ZodType[] = [];
   if (stepIds.length > 0) variants.push(z.strictObject({ name: z.literal("select_step"), step_id: oneOf(stepIds) }));
   if (questionIds.length > 0) variants.push(z.strictObject({ name: z.literal("ask_clarifying"), question_id: oneOf(questionIds) }));
   if (skus.length > 0) {
     variants.push(z.strictObject({ name: z.literal("locate_item"), sku: oneOf(skus) }));
   }
+  if (visualIds.length > 0) variants.push(z.strictObject({ name: z.literal("show_visual"), visual_id: oneOf(visualIds) }));
+  if (pulseAvailable) variants.push(z.strictObject({ name: z.literal("read_pulse") }));
+  if (cameraAvailable) variants.push(z.strictObject({ name: z.literal("request_camera") }));
+  if (pendingCameraConsent) variants.push(z.strictObject({ name: z.literal("capture_camera") }));
   if (triage) variants.push(z.strictObject({ name: z.literal("start_triage") }));
+  if (pendingEmergencyQuestion) variants.push(z.strictObject({ name: z.literal("answer_emergency_question"), task_id: z.literal(pendingEmergencyQuestion.task_id), question_id: z.literal(pendingEmergencyQuestion.question_id) }));
   variants.push(z.strictObject({ name: z.literal("suggest_sos") }));
   const action = (variants.length === 1 ? variants[0]! : z.union(variants as [z.ZodType, z.ZodType, ...z.ZodType[]])).pipe(ActionSchema);
   return z.strictObject({

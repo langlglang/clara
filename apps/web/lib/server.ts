@@ -10,8 +10,11 @@ import { createPushBook, resolveVapid, type PushBook, type PushSender, type Vapi
 import { createTextBook, photonConfig, wireTexts, type PhotonConfig, type PhotonEnv, type TextBook } from "./photon";
 import { publicBaseUrl, twilioConfig, type FetchLike, type TwilioConfig, type TwilioEnv } from "./twilio";
 import { createPersistence, type Persistence } from "./persist";
+import { createEmergencyWorker, type EmergencyWorker } from "./emergency";
+import { createCoreSessionBook, type CoreSessionBook } from "./core-session";
 import { PERSISTENCE_OFF, parseSnapshot, type PersistenceStatus, type RuntimeState, type Snapshot } from "./snapshot";
 import bleeding from "../../../content/scenarios/severe-bleeding.json";
+import minorCut from "../../../content/scenarios/minor-cut.json";
 
 /**
  * One response network and one Clara agent per server process. Kept on globalThis so `next dev` hot reloads
@@ -44,6 +47,10 @@ export interface Runtime {
   rides: RideBook;
   /** The response coordinator (deep agent, rules, or off): plans the human response per incident. */
   coordinator: Coordinator;
+  /** Independent simulated-911 fact collector; never places a real call. */
+  emergency: EmergencyWorker;
+  core: CoreSessionBook;
+  cameraEnabled: boolean;
   /** Vehicle kind per volunteer (the contract only has seat counts). */
   vehicles: Map<string, VehicleKind>;
   /** Messages to boxes, per incident, oldest first. */
@@ -80,7 +87,7 @@ export interface Runtime {
 const DEMO_VEHICLES: Record<string, VehicleKind> = { "vol-tomas": "van", "vol-priya": "car", "vol-samir": "car" };
 
 /** The server's environment: the agent's keys plus web push (VAPID_*) and Twilio (TWILIO_*, PUBLIC_BASE_URL). */
-export type WebEnv = ClaraAgentEnv & VapidEnv & TwilioEnv & PhotonEnv;
+export type WebEnv = ClaraAgentEnv & VapidEnv & TwilioEnv & PhotonEnv & { CLARA_BOX_TOKEN?: string };
 
 export interface RuntimeOptions extends NetworkOptions {
   env?: WebEnv;
@@ -97,16 +104,17 @@ export interface RuntimeOptions extends NetworkOptions {
   coordinator?: (deps: { network: Network; rides: RidesAdapter; careFor: (need: Need) => CareThreshold; ambulanceEtaMin: number | null }) => Coordinator;
 }
 
-const stepLabels: Record<string, string> = Object.fromEntries(bleeding.steps.map((s: { step_id: string; label: string }) => [s.step_id, s.label]));
-const guidanceText = new Map<string, string>(bleeding.steps.map((s) => [s.step_id, s.text] as const));
+const scenarios = [bleeding, minorCut];
+const stepLabels: Record<string, string> = Object.fromEntries(scenarios.flatMap((scenario) => scenario.steps.map((s: { step_id: string; label: string }) => [s.step_id, s.label])));
+const guidanceText = new Map(scenarios.map((scenario) => [scenario.scenario_id, new Map(scenario.steps.map((s) => [s.step_id, s.text] as const))] as const));
 /** Resolve guidance from the server's versioned demo bundle, never from model or device text. */
 export function resolveGuidance(scenarioId: string, stepId: string): string | null {
-  return scenarioId === bleeding.scenario_id ? guidanceText.get(stepId) ?? null : null;
+  return guidanceText.get(scenarioId)?.get(stepId) ?? null;
 }
 export const REPORT_OPTIONS: ReportOptions = {
   timeZone: "America/New_York",
   stepLabels,
-  scenarioLabels: { [bleeding.scenario_id]: bleeding.title },
+  scenarioLabels: Object.fromEntries(scenarios.map((scenario) => [scenario.scenario_id, scenario.title])),
 };
 
 /** Demo time-to-care thresholds per need: the scenario's care block, else DEFAULT_CARE. Fictional, not medical guidance. */
@@ -175,6 +183,11 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     : createCoordinator({ network, rides: ridesAdapter, careFor, ambulanceEtaMin, env: env as CoordinatorEnv, timers: options.timers !== false, log: (line) => console.log(line) });
   if (snap) coordinator.importState(snap.coordinator);
   coordinator.subscribe((change) => emit(change));
+  const emergency = createEmergencyWorker({ network, emit, restored: snap?.extra?.emergency, speak: agent.deps.voice ? async (prompt, signal) => {
+    const wav = await agent.deps.voice!.speak(prompt, "en", signal);
+    return wav ? { mime: "audio/wav" as const, sample_rate: agent.deps.voice!.sampleRate, data_base64: wav.toString("base64") } : null;
+  } : undefined });
+  const core = createCoreSessionBook(network, emergency);
 
   const push = createPushBook({ vapid: resolveVapid(env, undefined, undefined, snap?.push.vapid), ...(options.pushSender ? { sender: options.pushSender } : {}) });
   if (snap) {
@@ -191,9 +204,10 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const photon = photonConfig(env);
   const texts = createTextBook({ network, rides, photon, ...(options.fetch ? { fetch: options.fetch } : {}) });
   // Other books are saved under `extra` once they expose exportState/importState (duck-typed, so adding one is enough).
-  const extras: Record<string, Partial<Persistable>> = { texts: texts as Partial<Persistable> };
+  const extras: Record<string, Partial<Persistable>> = { texts: texts as Partial<Persistable>, emergency };
   if (snap?.extra) {
     for (const [name, value] of Object.entries(snap.extra)) {
+      if (name === "emergency") continue; // Restored before subscribing, so no stale question is emitted.
       try {
         extras[name]?.importState?.(value);
       } catch (error) {
@@ -244,6 +258,9 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     agent,
     rides,
     coordinator,
+    emergency,
+    core,
+    cameraEnabled: Boolean(env.CLARA_BOX_TOKEN && env.ANTHROPIC_API_KEY),
     vehicles,
     push,
     calls,
@@ -285,6 +302,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     stop: () => {
       timers.forEach(clearInterval);
       coordinator.stop();
+      emergency.stop();
+      core.clear();
     },
   };
 }

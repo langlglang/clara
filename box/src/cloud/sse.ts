@@ -16,10 +16,10 @@ export class SseParser {
 
   feed(text: string): SseMessage[] {
     this.buffer += text.replace(/\r\n?/g, "\n");
-    if (this.buffer.length > MAX_SSE_BUFFER) throw new Error("event stream message too large");
     const out: SseMessage[] = [];
     let end: number;
     while ((end = this.buffer.indexOf("\n\n")) >= 0) {
+      if (end > MAX_SSE_BUFFER) throw new Error("event stream message too large");
       const block = this.buffer.slice(0, end);
       this.buffer = this.buffer.slice(end + 2);
       let event = "message";
@@ -35,6 +35,7 @@ export class SseParser {
       }
       if (data.length > 0) out.push({ event, data: data.join("\n") });
     }
+    if (this.buffer.length > MAX_SSE_BUFFER) throw new Error("event stream message too large");
     return out;
   }
 }

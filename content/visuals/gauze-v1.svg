@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" role="img" aria-labelledby="title desc">
+<title id="title">Sterile gauze pack illustration</title>
+<desc id="desc">A white sealed gauze pack in front of a folded gauze pad; actual packaging may differ.</desc>
+<defs><pattern id="weave" width="14" height="14" patternUnits="userSpaceOnUse"><path d="M0 0H14M0 7H14M0 0V14M7 0V14" stroke="#b4c3c7" stroke-width="1"/></pattern></defs>
+<rect width="800" height="520" fill="#1f1f23"/>
+<text x="42" y="52" fill="#f4f4f4" font-family="sans-serif" font-size="34" font-weight="700">STERILE GAUZE PACK</text>
+<rect x="264" y="105" width="360" height="275" rx="10" fill="#e8eff0" stroke="#aabdc4" stroke-width="8" transform="rotate(10 444 242)"/>
+<rect x="264" y="105" width="360" height="275" rx="10" fill="url(#weave)" transform="rotate(10 444 242)"/>
+<rect x="156" y="180" width="390" height="246" rx="18" fill="#fcfcf3" stroke="#d9f45b" stroke-width="8"/>
+<path d="M174 225 H528 M174 383 H528" stroke="#b4c3c7" stroke-width="3" stroke-dasharray="8 8"/>
+<text x="205" y="298" fill="#263035" font-family="sans-serif" font-size="39" font-weight="700">GAUZE</text>
+<text x="206" y="338" fill="#526267" font-family="sans-serif" font-size="22">SEALED PACK</text>
+<text x="42" y="483" fill="#bfc0c4" font-family="sans-serif" font-size="20">ILLUSTRATION · ACTUAL ITEM MAY DIFFER</text>
+</svg>

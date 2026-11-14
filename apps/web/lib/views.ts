@@ -22,7 +22,7 @@ export interface HandoffLine {
 
 /** Numbers for the stat tiles, each from a box event (or the network), never estimated by a model. */
 export interface SceneStats {
-  /** When the tourniquet went on (timer.started), or null. */
+  /** When the box started its tourniquet guidance timer; application is not confirmed. */
   tourniquet_at: string | null;
   /** The latest pulse reading (sensor.pulse, a device reading), or null. */
   pulse: { bpm: number | null; quality: "valid" | "suspect" | "unavailable"; at: string } | null;
@@ -163,7 +163,7 @@ export function handoffOf(report: SceneReport | null): HandoffLine[] {
     ...report.mist.injuries,
     ...(report.tourniquet ? [report.tourniquet] : []),
     ...report.mist.signs.slice(-1),
-    ...report.mist.treatment.filter((l) => !l.text.startsWith("Tourniquet applied")).slice(-4),
+    ...report.mist.treatment.filter((l) => l.event_ids[0] !== report.tourniquet?.event_ids[0]).slice(-4),
   ].map(line);
 }
 

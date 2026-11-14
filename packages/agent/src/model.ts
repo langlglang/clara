@@ -1,5 +1,6 @@
 // Adapted from Sophi (github.com/mzhao1599/sophi), services/cloud-api/src/onboarding/anthropic.ts.
 import Anthropic from "@anthropic-ai/sdk";
+import { minorCutVisualAllowed } from "@clara/contracts";
 
 export const DEFAULT_MAIN_MODEL = "claude-haiku-5-5";
 export const DEFAULT_BACKUP_MODEL = "claude-opus-5-5";
@@ -77,6 +78,10 @@ export function createKeywordStubModel(): ReplyModel {
         allowed_steps: { step_id: string; label: string }[];
         questions: { question_id: string }[];
         manifest: { sku: string; name: string; on_hand: number }[];
+        available_visuals?: { visual_id: string; label: string }[];
+        pulse_available?: boolean;
+        camera_available?: boolean;
+        pending_camera_consent?: string | null;
       };
       const said = turn.person_words;
       const heard = tokens(said);
@@ -86,12 +91,27 @@ export function createKeywordStubModel(): ReplyModel {
       const item = /\b(where|find|locate|grab|get)\b/i.test(said)
         ? turn.manifest.find((m) => m.on_hand > 0 && [...tokens(m.name)].some((w) => heard.has(w)))
         : undefined;
+      const visual = /\b(show|see|picture|visual|illustration|diagram)\b/i.test(said)
+        ? turn.available_visuals?.find((v) => (v.visual_id !== "minor_cut_rinse_cover" || minorCutVisualAllowed(said)) && [...tokens(v.label)].some((w) => heard.has(w)))
+        : undefined;
+      const cameraConsent = turn.pending_camera_consent === "cloud_interpretation" &&
+        /^(yes,? send the photo(?: to clara)?)[.!?]?$/i.test(said.trim());
+      const pulse = turn.pulse_available && /\b(pulse|heart rate|bpm)\b/i.test(said) && /\b(read|measure|check|what|show|get)\b/i.test(said);
+      const camera = turn.camera_available && /\b(camera|photo|picture|look at|see this)\b/i.test(said) && /\b(show|look|see|inspect|check|take|use|photo|picture)\b/i.test(said);
       const nextStep = step ?? entry;
       const relevantQuestion = /\b(blood|bleed|bleeding|wound|injured|hurt|pain)\b/i.test(said) && turn.current_step;
       const action = sos
         ? { name: "suggest_sos" }
+        : cameraConsent
+          ? { name: "capture_camera" }
+        : pulse
+          ? { name: "read_pulse" }
+        : camera
+          ? { name: "request_camera" }
         : item
           ? { name: "locate_item", sku: item.sku }
+        : visual
+          ? { name: "show_visual", visual_id: visual.visual_id }
         : nextStep
           ? { name: "select_step", step_id: nextStep.step_id }
           : relevantQuestion && turn.questions[0]

@@ -20,6 +20,45 @@ const assistantFor = (...outputs: Parameters<typeof scriptedModel>[0]) => create
 afterEach(() => vi.useRealTimers());
 
 describe("handleTurn", () => {
+  it("voices a catalog caption instead of model-authored visual instructions", async () => {
+    const v = voice();
+    const offered = { ...state, available_visuals: [{ visual_id: "kit_overview", label: "Clara kit layout" }] };
+    const response = await handleTurn(textRequest("Show me the box layout", { state: offered }), {
+      assistant: assistantFor(json({ transcript: "Show me the box layout", reply: "This is how to treat a wound.", action: { name: "show_visual", visual_id: "kit_overview" } })),
+      ears: null, voice: v,
+    });
+    expect(response).toMatchObject({ action: { name: "show_visual", visual_id: "kit_overview" }, reply: "Here is the three-compartment layout. Ask me for an item and I can light its compartment." });
+    expect(v.said).toEqual([response.reply]);
+  });
+  it("shows the source-linked minor-cut visual only for an explicit superficial cut", async () => {
+    const offered = { ...state, available_visuals: [{ visual_id: "minor_cut_rinse_cover", label: "Superficial cut or scrape care" }] };
+    const action = { name: "show_visual", visual_id: "minor_cut_rinse_cover" };
+    const reply = json({ transcript: "x", reply: "Use this image.", action });
+    const accepted = await handleTurn(textRequest("Show me what to do for a small cut", { state: offered }), {
+      assistant: assistantFor(reply), ears: null, voice: null,
+    });
+    expect(accepted).toMatchObject({ action, reply: "For a superficial cut or scrape, if running tap water or sterile saline is available, rinse until no visible debris remains. Once clean, cover with an adhesive bandage." });
+    const refused = await handleTurn(textRequest("Show me the cut image for heavy bleeding", { state: offered }), {
+      assistant: assistantFor(reply, reply), ears: null, voice: null,
+    });
+    expect(refused).toMatchObject({ action: null, reason: "invalid_reply" });
+  });
+  it("keeps the caller answer as exact heard words and speaks only a fixed acknowledgment", async () => {
+    const pending = { task_id: "7f1c2a4e-1b2c-4d3e-8f90-0a1b2c3d4e5f", question_id: "people_count" as const, prompt: "How many people need help?" };
+    const response = await handleTurn(textRequest("Two people need help", { state: { ...state, pending_emergency_question: pending } }), {
+      assistant: assistantFor(json({ transcript: "Two people need help", reply: "I called the dispatcher and told them two people.", action: { name: "answer_emergency_question", task_id: pending.task_id, question_id: pending.question_id } })),
+      ears: null,
+      voice: null,
+    });
+    // The honesty guard rejects the model's call claim before it can reach the box.
+    expect(response).toMatchObject({ answered_by: "fixed", reason: "invalid_reply", action: null });
+    const accepted = await handleTurn(textRequest("Two people need help", { state: { ...state, pending_emergency_question: pending } }), {
+      assistant: assistantFor(json({ transcript: "Two people need help", reply: "", action: { name: "answer_emergency_question", task_id: pending.task_id, question_id: pending.question_id } })),
+      ears: null,
+      voice: null,
+    });
+    expect(accepted).toMatchObject({ heard: "Two people need help", reply: "Got it. You can keep talking with me.", action: { name: "answer_emergency_question", task_id: pending.task_id, question_id: pending.question_id } });
+  });
   it("voices the exact server-owned guidance text, ignoring model wording", async () => {
     const v = voice();
     const response = await handleTurn(textRequest("my friend's leg is bleeding"), {

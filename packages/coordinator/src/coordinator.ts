@@ -343,9 +343,9 @@ export function createCoordinator(options: CoordinatorOptions): Coordinator {
     }
   }
 
-  /** An SOS (re)opened or a tourniquet went on: time to care changes, so plan again. */
+  /** An SOS (re)opened or the tourniquet guidance timer started: reassess the plan. */
   function onEvent(event: Extract<NetworkChange, { kind: "event" }>["event"]) {
-    const reason = event.type === "sos.opened" ? "SOS opened" : event.type === "timer.started" && event.timer === "tourniquet" ? "tourniquet on" : null;
+    const reason = event.type === "sos.opened" ? "SOS opened" : event.type === "timer.started" && event.timer === "tourniquet" ? "tourniquet timer started" : null;
     if (!reason) return;
     const entry = network.store.openIncidentForBox(event.box_id);
     if (!entry || entry.incident.closed !== null) return;

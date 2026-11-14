@@ -16,6 +16,7 @@ const state: TurnState = {
   manifest: [{ sku: "gauze", name: "Gauze", on_hand: 4 }],
   triage_available: false,
   recent_turns: [],
+  pulse_available: true,
 };
 
 class FakeListener implements Listener {
@@ -70,7 +71,7 @@ const answer = (action: Action | null, reply = "", speech = false): TurnResponse
 function setup(
   voiceTurn: (request: TurnRequest, signal: AbortSignal) => Promise<TurnResponse>,
   context = true,
-  onAction?: (action: Action, response: TurnResponse, queue: ReturnType<typeof createSpeechQueue>) => void,
+  onAction?: (action: Action, response: TurnResponse, queue: ReturnType<typeof createSpeechQueue>, events: VoiceLoopEvent[]) => boolean | void,
 ) {
   const clock = new FakeClock();
   const speaker = new FakeSpeaker();
@@ -89,7 +90,7 @@ function setup(
     voiceTurn: (request, signal) => (requests.push(request), voiceTurn(request, signal)),
     onAction: (action, response) => {
       actions.push(action);
-      onAction?.(action, response, queue);
+      return onAction?.(action, response, queue, events) !== false;
     },
     playCue: (name) => speaker.playCue(name),
     onEvent: (event) => events.push(event),
@@ -98,6 +99,31 @@ function setup(
 }
 
 describe("voice loop", () => {
+  it("records the final transcript before applying a source-linked action", async () => {
+    let heardBeforeAction = false;
+    const t = setup(async () => answer({ name: "read_pulse" }, "I'll read the pulse sensor now."), true,
+      (_action, _response, _queue, events) => {
+        heardBeforeAction = events.some((event) => event.type === "heard" && event.heard === "it's bleeding" && event.clientTurnId === TURN);
+        return true;
+      });
+    t.loop.start();
+    await flush();
+    t.listener.clip();
+    await flush();
+    expect(heardBeforeAction).toBe(true);
+    expect(t.events.filter((event) => event.type === "heard")).toHaveLength(1);
+  });
+
+  it("does not speak a promised action when the local session refuses it", async () => {
+    const t = setup(async () => answer({ name: "read_pulse" }, "I'll read the pulse sensor now.", true), true, () => false);
+    t.loop.start();
+    await flush();
+    t.listener.clip();
+    await flush();
+    expect(t.speaker.lines.map((line) => line.value)).toContain("I couldn't complete that request. Please try again.");
+    expect(t.speaker.lines.map((line) => line.value)).not.toContain("I'll read the pulse sensor now.");
+    expect(t.events.some((event) => event.type === "ignored_action")).toBe(true);
+  });
   it("reacts to live speech, processing, playback, and mic reconnection", async () => {
     const t = setup(() => new Promise<TurnResponse>(() => {}));
     t.loop.start();

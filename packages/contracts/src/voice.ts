@@ -2,10 +2,10 @@
 import { z } from "zod";
 
 /**
- * Voice turn API, `voice-turn/0.2`. The box sends one turn per utterance; the server answers
+ * Voice turn API, `voice-turn/0.5`. The box sends one turn per utterance; the server answers
  * with what it heard, a short reply and at most one action. See docs/contracts.md and docs/voice.md.
  */
-export const VOICE_TURN_VERSION = "voice-turn/0.2";
+export const VOICE_TURN_VERSION = "voice-turn/0.5";
 
 /** A clip is 16 kHz mono 16-bit PCM WAV: 32 bytes per millisecond. */
 export const CLIP_SAMPLE_RATE = 16_000;
@@ -34,6 +34,13 @@ export const AllowedStepSchema = z.strictObject({ step_id: Id, label: z.string()
 export const QuestionSchema = z.strictObject({ question_id: Id, text: z.string().min(1).max(200) });
 export const ManifestItemSchema = z.strictObject({ sku: Id, name: z.string().min(1).max(80), on_hand: z.number().int().min(0).max(999) });
 export const RecentTurnSchema = z.strictObject({ from: z.enum(["person", "clara"]), words: z.string().max(MAX_HEARD) });
+export const AvailableVisualSchema = z.strictObject({ visual_id: Id, label: z.string().min(1).max(80) });
+export const PendingEmergencyQuestionSchema = z.strictObject({ task_id: z.uuid(), question_id: z.enum(["situation", "people_count", "location"]), prompt: z.string().min(1).max(200) });
+export const CoreContextSchema = z.strictObject({
+  reports: z.array(z.strictObject({ source_event_id: z.uuid(), at: z.iso.datetime({ offset: true }), text: z.string().max(500) })).max(4),
+  actions: z.array(z.strictObject({ name: z.enum(["locate_item", "show_visual", "suggest_sos", "read_pulse", "request_camera", "capture_camera"]), id: z.string().max(80).nullable(), status: z.literal("requested"), at: z.iso.datetime({ offset: true }) })).max(6),
+  emergency_task: z.strictObject({ task_id: z.uuid(), state: z.enum(["collecting_facts", "facts_ready"]) }).nullable(),
+});
 
 export const TurnStateSchema = z.strictObject({
   scenario_id: Id.nullable(),
@@ -43,6 +50,13 @@ export const TurnStateSchema = z.strictObject({
   manifest: z.array(ManifestItemSchema).max(40),
   triage_available: z.boolean(),
   recent_turns: z.array(RecentTurnSchema).max(12),
+  available_visuals: z.array(AvailableVisualSchema).max(12).optional(),
+  pending_emergency_question: PendingEmergencyQuestionSchema.optional(),
+  pulse_available: z.boolean().optional(),
+  camera_available: z.boolean().optional(),
+  pending_camera_consent: z.literal("cloud_interpretation").optional(),
+  /** Server-owned, source-labeled context. The server ignores a box-supplied value. */
+  core_context: CoreContextSchema.optional(),
 });
 export type TurnState = z.infer<typeof TurnStateSchema>;
 
@@ -66,6 +80,11 @@ export const ActionSchema = z.discriminatedUnion("name", [
   z.strictObject({ name: z.literal("record_usage"), items: z.array(UsageItemSchema).min(1).max(10) }),
   z.strictObject({ name: z.literal("start_triage") }),
   z.strictObject({ name: z.literal("suggest_sos") }),
+  z.strictObject({ name: z.literal("show_visual"), visual_id: Id }),
+  z.strictObject({ name: z.literal("read_pulse") }),
+  z.strictObject({ name: z.literal("request_camera") }),
+  z.strictObject({ name: z.literal("capture_camera") }),
+  z.strictObject({ name: z.literal("answer_emergency_question"), task_id: z.uuid(), question_id: z.enum(["situation", "people_count", "location"]) }),
 ]);
 export type Action = z.infer<typeof ActionSchema>;
 export type ActionName = Action["name"];
@@ -76,7 +95,7 @@ export type FixedReason = z.infer<typeof FixedReasonSchema>;
 export const SpeechSchema = z.strictObject({
   mime: z.literal("audio/wav"),
   sample_rate: z.number().int().positive(),
-  data_base64: z.string().min(1),
+  data_base64: z.string().min(1).max(2_700_000),
 });
 
 export const TurnResponseSchema = z.strictObject({
@@ -113,5 +132,15 @@ export function actionAllowed(action: Action, state: TurnState): boolean {
       return state.triage_available;
     case "suggest_sos":
       return true;
+    case "show_visual":
+      return state.available_visuals?.some((visual) => visual.visual_id === action.visual_id) ?? false;
+    case "read_pulse":
+      return state.pulse_available === true;
+    case "request_camera":
+      return state.camera_available === true && !state.pending_camera_consent;
+    case "capture_camera":
+      return state.pending_camera_consent === "cloud_interpretation";
+    case "answer_emergency_question":
+      return state.pending_emergency_question?.task_id === action.task_id && state.pending_emergency_question.question_id === action.question_id;
   }
 }

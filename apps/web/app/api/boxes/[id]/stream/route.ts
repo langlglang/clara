@@ -16,6 +16,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   return sseResponse(req, (out) => {
     const open = rt.network.openIncidentForBox(id);
     if (open) for (const alert of open.incident.alerts) out.send({ type: "alert.update", incident_id: open.incident.incident_id, alert });
+    const emergencyQuestion = rt.emergency.pendingForBox(id);
+    if (emergencyQuestion) out.send(emergencyQuestion);
     const offNetwork = rt.network.subscribe((change) => {
       if (change.kind === "push" && change.box_id === id) out.send(change.push);
     });

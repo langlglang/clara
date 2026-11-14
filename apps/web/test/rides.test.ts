@@ -59,7 +59,7 @@ describe("rides", () => {
     const ride = await newRide(incident.incident_id);
     expect((await approve(post(`/api/rides/${ride.ride_id}/approve`, {}), params({ id: ride.ride_id }))).status).toBe(200);
     expect((await approve(post(`/api/rides/${ride.ride_id}/approve`, { driver_id: "vol-samir" }), params({ id: ride.ride_id }))).status).toBe(200);
-    expect(pushes.some((c) => c.kind === "push")).toBe(false);
+    expect(pushes.some((c) => c.kind === "push" && c.push.type === "responder.message")).toBe(false);
 
     // The driver sees the offer in the inbox.
     const inbox = (await (await getInbox(new Request("http://test/x"), params({ id: "vol-tomas" }))).json()) as InboxResponse;
@@ -73,7 +73,7 @@ describe("rides", () => {
     const late = await answer(post(`/api/rides/${ride.ride_id}/answer`, { driver_id: "vol-tomas", action: "accept" }), params({ id: ride.ride_id }));
     expect(late.status).toBe(409);
     expect(((await late.json()) as { error: { outcome: string } }).error.outcome).toBe("taken");
-    const box = pushes.filter((c) => c.kind === "push");
+    const box = pushes.filter((c) => c.kind === "push" && c.push.type === "responder.message");
     expect(box).toHaveLength(1);
     expect(box[0]!.kind === "push" && box[0]!.push.type === "responder.message" && box[0]!.push.text).toMatch(/^Samir, a volunteer driver, accepted/);
     expect(rt.rides.get(ride.ride_id)!.offers.find((f) => f.driver_id === "vol-tomas")?.state).toBe("lost");
@@ -136,8 +136,8 @@ describe("requestNow (the coordinator's request_ride)", () => {
     expect(r.offered_to).toEqual(["Tomas", "Samir"]);
     expect(r.ride.state).toBe("offered");
     expect(r.ride.offers.map((f) => f.state)).toEqual(["offered", "offered"]);
-    // No words at the box before an accept.
-    expect(changes.some((c) => c.kind === "push")).toBe(false);
+    // No ride acceptance claim at the box before an accept (the caller worker may ask a separate question).
+    expect(changes.some((c) => c.kind === "push" && c.push.type === "responder.message")).toBe(false);
     expect(rt.rides.requestNow(incident.incident_id, null)).toEqual({ ok: false, error: "active" });
 
     const inbox = (await (await getInbox(new Request("http://test/x"), params({ id: "vol-samir" }))).json()) as InboxResponse;

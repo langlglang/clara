@@ -30,6 +30,9 @@ services:
         sync: false
       - key: CARTESIA_API_KEY
         sync: false
+      # Shared Pi credential required for one-frame camera interpretation; set the same secret on the Pi.
+      - key: CLARA_BOX_TOKEN
+        sync: false
       # Without an Anthropic key the voice brain uses the keyword stub; with one, Claude answers.
       - key: CLARA_MODEL
         value: stub

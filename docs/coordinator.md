@@ -22,7 +22,7 @@ The console's COORDINATOR panel shows a TIME TO CARE block (AMBULANCE scene / ho
 
 `estimate_time_to_care` is computed by code (a pure function with unit tests); the model only reads it. For the incident:
 
-- minutes since the SOS (`opened_at`) and since the tourniquet `timer.started`, if any;
+- minutes since the SOS (`opened_at`) and since the tourniquet guidance `timer.started`, if any; the timer does not confirm treatment;
 - **ambulance** (the 911 call is simulated): reaches the scene `CLARA_AMBULANCE_ETA_MIN` (a demo setting) after the SOS, so minus the time elapsed; + `AMBULANCE_ON_SCENE_MIN` (15, demo) + the drive from the box to the nearest of the three fictional hospitals (`apps/web/lib/rides.ts`);
 - **driver**: the best free suitable driver (`drivers_by_distance`: car or van, enough seats, lying-down / wheelchair when the scenario's `care` block needs it): pickup + `DRIVER_LOAD_MIN` (5, demo) + the same drive;
 - **deadline**: the scenario's optional `care.reach_hospital_within_min` (`severe-bleeding.json`: 60), else need-based demo defaults (bleeding 60, breathing 30, general 120). Fictional demo values, not medical guidance.
@@ -44,7 +44,7 @@ There is no tool that talks to the bystander, the box voice, or volunteers beyon
 
 ## Runtime rules (`packages/coordinator/src/coordinator.ts`)
 
-- Triggers: incident opened, `sos.opened` (again) and a tourniquet `timer.started` on the incident's box, an alert declined or expired, escalation level change, and every 45 s while open.
+- Triggers: incident opened, `sos.opened` (again) and a tourniquet guidance `timer.started` on the incident's box, an alert declined or expired, escalation level change, and every 45 s while open. This timer triggers reassessment only; it does not confirm application.
 - Debounce 3 s; one run at a time per incident (triggers during a run queue one follow-up run); at most 10 runs per incident; a 60 s deadline per run with an `AbortSignal` passed to the agent.
 - Failures and timeouts are logged in the run entry and the server log, never thrown into the network. Closed incidents stop.
 
@@ -53,7 +53,7 @@ There is no tool that talks to the bystander, the box voice, or volunteers beyon
 | `CLARA_COORDINATOR` | Behaviour |
 | --- | --- |
 | `on` (default) | Deep agent when `ANTHROPIC_API_KEY` is set; **off** without it. |
-| `rules` | Deterministic planner (`src/rules.ts`) through the same tool layer, no LLM, labelled `RULES`. Alerts a medical candidate after a decline or silence, asks the nearest box for its kit after escalation, requests a ride when `estimate_time_to_care` qualifies (otherwise proposes the suggested driver once a tourniquet is on), flags when nobody is left. |
+| `rules` | Deterministic planner (`src/rules.ts`) through the same tool layer, no LLM, labelled `RULES`. Alerts a medical candidate after a decline or silence, asks the nearest box for its kit after escalation, requests a ride when `estimate_time_to_care` qualifies, and flags when nobody is left. A tourniquet timer alone never triggers a ride. |
 | `off` | Disabled (no-op). |
 
 `CLARA_COORDINATOR_MODEL` overrides the model (default `claude-opus-5-5`); `CLARA_COORDINATOR_EFFORT` is `low` (default) or `medium`.

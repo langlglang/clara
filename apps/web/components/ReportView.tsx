@@ -41,17 +41,17 @@ export function ReportView({ token }: { token: string }) {
             </span>
           </div>
 
-          <section className="tq" aria-label="Tourniquet time">
-            <span className="lbl t-red">Tourniquet</span>
+          <section className="tq" aria-label="Tourniquet guidance timer">
+            <span className="lbl t-red">Tourniquet guidance timer</span>
             {r.tourniquet ? (
               <>
-                <strong>Applied {clock(r.tourniquet.at)}</strong>
+                <strong>Started {clock(r.tourniquet.at)}</strong>
                 <span>
-                  On for about {Math.max(0, Math.round((now - Date.parse(r.tourniquet.at)) / 60_000))} min (from the box&apos;s clock) <Label l={r.tourniquet} />
+                  About {Math.max(0, Math.round((now - Date.parse(r.tourniquet.at)) / 60_000))} min since the box started this timer; application is unconfirmed. <Label l={r.tourniquet} />
                 </span>
               </>
             ) : (
-              <strong style={{ fontSize: "1.2rem" }}>No tourniquet recorded</strong>
+              <strong style={{ fontSize: "1.2rem" }}>No tourniquet timer recorded</strong>
             )}
           </section>
 
@@ -60,7 +60,8 @@ export function ReportView({ token }: { token: string }) {
             <Lines title="M · Mechanism" lines={r.mist.mechanism} empty="Nothing reported." />
             <Lines title="I · Injuries" lines={r.mist.injuries} empty="Nothing reported." />
             <Lines title="S · Signs" lines={r.mist.signs} empty="No device readings." />
-            <Lines title="T · Treatment" lines={r.mist.treatment} empty="No treatment recorded." />
+            <Lines title="T · Treatment status" lines={r.mist.treatment} empty="No treatment confirmed." />
+            {r.mist.treatment.length ? <p className="small muted">These are box guidance timers, not confirmation that treatment was given.</p> : null}
           </section>
 
           <section className="card flat" aria-labelledby="who-h">

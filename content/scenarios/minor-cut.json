@@ -1,0 +1,23 @@
+{
+  "scenario_id": "minor_cut",
+  "version": "minor-cut-demo-v1",
+  "title": "Superficial cut or scrape",
+  "status": "draft",
+  "sources": [
+    "https://cpr.heart.org/en/resuscitation-science/2024-first-aid-guidelines",
+    "https://www.redcross.org/content/dam/redcross/training-services/no-index/First%20Aid-CPR-AED-Participant%27s-Manual.pdf"
+  ],
+  "start": "rinse_cover",
+  "steps": [
+    {
+      "step_id": "rinse_cover",
+      "label": "Show rinse and cover for a superficial cut",
+      "text": "For a superficial cut or scrape, if running tap water or sterile saline is available, rinse until no visible debris remains. Once clean, cover with an adhesive bandage.",
+      "image": "visuals/minor-cut-sequence-v1.svg",
+      "item": "ADHESIVE_BANDAGES",
+      "next": []
+    }
+  ],
+  "questions": [],
+  "triage_available": false
+}

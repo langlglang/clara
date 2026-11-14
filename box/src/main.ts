@@ -7,6 +7,8 @@ import { HttpCloudLink } from "./cloud/http.js";
 import { Kit, loadKit } from "./engine/kit.js";
 import { loadScenario } from "./engine/scenario.js";
 import { UsbGpsLocation } from "./location/usb-gps.js";
+import { CameraCapture, captureUsbJpeg, defaultCameraDevice } from "./camera/capture.js";
+import { PulseReader } from "./sensors/pulse-reader.js";
 import type { Board, CloudLink } from "./ports.js";
 import { DEFAULT_SCREEN_PORT, startScreenServer, type ScreenServer } from "./screen/server.js";
 import { BoxSession, type Need } from "./session/session.js";
@@ -115,7 +117,12 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
     log,
   );
 
-  const session = new BoxSession({
+  let session!: BoxSession;
+  const cameraDevice = defaultCameraDevice();
+  const camera = !config.sim && config.token && existsSync(cameraDevice)
+    ? new CameraCapture(() => session?.sessionId ?? null, (signal) => captureUsbJpeg(cameraDevice, signal)) : null;
+  const pulseReader = board && !board.simulated ? new PulseReader(board) : null;
+  session = new BoxSession({
     boxId: config.boxId,
     boxName: config.boxName,
     directions: config.directions,
@@ -125,6 +132,9 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
     kit,
     cloud,
     board,
+    pulseReader,
+    camera,
+    cameraCloudEnabled: Boolean(config.token),
     speech: audio?.speech ?? null,
     cue: audio ? (name) => { if (!audio.speech.muted) void audio.speaker.playCue(name).catch(() => {}); } : null,
     language: config.language,

@@ -7,7 +7,7 @@ import { Id } from "./scenario.js";
  * of this list.
  */
 
-export const EVENTS_VERSION = "events/0.1";
+export const EVENTS_VERSION = "events/0.2";
 
 const base = {
   event_id: z.uuid(),
@@ -18,6 +18,15 @@ const base = {
 };
 
 export const SourceSchema = z.enum(["touch", "voice", "device", "system"]);
+
+/** Only the configured public box address may leave the Pi in this version; GPS stays local. */
+export const EmergencyLocationSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("configured_address"), address: z.string().trim().min(1).max(200) }),
+  z.strictObject({ kind: z.literal("unavailable") }),
+]);
+export type EmergencyLocation = z.infer<typeof EmergencyLocationSchema>;
+export const EmergencyQuestionIdSchema = z.enum(["situation", "people_count", "location"]);
+export type EmergencyQuestionId = z.infer<typeof EmergencyQuestionIdSchema>;
 
 export const BoxEventSchema = z.discriminatedUnion("type", [
   z.strictObject({ ...base, type: z.literal("box.opened") }),
@@ -33,6 +42,8 @@ export const BoxEventSchema = z.discriminatedUnion("type", [
   z.strictObject({ ...base, type: z.literal("sos.cancelled"), source: SourceSchema }),
   /** The countdown finished: the simulated 911 call shows and the network is alerted. */
   z.strictObject({ ...base, type: z.literal("sos.opened"), need: z.enum(["bleeding", "breathing", "general"]), source: SourceSchema }),
+  z.strictObject({ ...base, type: z.literal("emergency.context"), task_id: z.uuid(), location: EmergencyLocationSchema }),
+  z.strictObject({ ...base, type: z.literal("emergency.answer"), task_id: z.uuid(), question_id: EmergencyQuestionIdSchema, answer: z.string().trim().min(1).max(500), source_event_id: z.uuid() }),
   z.strictObject({ ...base, type: z.literal("supply.used"), sku: Id, qty: z.number().int().min(1).max(99), confirmed: z.boolean() }),
   z.strictObject({ ...base, type: z.literal("sensor.pulse"), bpm: z.number().int().min(20).max(250).nullable(), quality: z.enum(["valid", "suspect", "unavailable"]) }),
   z.strictObject({ ...base, type: z.literal("photo.taken"), photo_id: Id, purpose: z.string().max(80) }),

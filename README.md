@@ -6,6 +6,8 @@ Where professional help is far away (conflict zones, refugee camps, remote and h
 
 > Clara is a hackathon proof of concept. It is never used on a patient, the demo scenarios are fictional, and the 911 call is simulated.
 
+When configured, mock SOS can also place a **real Twilio call to a team-owned demo dispatcher phone**. It plays a one-time briefing about the fictional incident. Clara does not dial 911 or another emergency service; without a configured demo number and Twilio credentials, it only records that no demo phone call was placed. The independent mock emergency fact worker may collect answers afterward, but those later answers are not added to the one-time phone briefing.
+
 ## Live demo
 
 **https://clara.living** (hosted on Render's free plan: the first visit after 15 idle minutes takes about a minute to wake it; state is saved to Postgres, so restarts and redeploys keep it)
@@ -75,6 +77,7 @@ Volunteers join at [clara.living/join](https://clara.living/join): first aid nea
 - **iPhone:** push alerts only work after **Share → Add to Home Screen** and opening Clara from there (iOS 16.4+). In a Safari tab, alerts show only while the page is open.
 - **Push keys:** set `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` (`npx web-push generate-vapid-keys`); without them the server generates a pair and keeps it in the database snapshot with the subscriptions (with no database, phones re-subscribe after each restart).
 - **Calls:** set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (and `PUBLIC_BASE_URL`, default `https://clara.living`). Without them calls are only logged and the maintainer console says "Calls: not configured". **A Twilio trial account can only call numbers verified in the Twilio console.** Clara never calls emergency services.
+- **Demo dispatcher phone:** also set `CLARA_DEMO_911_NUMBER` to a team-owned E.164 number to ring it once per mock SOS. The call starts about four seconds after SOS opens, reads a briefing assembled from the events known at that moment, and never dials an emergency number. A Twilio API acceptance means the call was placed, not that a person answered.
 - **Texts:** volunteers can tick **Also text me (iMessage/WhatsApp/SMS)** and answer alerts by replying 1 / 2, via [Photon](https://photon.codes) (Beta API). Set `PHOTON_API_KEY`, `PHOTON_PROJECT_ID`, `PHOTON_WEBHOOK_SECRET`; setup steps in [docs/companion-pwa.md](docs/companion-pwa.md#text-alerts-photon-imessage-whatsapp-sms). Without them texts are only logged.
 
 Details: [docs/companion-pwa.md](docs/companion-pwa.md).

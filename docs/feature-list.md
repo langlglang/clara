@@ -31,7 +31,7 @@ Someone opens the box → the mic becomes available without automatically contac
 6. **Runs on the 12 V battery** (power path to the Pi still needs a bench test; keep the official Pi supply as backup).
 
 **SOS and help**
-7. **Mock SOS.** 5 s countdown (tap to cancel) → a **simulated 911 call** screen ("Calling 911 — simulation"); the screen coaches what to say; the scene report is ready for EMS. Clara never really dials 911.
+7. **Mock SOS.** 5 s countdown (tap to cancel) → a **simulated 911 call** screen with coaching. When configured, Twilio can ring a team-owned demo dispatcher phone once and read a one-time briefing from events known then; subsequent fact-worker answers are not included. No emergency number is dialed. Twilio acceptance is not proof that a person answered. Phone delivery has not been verified on the deployed demo.
 8. **Companion app = the response network.** Volunteer sign-up by QR (skills, vehicle, language, location); alerts for nearby emergencies (also over WhatsApp/iMessage through Photon); **Accept / Decline** with the handoff card and directions; the kit map; two-way messages that the box reads aloud.
 9. **The box says who is coming, honestly.** "Amina, a nurse, about 6 minutes" only after Amina accepted; names and times come from templates, never from the model.
 10. **Nearby boxes join (not shown on the current kiosk).** The network contract can deliver another box's incident, but the kiosk does not announce it or show an emergency-nearby banner.
@@ -48,16 +48,16 @@ Someone opens the box → the mic becomes available without automatically contac
 17. **Escalation.** No reply in 60 s → next helper → everyone with the skill → dashboard flags it.
 18. **Multi-patient START triage**, with the board on the dashboard.
 19. **Running supply count (proposed).** "What did you use?" → an agent proposes a list → a future confirmation method approves it → restock alert. The current model does not offer usage changes because the minimal screen has no confirmation control.
-20. **Camera check.** "Show me the wound": one photo; the model describes it with its uncertainty and never advances a step from it alone.
+20. **Camera check (demo implemented in code; end-to-end physical check pending).** On request and with session consent, the Pi captures one USB-camera frame for a cloud observation. The result carries uncertainty and never advances guidance by itself.
 21. **Failure states.** Server or internet down, item missing, kit layout mismatch, stale or offline box, a volunteer cancels: the box shows what it knows and keeps local mock SOS available. General offline conversation is not implemented.
 22. **Second language** (Claude speaks freely only in languages a teammate checked; elsewhere fixed recorded lines).
 23. **First-aid voice exam.** Simulated panicked bystanders, an Opus grader, results (including failures) in the README.
 24. **Approved answers** to common questions; below a match threshold, Clara asks for clarification or says it does not know.
-25. **Pulse sensor (MAX30102).** Finger clip → ESP32 → pulse with time on screen, in the scene report and dashboard, labeled "device reading". Show a number only after the detection code is tested; otherwise "unavailable". The model may read it out but never chooses a step from it.
+25. **Pulse sensor (demo implemented in code; on-finger reference check pending).** A fresh MAX30102 sample window can yield an ESP32 pulse estimate; the Pi shows a number only for a valid-quality result, otherwise "unavailable." A numeric result is not yet verified against an independent reference. It cannot select treatment. Scene-report/dashboard integration remains proposed.
 
 ## Stretch
 26. Ride matching for patient transport (one accept wins).
-27. Phone calls to helpers without smartphones (Twilio + Cartesia).
+27. **Demo implemented in code:** opted-in volunteers can receive a Twilio phone fallback after an unseen alert; call delivery still needs a deployed end-to-end check. This is separate from the optional team-owned simulated 911 briefing in #7.
 28. **Demo implemented:** deepagents response coordinator with responder-scout, logistics, and time-to-care specialists, subject to its configuration and tool limits. It is distinct from the proposed emergency caller and Core Clara task supervisor.
 29. ~~Driver fuel reimbursement through Nessie (Capital One prize)~~ — dropped, not targeting Capital One.
 30. CoStar kit-placement agent (only with a free person after a one-hour data check).
@@ -72,10 +72,10 @@ Someone opens the box → the mic becomes available without automatically contac
 - **TypeScript everywhere** (Node 24), npm workspaces.
 - **Box (Pi 5):** Node service; `arecord`/`aplay` audio (same mic and speaker as Sophi); USB serial to the ESP32; Piper/espeak-ng fallback voice; box screen as a local web page in Chromium kiosk.
 - **ESP32:** Arduino/PlatformIO C++, newline-delimited JSON over USB serial (lid switch, LEDs, pulse sensor).
-- **Backend + web:** one Next.js app (box API, companion app, dashboard, maintainer backend, kit map, EMS scene report). Database and real-time: Supabase (in-memory store until the project exists).
+- **Backend + web:** one Next.js app (box API, companion app, dashboard, maintainer backend, kit map, EMS scene report). Runtime state is held in memory and snapshotted to Render Postgres when `DATABASE_URL` is set; local development without that variable is memory-only. See [persistence](persistence.md).
 - **AI:** Anthropic SDK; Claude Haiku 5.5 main with Claude Opus 5.5 as a parallel backup; structured JSON replies with the schema rebuilt each turn.
 - **Voice:** Cartesia (ink-whisper speech-to-text, Sonic voice). Key lives only in the server's environment.
-- **Messaging:** Photon 2.0 (iMessage / WhatsApp). Optional Twilio.
+- **Messaging:** Photon 2.0 (iMessage / WhatsApp); optional Twilio volunteer fallback and team-owned demo dispatcher call. Neither calls emergency services.
 - **Maps:** Leaflet + OpenStreetMap, or a static map of a fictional village.
 
 ## Reuse from Sophi

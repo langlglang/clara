@@ -12,7 +12,8 @@ const VISION_SCHEMA = {
   properties: {
     setting: { type: "string", enum: ["indoors", "outdoors", "unclear"] },
     people: { type: "string", enum: ["none_visible", "one_visible", "multiple_visible", "unclear"] },
-    objects: { type: "array", items: { type: "string", enum: OBJECTS }, maxItems: 5 },
+    // Anthropic structured outputs reject maxItems; the local Zod parse still enforces five.
+    objects: { type: "array", items: { type: "string", enum: OBJECTS } },
   },
 };
 

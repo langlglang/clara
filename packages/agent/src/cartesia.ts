@@ -89,6 +89,7 @@ export function createCartesiaVoice({
             voice: { id: voiceId },
             output_format: { container: "wav", encoding: "pcm_s16le", sample_rate: sampleRate },
             language: cartesiaLanguage(language),
+            generation_config: { speed: 1.5 },
           }),
           signal,
         });

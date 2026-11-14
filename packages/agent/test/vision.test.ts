@@ -26,5 +26,8 @@ describe("one-frame vision output boundary", () => {
     const result = await createAnthropicVisionInspector("unused", "claude-haiku-5-5", fake).inspect("jpeg-base64", new AbortController().signal);
     expect(result).toContain("may show a hand, a red area");
     expect(request).toMatchObject({ output_config: { format: { type: "json_schema" } } });
+    const schema = (request as unknown as { output_config: { format: { schema: { properties: { objects: object } } } } }).output_config.format.schema;
+    expect(schema.properties.objects).not.toHaveProperty("maxItems");
+    expect(parseVisibleObservation(JSON.stringify({ setting: "unclear", people: "unclear", objects: Array(6).fill("hand") }))).toBeNull();
   });
 });

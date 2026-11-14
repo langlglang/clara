@@ -47,7 +47,7 @@ describe("Cartesia voice", () => {
     const audio = await createCartesiaVoice({ apiKey: "k", fetchImpl: impl }).speak("Tell me more.", "es", signal());
     expect(audio?.equals(wav)).toBe(true);
     const body = JSON.parse(calls[0]!.init.body as string);
-    expect(body).toMatchObject({ model_id: "sonic-3.6", transcript: "Tell me more.", language: "es", output_format: { container: "wav", sample_rate: 16_000 } });
+    expect(body).toMatchObject({ model_id: "sonic-3.6", transcript: "Tell me more.", language: "es", output_format: { container: "wav", sample_rate: 16_000 }, generation_config: { speed: 1.5 } });
   });
 
   it("returns null for non-WAV bytes, oversized audio, or an error", async () => {

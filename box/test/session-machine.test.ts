@@ -191,7 +191,7 @@ describe("BoxSession lid", () => {
     session.lidOpened();
     expect(session.view().presentation).toMatchObject({ kind: "answer", body: "I'm Clara, I'm here to help. Let me know what happened and I can guide you through treatment, diagnosis, or call for help." });
     expect(speech.played).toHaveLength(1);
-    expect(speech.played[0]).toMatchObject({ text: "", file: join(contentDir, "audio/clara-greeting-v3.wav") });
+    expect(speech.played[0]).toMatchObject({ text: "", file: join(contentDir, "audio/clara-greeting-v3-fast.wav") });
     expect(cloud.types()).toEqual(["box.opened"]);
     expect(cloud.turns).toHaveLength(0);
     session.lidClosed();

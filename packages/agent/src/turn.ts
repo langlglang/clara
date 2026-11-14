@@ -201,7 +201,7 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
     if (visual.id === "minor_cut_rinse_cover" && !minorCutVisualAllowed(words)) return fixed("invalid_reply", words);
     reply = visual.line;
   }
-  if (!reply && action?.name === "ask_clarifying") {
+  if (action?.name === "ask_clarifying") {
     reply = request.state.questions.find((q) => q.question_id === action.question_id)?.text ?? "";
   }
   if (action?.name === "answer_emergency_question") {

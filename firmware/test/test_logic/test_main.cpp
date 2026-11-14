@@ -123,6 +123,22 @@ void test_pulse_steady_waveform_is_valid() {
   TEST_ASSERT_TRUE(p.result(8300).quality == PulseQuality::Unavailable);  // No new FIFO records.
 }
 
+void test_pulse_recovers_after_one_long_interval() {
+  PulseEstimator p;
+  // Downward optical troughs with one 1.6 s interval amid 0.8 s intervals.
+  const uint32_t beats[] = {0, 800, 1600, 2400, 3200, 4000, 5600, 6400, 7200, 8000, 8800, 9600};
+  for (uint32_t t = 0; t <= 9600; t += 40) {
+    uint8_t beat = 0;
+    while (beat + 1 < sizeof(beats) / sizeof(beats[0]) - 1 && t >= beats[beat + 1]) ++beat;
+    const uint32_t period = beats[beat + 1] - beats[beat];
+    const float phase = 6.2831853f * static_cast<float>(t - beats[beat]) / period;
+    p.sample(static_cast<uint32_t>(120000.0f - 2500.0f * std::sin(phase)), t);
+  }
+  const PulseResult r = p.result(9600);
+  TEST_ASSERT_TRUE(r.quality == PulseQuality::Valid);
+  TEST_ASSERT_INT_WITHIN(3, 75, r.bpm);
+}
+
 void test_pulse_flat_noisy_or_broken_signal_never_reports_a_number() {
   PulseEstimator p;
   for (uint32_t t = 0; t <= 8000; t += 40) p.sample(100000 + (t % 3) * 10, t);
@@ -162,6 +178,7 @@ int main() {
   RUN_TEST(test_buzzer_chime_ends_and_alert_is_bounded);
   RUN_TEST(test_pulse_no_finger_is_unavailable);
   RUN_TEST(test_pulse_steady_waveform_is_valid);
+  RUN_TEST(test_pulse_recovers_after_one_long_interval);
   RUN_TEST(test_pulse_flat_noisy_or_broken_signal_never_reports_a_number);
   RUN_TEST(test_line_buffer_frames_and_drops_oversize);
   return UNITY_END();

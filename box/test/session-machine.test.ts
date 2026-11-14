@@ -98,6 +98,13 @@ function setup(contentDir?: string, extra: Partial<Pick<BoxSessionOptions, "conf
 }
 
 describe("optional voice-paced guides", () => {
+  it("shows a clarification without queuing the question twice", () => {
+    const { session, speech } = setup();
+    session.lidOpened();
+    expect(session.applyAction({ name: "ask_clarifying", question_id: "q1" })).toBe(true);
+    expect(session.view().presentation).toMatchObject({ kind: "question", body: "TEST QUESTION placeholder?" });
+    expect(speech.said).toEqual([]); // The voice loop plays the server's single canonical reply.
+  });
   it("starts a stocked guide, lights its item, and waits for a same-turn spoken completion", () => {
     const guide = loadScenario(content("scenarios/minor-cut.json"));
     const { session, board } = setup(content(""), { scenarios: [guide] }, content("kits/clara-3slot-v1.json"));

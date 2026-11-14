@@ -668,7 +668,6 @@ export class BoxSession {
         if (question) {
           this.caption = question.text;
           this.presentation = { kind: "question", title: "Clara asks", body: question.text, image_url: null, item: null, source_label: null };
-          this.o.speech?.say({ text: question.text }).catch(() => {});
         }
         this.publish();
         return true;

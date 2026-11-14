@@ -68,7 +68,8 @@ void PulseEstimator::sample(uint32_t ir, uint32_t sampledAtMs) {
   }
   dc_ += difference / 32.0f;  // Remove slow baseline drift without truncating the 18-bit reading.
   const float ac = static_cast<float>(ir) - dc_;
-  const float filtered = (ac + ac1_ + ac2_) / 3.0f;  // Smooth high-frequency noise at 25 records/s.
+  // On the installed reflective breakout, each pulse is a downward IR trough.
+  const float filtered = -(ac + ac1_ + ac2_) / 3.0f;  // Smooth high-frequency noise at 25 records/s.
   ac2_ = ac1_;
   ac1_ = ac;
   if (filteredCount_ < 2) {
@@ -102,10 +103,14 @@ PulseResult PulseEstimator::result(uint32_t nowMs) const {
     sorted[j] = value;
   }
   const uint32_t median = sorted[filled_ / 2];
-  for (uint8_t i = 0; i < filled_; ++i) {
-    if (std::fabs(static_cast<float>(sorted[i]) - median) > median * kMaxIntervalSpread)
-      return {-1, PulseQuality::Suspect};
-  }
+  uint8_t consistent = 0;
+  for (uint8_t i = 0; i < filled_; ++i)
+    if (std::fabs(static_cast<float>(sorted[i]) - median) <= median * kMaxIntervalSpread) ++consistent;
+  // One motion peak can split a true beat. Require four agreeing intervals, including the newest.
+  const uint8_t newest = static_cast<uint8_t>((next_ + kIntervalSlots - 1) % kIntervalSlots);
+  if (consistent < kMinIntervals ||
+      std::fabs(static_cast<float>(intervals_[newest]) - median) > median * kMaxIntervalSpread)
+    return {-1, PulseQuality::Suspect};
   const int bpm = static_cast<int>((60000u + median / 2) / median);
   if (bpm < 30 || bpm > 200) return {-1, PulseQuality::Suspect};
   return {bpm, PulseQuality::Valid};

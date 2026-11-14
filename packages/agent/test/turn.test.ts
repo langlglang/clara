@@ -185,9 +185,9 @@ describe("handleTurn", () => {
     expect(v.said).toEqual([cue]);
   });
 
-  it("speaks the question text when ask_clarifying has no reply", async () => {
+  it("speaks the canonical question even if the model supplies different words", async () => {
     const v = voice();
-    const response = await handleTurn(textRequest("help"), { assistant: assistantFor(json({ transcript: "help", reply: "", action: { name: "ask_clarifying", question_id: "where" } })), ears: null, voice: v });
+    const response = await handleTurn(textRequest("help"), { assistant: assistantFor(json({ transcript: "help", reply: "A different question?", action: { name: "ask_clarifying", question_id: "where" } })), ears: null, voice: v });
     expect(response.reply).toBe(state.questions[0]!.text);
     expect(v.said).toEqual([state.questions[0]!.text]);
   });

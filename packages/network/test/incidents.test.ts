@@ -86,6 +86,22 @@ describe("incidents", () => {
     expect(h.net.comingLine("box-clinic")).toBe(comingLine(r.incident.alerts));
   });
 
+  it("measures the walking time from where the phone is when the app sends it, else from the saved location", () => {
+    const h = harness();
+    const { incident } = openSos(h);
+    const amina = incident.alerts.find((a) => a.volunteer_id === "vol-amina")!;
+    const yusuf = incident.alerts.find((a) => a.volunteer_id === "vol-yusuf")!;
+    // Amina is standing next to the box (Clinic tent at 40.35, -74.66) even though her profile spot is ~240 m away.
+    const near = h.net.respond(amina.alert_id, "vol-amina", "coming", { lat: 40.3501, lng: -74.6601 });
+    expect(near.outcome === "answered" && near.alert.eta_minutes).toBe(1);
+    expect(h.net.comingLine("box-clinic")).toBe("Amina is coming, about 1 minute.");
+    // No location sent (a text reply, or location refused): the saved profile spot is used, as before.
+    const saved = h.net.respond(yusuf.alert_id, "vol-yusuf", "coming");
+    expect(saved.outcome === "answered" && saved.alert.eta_minutes).toBeGreaterThan(1);
+    // A bad position is refused, not used.
+    expect(() => h.net.respond(amina.alert_id, "vol-amina", "arrived", { lat: 400, lng: 0 })).toThrow();
+  });
+
   it("valid and invalid transitions; repeated taps are harmless", () => {
     const h = harness();
     const { incident } = openSos(h);

@@ -93,7 +93,11 @@ export const IncidentSchema = z.strictObject({
 export type Incident = z.infer<typeof IncidentSchema>;
 
 /** Volunteer answers from the companion app (or a WhatsApp / iMessage reply mapped to one). */
-export const AlertResponseSchema = z.strictObject({ action: z.enum(["shown", "coming", "declined", "arrived"]) });
+export const AlertResponseSchema = z.strictObject({
+  action: z.enum(["shown", "coming", "declined", "arrived"]),
+  /** Where the volunteer's phone is when they answer (optional; the ETA uses it instead of their saved location). */
+  from: z.strictObject({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).optional(),
+});
 export type AlertResponse = z.infer<typeof AlertResponseSchema>;
 
 /** Short code for the EMS report link (`<base>/r/AB12CD`): six upper-case letters and digits. */

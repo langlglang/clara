@@ -73,7 +73,11 @@ export function AlertScreen({ item, volunteerId, refresh, announce, now }: { ite
   const respond = (action: "coming" | "declined" | "arrived") =>
     act(
       action,
-      () => postJson<{ alert: Alert }>(`/api/alerts/${encodeURIComponent(alert.alert_id)}/respond`, { volunteer_id: volunteerId, action }),
+      async () => {
+        // "I'm coming": send where the phone is now so the walking time is real, not from the saved profile spot.
+        const from = action === "coming" ? await herePosition() : null;
+        return postJson<{ alert: Alert }>(`/api/alerts/${encodeURIComponent(alert.alert_id)}/respond`, { volunteer_id: volunteerId, action, ...(from ? { from } : {}) });
+      },
       (r) => {
         setAnswer(r.alert);
         return action === "coming" ? `You said you're coming to ${boxName}.` : action === "arrived" ? "Marked as arrived." : "You said you can't help this time.";
@@ -354,4 +358,26 @@ export function RideScreen({ item, volunteerId, refresh, announce, now }: { item
       </div>
     </section>
   );
+}
+
+/**
+ * The phone's position right now, or null: no permission, no fix within a few seconds, or a fix too rough to help
+ * (over 1 km). Never blocks the answer for long, and never asks again if location was refused.
+ */
+function herePosition(): Promise<{ lat: number; lng: number } | null> {
+  if (typeof navigator === "undefined" || !("geolocation" in navigator)) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 4000);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        clearTimeout(timer);
+        resolve(p.coords.accuracy <= 1000 ? { lat: p.coords.latitude, lng: p.coords.longitude } : null);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(null);
+      },
+      { enableHighAccuracy: true, timeout: 3500, maximumAge: 60_000 },
+    );
+  });
 }

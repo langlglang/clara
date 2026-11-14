@@ -190,7 +190,7 @@ const TRANSITIONS: Record<"sent" | "shown" | "coming" | "declined" | "arrived", 
  * so the box's comingLine can't name anyone who didn't accept. Declining after coming is allowed (they backed
  * out) and re-opens escalation on the next tick.
  */
-export function respond(ctx: AlertContext, req: { alert_id: string; volunteer_id: string; action: Action }, now: Date): RespondResult {
+export function respond(ctx: AlertContext, req: { alert_id: string; volunteer_id: string; action: Action; from?: { lat: number; lng: number } }, now: Date): RespondResult {
   const entry = ctx.store.incidentByAlert(req.alert_id);
   if (!entry) return { outcome: "not_found" };
   const { incident } = entry;
@@ -205,7 +205,9 @@ export function respond(ctx: AlertContext, req: { alert_id: string; volunteer_id
   if (next === "coming") {
     const volunteer = ctx.store.getVolunteer(alert.volunteer_id);
     const box = ctx.store.getBox(incident.box_id);
-    alert.eta_minutes = volunteer && box ? Math.min(600, estimateEta(haversineKm(volunteer.location, box.box.location), volunteer.vehicle_seats).minutes) : null;
+    // From where the phone is now when the app sent it, else from the volunteer's saved location.
+    const start = req.from ?? volunteer?.location;
+    alert.eta_minutes = start && volunteer && box ? Math.min(600, estimateEta(haversineKm(start, box.box.location), volunteer.vehicle_seats).minutes) : null;
   }
   ctx.store.putIncident(entry);
   return { outcome: "answered", incident, alert, pushes: [alertUpdate(incident, alert)] };

@@ -150,6 +150,8 @@ describe("volunteers and alerts", () => {
     // Someone else can't accept for them; a bad action is a 400.
     expect((await respond(post(`/api/alerts/${alert!.alert_id}/respond`, { volunteer_id: "vol-amina", action: "coming" }), params({ id: alert!.alert_id }))).status).toBe(403);
     expect((await respond(post(`/api/alerts/${alert!.alert_id}/respond`, { volunteer_id: volunteer.volunteer_id, action: "maybe" }), params({ id: alert!.alert_id }))).status).toBe(400);
+    // A position that isn't one is a 400 too (the app sends { lat, lng } from the phone, or nothing).
+    expect((await respond(post(`/api/alerts/${alert!.alert_id}/respond`, { volunteer_id: volunteer.volunteer_id, action: "coming", from: { lat: "here" } }), params({ id: alert!.alert_id }))).status).toBe(400);
 
     const coming = await respond(post(`/api/alerts/${alert!.alert_id}/respond`, { volunteer_id: volunteer.volunteer_id, action: "coming" }), params({ id: alert!.alert_id }));
     expect(coming.status).toBe(200);

@@ -123,9 +123,9 @@ export function createNetwork(options: NetworkOptions = {}) {
 
     // ---- Volunteers ----
     /** A volunteer's answer from the companion app (or a WhatsApp / iMessage reply mapped to one). */
-    respond(alertId: string, volunteerId: string, action: unknown): RespondResult {
-      const parsed = AlertResponseSchema.parse({ action });
-      const result = respond(ctx, { alert_id: alertId, volunteer_id: volunteerId, action: parsed.action }, clock());
+    respond(alertId: string, volunteerId: string, action: unknown, from?: unknown): RespondResult {
+      const parsed = AlertResponseSchema.parse({ action, ...(from !== undefined ? { from } : {}) });
+      const result = respond(ctx, { alert_id: alertId, volunteer_id: volunteerId, action: parsed.action, ...(parsed.from ? { from: parsed.from } : {}) }, clock());
       if (result.outcome === "answered") publish(result.pushes);
       return result;
     },

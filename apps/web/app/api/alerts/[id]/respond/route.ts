@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 const RespondSchema = AlertResponseSchema.extend({ volunteer_id: VolunteerSchema.shape.volunteer_id });
 
 /**
- * A volunteer's answer: `{ volunteer_id, action: "shown" | "coming" | "declined" | "arrived" }`. Only the
+ * A volunteer's answer: `{ volunteer_id, action: "shown" | "coming" | "declined" | "arrived", from?: { lat, lng } }`
+ * (`from`: where the phone is now, so "coming" gets a real walking time). Only the
  * volunteer the alert went to may answer; a repeated tap is harmless; a late answer gets 409 with the incident.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
@@ -17,7 +18,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const parsed = RespondSchema.safeParse(read.body);
   if (!parsed.success) return fail(400, "bad_request", "Expected { volunteer_id, action }.", { issues: issues(parsed.error) });
   const rt = await ensureRuntime();
-  const result = rt.network.respond(id, parsed.data.volunteer_id, parsed.data.action);
+  const result = rt.network.respond(id, parsed.data.volunteer_id, parsed.data.action, parsed.data.from);
   switch (result.outcome) {
     case "answered":
     case "unchanged":

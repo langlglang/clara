@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createNetwork } from "@clara/network";
 import { EVENTS_VERSION } from "@clara/contracts";
-import { briefing, createDemo911, demo911Target, demo911Twiml } from "../lib/demo911";
+import { briefing, briefingLines, createDemo911, demo911Target, demo911Twiml } from "../lib/demo911";
 
 const twilio = { accountSid: "AC" + "0".repeat(32), authToken: "token", from: "+15550000000" };
 
@@ -67,7 +67,10 @@ describe("demo 911 call", () => {
       { event_id: randomUUID(), box_id: "box-clinic", session_id: open.incident.session_id, occurred_at: new Date().toISOString(), type: "emergency.context", task_id: randomUUID(), location: { kind: "configured_address", address: "Wrong address" } },
     ] });
     const text = briefing(network, "box-clinic", new Date())!;
+    const page = briefingLines(network, open.incident.incident_id)!;
     expect(text).toContain("1455 California Ave");
+    expect(page.lines.find((line) => line.kind === "location")?.text).toContain("1455 California Ave");
+    expect(page.lines.find((line) => line.kind === "timer")?.text).toContain("application is unconfirmed");
     expect(text).not.toContain("Wrong address");
     expect(text).not.toMatch(/Room 101|Clinic tent/);
   });

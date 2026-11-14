@@ -33,32 +33,55 @@ export interface Demo911Call {
   error?: string;
 }
 
-/** The spoken briefing: facts from the box's events only, labelled as reported where they came from the bystander. */
-export function briefing(network: Network, boxId: string, now: Date, timeZone = "America/New_York"): string | null {
-  const entry = network.store.openIncidentForBox(boxId);
-  const open = entry?.incident;
-  if (!open || !entry) return null;
-  const events = network.store.eventsForBox(boxId).map((e) => e.event).filter((e) => e.session_id === open.session_id);
+/** One spoken line of the call, labelled so the call page can show who is speaking and where a fact came from. */
+export interface BriefingLine {
+  text: string;
+  kind: "intro" | "location" | "need" | "reported" | "timer" | "network" | "time";
+}
+
+/** The briefing for one incident: facts from its box's events only, the bystander's words labelled as reported. */
+export function briefingLines(network: Network, incidentId: string, timeZone = "America/New_York"): { lines: BriefingLine[]; box_name: string; need: string; opened_at: string; closed: boolean } | null {
+  const entry = network.store.getIncident(incidentId);
+  const incident = entry?.incident;
+  if (!incident || !entry) return null;
+  const box = network.store.getBox(incident.box_id)?.box;
+  if (!box) return null;
+  const events = network.store.eventsForBox(incident.box_id).map((e) => e.event).filter((e) => e.session_id === incident.session_id);
   const heard = [...events].reverse().find((e) => e.type === "report.heard") as { text?: string } | undefined;
   const tq = events.find((e) => e.type === "timer.started" && (e as { timer?: string }).timer === "tourniquet");
   const context = events.find((e) => e.type === "emergency.context" && e.task_id === entry.sos_event_id);
   const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
-  const alerted = open.alerts.length;
-  const coming = open.alerts.filter((a) => a.state === "coming" || a.state === "arrived").map((a) => a.volunteer_name);
-  const parts = [
-    "This is Clara, an automated first-aid box. This is a simulated 911 call for a hackathon demo.",
-    context?.type === "emergency.context" && context.location.kind === "configured_address"
+  const alerted = incident.alerts.length;
+  const coming = incident.alerts.filter((a) => a.state === "coming" || a.state === "arrived").map((a) => a.volunteer_name);
+  const lines: Array<BriefingLine | null> = [
+    { kind: "intro", text: "This is Clara, an automated first-aid box. This is a simulated 911 call for a hackathon demo." },
+    { kind: "location", text: context?.type === "emergency.context" && context.location.kind === "configured_address"
       ? `The box's configured address is ${context.location.address}; it is not a live GPS fix.`
-      : "The box has no configured address available; ask the bystander for their location.",
-    `${NEED_WORDS[open.need] ?? "First aid"}.`,
-    heard?.text ? `The bystander reported: ${heard.text}` : "",
-    tq ? `The box started a tourniquet guidance timer at ${time(tq.occurred_at)}; application is unconfirmed.` : "",
-    alerted > 0 ? `${alerted} nearby volunteer${alerted === 1 ? " has" : "s have"} been alerted.` : "",
-    coming.length > 0 ? `${coming.join(" and ")} accepted and ${coming.length === 1 ? "is" : "are"} on the way.` : "",
-    `SOS opened at ${time(open.opened_at)}.`,
-    `This one-time briefing was assembled at ${time(now.toISOString())}; later updates are not included.`,
+      : "The box has no configured address available; ask the bystander for their location." },
+    { kind: "need", text: `${NEED_WORDS[incident.need] ?? "First aid"}.` },
+    heard?.text ? { kind: "reported", text: `The bystander reported: ${heard.text}` } : null,
+    tq ? { kind: "timer", text: `The box started a tourniquet guidance timer at ${time(tq.occurred_at)}; application is unconfirmed.` } : null,
+    alerted > 0 ? { kind: "network", text: `${alerted} nearby volunteer${alerted === 1 ? " has" : "s have"} been alerted.` } : null,
+    coming.length > 0 ? { kind: "network", text: `${coming.join(" and ")} accepted and ${coming.length === 1 ? "is" : "are"} on the way.` } : null,
+    { kind: "time", text: `SOS opened at ${time(incident.opened_at)}.` },
   ];
-  return parts.filter(Boolean).join(" ");
+  return { lines: lines.filter((l): l is BriefingLine => l !== null), box_name: box.name, need: incident.need, opened_at: incident.opened_at, closed: incident.closed !== null };
+}
+
+/** The most recently opened incident's id (the call page's "latest"). */
+export function latestIncidentId(entries: Array<{ incident: { incident_id: string; opened_at: string } }>): string | null {
+  const latest = [...entries].sort((a, b) => b.incident.opened_at.localeCompare(a.incident.opened_at))[0];
+  return latest?.incident.incident_id ?? null;
+}
+
+/** The spoken briefing for a box's open incident (the Twilio call reads this). */
+export function briefing(network: Network, boxId: string, _now?: Date, timeZone = "America/New_York"): string | null {
+  const open = network.store.openIncidentForBox(boxId)?.incident;
+  if (!open) return null;
+  const lines = briefingLines(network, open.incident_id, timeZone)?.lines;
+  if (!lines) return null;
+  const time = (_now ?? new Date()).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
+  return `${lines.map((l) => l.text).join(" ")} This one-time briefing was assembled at ${time}; later updates are not included.`;
 }
 
 export function demo911Twiml(spoken: string): string {

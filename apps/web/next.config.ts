@@ -6,7 +6,7 @@ const config: NextConfig = {
   // Keep `next dev` from writing an AGENTS.md into apps/web (the repo root has the project one).
   agentRules: false,
   // The shared packages ship TypeScript source; Next compiles them with the app.
-  transpilePackages: ["@clara/contracts", "@clara/network", "@clara/agent", "@clara/coordinator"],
+  transpilePackages: ["@clara/contracts", "@clara/network", "@clara/agent", "@clara/coordinator", "@clara/placement"],
   // The coordinator loads LangChain / deepagents lazily on the server; keep them as plain Node packages, unbundled.
   serverExternalPackages: ["deepagents", "langchain", "@langchain/core", "@langchain/langgraph", "@langchain/anthropic", "langsmith", "web-push"],
   // The packages use NodeNext imports ("./alerts.js" for alerts.ts). Turbopack does not map those yet, so the app

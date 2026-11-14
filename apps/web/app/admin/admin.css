@@ -1,0 +1,347 @@
+/* Admin app (Field Kit theme, docs/design/field-kit.md): 1440 px desktop. */
+
+.adm {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+}
+.adm > .topbar {
+  position: static;
+}
+.adm-tabs {
+  display: flex;
+  gap: 0;
+  margin-left: 16px;
+}
+.adm-tabs button {
+  font-family: var(--font-head);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.adm-tabs button[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
+/* Health */
+.adm-health {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  min-height: 0;
+}
+.adm-stage {
+  position: relative;
+  min-height: 0;
+}
+.adm-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 500;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  font-family: var(--font-head);
+  font-size: 12px;
+  display: flex;
+  gap: 12px;
+}
+.adm-side,
+.adm-col {
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.adm-select,
+.adm-input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 10px;
+  font-family: var(--font-head);
+  font-size: 13px;
+  min-height: 44px;
+  width: 100%;
+}
+.adm-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.adm-tile {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.adm-tile .big {
+  font-size: 1.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.adm-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.adm-card h2,
+.adm-card h3 {
+  margin: 0;
+  font-family: var(--font-head);
+}
+.adm-card p {
+  margin: 0;
+}
+.adm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.adm-row {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 10px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.adm-row.on {
+  border-color: var(--accent);
+}
+.adm-row .mono {
+  grid-column: 1 / 3;
+}
+.adm-row-name {
+  font-weight: 600;
+}
+.adm-supplies {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 12px;
+  font-size: 13px;
+}
+.adm-supplies > div {
+  display: flex;
+  justify-content: space-between;
+}
+.adm-warn {
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  padding: 8px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+.pad {
+  padding: 16px;
+}
+
+/* Planner */
+.adm-planner {
+  display: grid;
+  grid-template-columns: 380px minmax(0, 1fr) 440px;
+  min-height: 0;
+}
+.adm-planner > .adm-col:first-child {
+  border-left: 0;
+}
+.adm-mid {
+  background: var(--bg);
+}
+.adm-mid .adm-card {
+  background: var(--surface);
+}
+.adm-search {
+  display: flex;
+  gap: 6px;
+}
+.adm-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.adm-levels {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.adm-levels button {
+  font-family: var(--font-head);
+  font-size: 12px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.adm-levels button.on {
+  background: var(--info);
+  color: var(--on-accent);
+  border-color: var(--info);
+}
+.adm-graph {
+  width: 100%;
+  max-height: 440px;
+  background: var(--map);
+  border: 1px solid var(--border);
+}
+.adm-aerial {
+  width: 100%;
+  max-height: 520px;
+  border: 1px solid var(--border);
+}
+.adm-tour {
+  width: 100%;
+  height: 420px;
+  border: 1px solid var(--border);
+  background: var(--map);
+}
+.adm-heat {
+  margin: 0;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.adm-heat i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+}
+.adm-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 480px;
+  overflow-y: auto;
+  border-left: 2px solid var(--border);
+}
+.adm-floor {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  padding: 0 4px;
+  height: 9px;
+  font-size: 8px;
+  cursor: default;
+  text-align: right;
+}
+.adm-floor .bar {
+  height: 7px;
+  background: var(--muted);
+  justify-self: start;
+  min-width: 1px;
+}
+.adm-floor.scanned {
+  height: 14px;
+  font-size: 10px;
+  color: var(--info);
+  cursor: pointer;
+}
+.adm-floor.scanned .bar {
+  background: var(--info);
+  height: 12px;
+}
+.adm-floor.on {
+  outline: 1px solid var(--accent);
+}
+.adm-floor .kit {
+  color: var(--accent);
+  font-size: 10px;
+}
+.adm-tenants {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.adm-tenants li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.adm-log {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.adm-log ol {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-family: var(--font-head);
+  word-break: break-word;
+}
+.adm-log li.note {
+  color: var(--accent);
+}
+.adm-log li.refused {
+  color: var(--warn);
+}
+.adm-bullets {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.adm-kits {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.adm-kits li {
+  border-left: 3px solid var(--border);
+  padding-left: 8px;
+}
+.adm-kits li.on {
+  border-left-color: var(--accent);
+}

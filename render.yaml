@@ -33,6 +33,9 @@ services:
       # Shared Pi credential required for one-frame camera interpretation; set the same secret on the Pi.
       - key: CLARA_BOX_TOKEN
         sync: false
+      # Admin planner and simulated call page require this separate credential.
+      - key: CLARA_ADMIN_TOKEN
+        sync: false
       # Without an Anthropic key the voice brain uses the keyword stub; with one, Claude answers.
       - key: CLARA_MODEL
         value: stub

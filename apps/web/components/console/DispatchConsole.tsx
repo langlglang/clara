@@ -224,6 +224,9 @@ function IncidentPanel({ d, now, announce, refresh }: { d: IncidentDetail; now: 
         <a className="btn small" href={`/report/${encodeURIComponent(incident.report_token)}`} target="_blank" rel="noreferrer">
           EMS scene report
         </a>
+        <a className="btn small" href={`/call/${encodeURIComponent(incident.incident_id)}`} target="_blank" rel="noreferrer">
+          Play simulated 911 call
+        </a>
         {!closed ? (
           <button type="button" className="btn small no-print" aria-disabled={busy || undefined} onClick={() => void closeBox()}>
             Demo: close the box

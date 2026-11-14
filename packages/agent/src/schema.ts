@@ -55,7 +55,7 @@ export function replyJsonSchema(state: TurnState): Record<string, unknown> {
   const presentation = variants.filter((variant) => presentationNames.has(String((variant as { properties?: { name?: { enum?: string[] } } }).properties?.name?.enum?.[0])));
   const background = [obj("suggest_sos"), ...(pulseAvailable ? [obj("read_pulse")] : []), ...(cameraAvailable ? [obj("request_camera")] : [])];
   if (presentation.length || background.length > 1) variants.push(obj("launch_tasks", {
-    background: { type: "array", items: { anyOf: background }, minItems: 1, maxItems: 3 },
+    background: { type: "array", items: { anyOf: background }, minItems: 1 },
     presentation: { anyOf: [{ type: "null" }, ...presentation] },
   }));
   variants.push(obj("suggest_sos"));

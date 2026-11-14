@@ -50,7 +50,7 @@ describe("replyJsonSchema", () => {
     expect(replyZodSchema(offered).safeParse({ transcript: "small cut", reply: "", action: { name: "start_guidance", scenario_id: "minor_cut" } }).success).toBe(true);
     expect(replyZodSchema(offered).safeParse({ transcript: "small cut", reply: "", action: { name: "start_guidance", scenario_id: "unknown" } }).success).toBe(false);
     expect(replyJsonSchema(offered)).not.toMatchObject({ minimum: expect.anything() });
-    expect(JSON.stringify(replyJsonSchema(offered))).not.toMatch(/"(?:minimum|maximum)"/);
+    expect(JSON.stringify(replyJsonSchema(offered))).not.toMatch(/"(?:minimum|maximum|maxItems)"/);
   });
   it("bounds a multi-task turn to offered, distinct background tools and one offered presentation", () => {
     const offered = { ...state, pulse_available: true, guided_scenarios: [{ scenario_id: "arm_gash", label: "Arm wound", start_step_id: "arm_gauze" }] };

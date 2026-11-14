@@ -1,5 +1,13 @@
 // Adapted from Sophi (github.com/mzhao1599/sophi), services/cloud-api/src/walker/service.ts (turn(): transcribe, model, fixed lines, voice, time budget).
 import { VOICE_TURN_VERSION, actionAllowed, minorCutVisualAllowed, visualById, type FixedReason, type TurnRequest, type TurnResponse } from "@clara/contracts";
+import { startTriage, TRIAGE_QUESTIONS, type TriageObservations } from "@clara/contracts";
+
+const TAG_WORDS = { red: "red, urgent", yellow: "yellow, can wait a little", green: "green, walking wounded", black: "black" } as const;
+/** Fixed words for a triage turn: the next START question, or the tag the rules decided. */
+export function triageLine(o: TriageObservations): string {
+  const r = startTriage(o);
+  return "need" in r ? `Patient ${o.patient}. ${TRIAGE_QUESTIONS[r.need]}` : `Patient ${o.patient} is ${TAG_WORDS[r.tag]}. Tell me about the next person.`;
+}
 import { deadline, type Assistant } from "./assistant.js";
 import type { Ears, Voice } from "./cartesia.js";
 import { isObviousNonRequestTranscript } from "./utterance-filter.js";
@@ -136,6 +144,7 @@ export async function handleTurn(request: TurnRequest, deps: TurnDeps, receivedA
     reply = "Got it. You can keep talking with me.";
   }
   if (action?.name === "request_nearby_kits") reply = "I'll ask the other Clara boxes nearby to bring their kits.";
+  if (action?.name === "assess_patient") reply = triageLine(action.observations);
   if (action?.name === "read_pulse") reply = "I'll read the pulse sensor now. Keep a finger steady on it while I continue listening.";
   if (action?.name === "request_camera") reply = "I'll take one photo and send it to Clara's cloud to describe what I can see. You can keep talking with me.";
   if (action?.name === "capture_camera") reply = "I'll take and inspect one photo now. You can keep talking with me.";

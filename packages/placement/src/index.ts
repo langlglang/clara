@@ -18,6 +18,8 @@ export * from "./vexcel.js";
 export * from "./planner.js";
 export * from "./tools.js";
 export * from "./agent.js";
+export * from "./budget.js";
+export * from "./rural.js";
 
 export interface PlacementEnv {
   COSTAR_DATA_DIR?: string;
@@ -103,11 +105,11 @@ export function createPlacement(env: PlacementEnv, opts: { fetch?: Fetch; cache?
 
   async function plan(
     input: PlanInput,
-    o: { onLog?: (e: ToolLogEntry) => void; onThought?: (t: string) => void; signal?: AbortSignal; useAgent?: boolean } = {},
+    o: { onLog?: (e: ToolLogEntry) => void; onThought?: (t: string) => void; signal?: AbortSignal; useAgent?: boolean; maxKits?: number } = {},
   ): Promise<{ plan: Plan; mode: "agent" | "fallback"; log: ToolLogEntry[]; error: string | null }> {
     const note = o.onThought ?? (() => {});
     if (agentOn && o.useAgent !== false) {
-      const session = createPlannerSession(input, { onLog: o.onLog });
+      const session = createPlannerSession(input, { onLog: o.onLog, maxKits: o.maxKits });
       try {
         const final = await runAgent(session, { apiKey: env.ANTHROPIC_API_KEY, model: env.CLARA_PLANNER_MODEL?.trim() || env.CLARA_COORDINATOR_MODEL?.trim() || undefined, signal: o.signal, onThought: note });
         if (final) note(final.slice(0, 800));
@@ -117,11 +119,11 @@ export function createPlacement(env: PlacementEnv, opts: { fetch?: Fetch; cache?
       } catch (e) {
         note(`Agent failed (${(e as Error).message.slice(0, 160)}); running the deterministic planner.`);
       }
-      const fb = createPlannerSession(input, { onLog: o.onLog });
+      const fb = createPlannerSession(input, { onLog: o.onLog, maxKits: o.maxKits });
       runFallback(fb, note);
       return { plan: fb.plan() ?? planBuilding(input), mode: "fallback", log: [...session.log, ...fb.log], error: "agent did not commit a plan" };
     }
-    const session = createPlannerSession(input, { onLog: o.onLog });
+    const session = createPlannerSession(input, { onLog: o.onLog, maxKits: o.maxKits });
     runFallback(session, note);
     return { plan: session.plan() ?? planBuilding(input), mode: "fallback", log: session.log, error: null };
   }

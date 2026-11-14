@@ -44,6 +44,7 @@ export function PlannerView({ onDeployed, token }: { onDeployed(): void; token: 
   const [level, setLevel] = useState<number | null>(null);
   const [job, setJob] = useState<PlanJob | null>(null);
   const [deployMsg, setDeployMsg] = useState<string | null>(null);
+  const [budget, setBudget] = useState("");
 
   useEffect(() => {
     void adminJson<Status>("/api/admin/status", token).then(setStatus).catch(() => setStatus(null));
@@ -78,7 +79,7 @@ export function PlannerView({ onDeployed, token }: { onDeployed(): void; token: 
 
   const run = async () => {
     setDeployMsg(null);
-    setJob(await adminJson<PlanJob>("/api/admin/plan", token, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ propertyId: id }) }));
+    setJob(await adminJson<PlanJob>("/api/admin/plan", token, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ propertyId: id, ...(Number(budget) >= 1 ? { maxKits: Math.floor(Number(budget)) } : {}) }) }));
   };
   const deploy = async () => {
     if (!job) return;
@@ -171,6 +172,10 @@ export function PlannerView({ onDeployed, token }: { onDeployed(): void; token: 
         <p className="small muted">
           Sources: CoStar {status?.costar ? "✓" : "✗"} · Matterport {status?.matterport ? "✓" : "✗"} · Vexcel {status?.vexcel ? "✓" : "✗"}
         </p>
+        <label className="small" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          Max boxes for this building
+          <input type="number" min={1} max={200} placeholder="no limit" value={budget} onChange={(e) => setBudget(e.target.value)} style={{ width: 90 }} aria-label="Maximum boxes for this building" />
+        </label>
         <button className="btn" onClick={run} disabled={!b || (job != null && job.status !== "done" && job.status !== "failed")}>
           {job && (job.status === "loading" || job.status === "planning") ? "Planning…" : plan ? "Re-plan" : "Plan kits"}
         </button>

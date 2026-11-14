@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { TopBar } from "../TopBar";
 import { HealthView } from "./HealthView";
 import { PlannerView } from "./PlannerView";
+import { RuralView } from "./RuralView";
 import { adminJson } from "./api";
 
 export const ADMIN_TOKEN_STORAGE_KEY = "clara-admin-token";
 
 /** The Admin app: box health by area, and the CoStar + Matterport + Vexcel kit placement planner. */
 export function AdminApp() {
-  const [tab, setTab] = useState<"health" | "planner">("health");
+  const [tab, setTab] = useState<"health" | "planner" | "rural">("health");
   const [area, setArea] = useState("houston");
   const [token, setToken] = useState<string | null>(null);
   const [entered, setEntered] = useState("");
@@ -48,6 +49,9 @@ export function AdminApp() {
           <button role="tab" aria-selected={tab === "planner"} onClick={() => setTab("planner")}>
             Kit planner
           </button>
+          <button role="tab" aria-selected={tab === "rural"} onClick={() => setTab("rural")}>
+            Rural planner
+          </button>
         </div><button type="button" className="btn small" onClick={() => { sessionStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY); setToken(null); }}>Lock Admin</button></> : null}
       </TopBar>
       {!token ? (
@@ -62,6 +66,8 @@ export function AdminApp() {
         </main>
       ) : tab === "health" ? (
         <HealthView area={area} setArea={setArea} token={token} />
+      ) : tab === "rural" ? (
+        <RuralView token={token} />
       ) : (
         <PlannerView
           token={token}

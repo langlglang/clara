@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { VISUALS, CAMERA_INSPECT_VERSION, actionAllowed, comingLine, minorCutVisualAllowed, visualById, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type TurnResponse, type TurnState } from "@clara/contracts";
+import { VISUALS, CAMERA_INSPECT_VERSION, actionAllowed, comingLine, minorCutVisualAllowed, startTriage, visualById, type Action, type Alert, type BoxEvent, type BoxPush, type Scenario, type TurnResponse, type TurnState } from "@clara/contracts";
 import { EventFactory, type EventBody } from "../engine/events.js";
 import { ScenarioEngine, type RecentTurn, type Source, type StepIntent } from "../engine/engine.js";
 import type { Kit } from "../engine/kit.js";
@@ -637,6 +637,14 @@ export class BoxSession {
         this.multipleInjured = true;
         this.publish();
         return true;
+      case "assess_patient": {
+        // The model only reported observations; fixed START rules decide the tag.
+        this.multipleInjured = true;
+        const r = startTriage(action.observations);
+        if ("tag" in r) this.emit("triage.tagged", { patient: action.observations.patient, tag: r.tag });
+        this.publish();
+        return true;
+      }
       case "suggest_sos":
         this.requestSos(source);
         return true;

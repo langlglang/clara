@@ -148,7 +148,7 @@ export function floorGraphs(graphs: FloorGraph[]) {
   return graphs.map(graphView);
 }
 
-export function startPlan(propertyId: number): PlanJob | null {
+export function startPlan(propertyId: number, maxKits?: number): PlanJob | null {
   const s = admin();
   if ([...s.jobs.values()].filter((job) => job.status === "loading" || job.status === "planning").length >= MAX_ACTIVE_PLANS) return null;
   const job: PlanJob = { id: randomUUID(), propertyId, status: "loading", mode: null, started_at: new Date().toISOString(), log: [], thoughts: [], plan: null, error: null, deployed: null };
@@ -165,7 +165,7 @@ export function startPlan(propertyId: number): PlanJob | null {
       if (!loaded) throw new Error("Building not found.");
       for (const w of loaded.warnings) think(w);
       job.status = "planning";
-      const r = await s.placement.plan(loaded.input, { onLog: (e) => job.log.push(e), onThought: think, signal: AbortSignal.timeout(180_000) });
+      const r = await s.placement.plan(loaded.input, { onLog: (e) => job.log.push(e), onThought: think, signal: AbortSignal.timeout(180_000), maxKits });
       job.mode = r.mode;
       job.plan = r.plan;
       job.status = "done";

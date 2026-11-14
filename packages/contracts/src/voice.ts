@@ -1,5 +1,6 @@
 // Voice turn contract. First drafted for Clara before the event and adapted from the Sophi device turn contract (github.com/mzhao1599/sophi, packages/contracts).
 import { z } from "zod";
+import { TriageObservationsSchema } from "./triage.js";
 
 /**
  * Voice turn API, `voice-turn/0.6`. The box sends one turn per utterance; the server answers
@@ -81,6 +82,7 @@ export const ActionSchema = z.discriminatedUnion("name", [
   z.strictObject({ name: z.literal("locate_item"), sku: Id }),
   z.strictObject({ name: z.literal("record_usage"), items: z.array(UsageItemSchema).min(1).max(10) }),
   z.strictObject({ name: z.literal("start_triage") }),
+  z.strictObject({ name: z.literal("assess_patient"), observations: TriageObservationsSchema }),
   z.strictObject({ name: z.literal("suggest_sos") }),
   z.strictObject({ name: z.literal("request_nearby_kits") }),
   z.strictObject({ name: z.literal("show_visual"), visual_id: Id }),
@@ -132,6 +134,7 @@ export function actionAllowed(action: Action, state: TurnState): boolean {
         return entry !== undefined && item.qty <= entry.on_hand;
       });
     case "start_triage":
+    case "assess_patient":
       return state.triage_available;
     case "suggest_sos":
       return true;

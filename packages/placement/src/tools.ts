@@ -1,6 +1,7 @@
 import { coverage, graphView, greedyKits, TARGET_S, type FloorGraph } from "./graph.js";
 import { assumptions, coreKit, DEFAULT_RULES, evaluate, pickupCandidates, placePins, planCore, scanKit, type PlanInput, type RuleOptions } from "./planner.js";
 import type { KitPlacement, PickupPoint, Plan } from "./types.js";
+import { optimizeBudget } from "./budget.js";
 
 /**
  * The planner's tool layer: the only way the agent (or the deterministic fallback) reads data and changes the plan.
@@ -30,7 +31,8 @@ const short = (v: unknown, n = 400) => {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 };
 
-export function createPlannerSession(input: PlanInput, opts: { onLog?: (e: ToolLogEntry) => void; now?: () => Date } = {}) {
+export function createPlannerSession(input: PlanInput, opts: { onLog?: (e: ToolLogEntry) => void; now?: () => Date; maxKits?: number } = {}) {
+  const maxKits = opts.maxKits && opts.maxKits > 0 ? Math.floor(opts.maxKits) : null;
   const log: ToolLogEntry[] = [];
   const now = opts.now ?? (() => new Date());
   let rules: RuleOptions = { ...DEFAULT_RULES };
@@ -88,6 +90,7 @@ export function createPlannerSession(input: PlanInput, opts: { onLog?: (e: ToolL
         top_tenants: b.topTenants.slice(0, 6).map((t) => `${t.name} (${t.employees}, floors ${t.floors.join("/")})`),
         scanned_levels: input.graphs.map((g) => ({ level: g.level, scan: g.modelName, points: g.nodes.length })),
         source: b.source,
+        box_budget: maxKits,
       });
     },
     people_by_floor(): ToolResult {
@@ -125,7 +128,8 @@ export function createPlannerSession(input: PlanInput, opts: { onLog?: (e: ToolL
         ...ev.stats,
       });
     },
-    propose_kits(a: { mode: "auto" | "manual"; kits?: KitSpec[]; dense_threshold?: number; group_size?: number; reason?: string }): ToolResult {
+    propose_kits(a: { mode: "auto" | "manual" | "budget"; kits?: KitSpec[]; dense_threshold?: number; group_size?: number; max_kits?: number; reason?: string }): ToolResult {
+      let budgetInfo: Record<string, unknown> = {};
       if (a.dense_threshold != null) rules.denseThreshold = Math.max(10, Math.min(2000, Math.round(a.dense_threshold)));
       if (a.group_size != null) rules.groupSize = Math.max(1, Math.min(5, Math.round(a.group_size)));
       if (a.mode === "manual") {
@@ -133,6 +137,13 @@ export function createPlannerSession(input: PlanInput, opts: { onLog?: (e: ToolL
         const t = toKits(a.kits);
         if (t.errors.length) return record("propose_kits", a, { ok: false, error: t.errors.join("; ") });
         kits = t.kits;
+        if (maxKits != null && kits.length > maxKits) return record("propose_kits", a, { ok: false, error: `${kits.length} kits is over the building's budget of ${maxKits} boxes.` });
+      } else if (a.mode === "budget") {
+        const k = Math.min(maxKits ?? Infinity, a.max_kits ?? maxKits ?? Infinity);
+        if (!Number.isFinite(k)) return record("propose_kits", a, { ok: false, error: "budget mode needs max_kits (no building budget set)" });
+        const r = optimizeBudget(input, k, rules);
+        kits = r.kits;
+        budgetInfo = { budget: r.budget, used: r.used, needed_for_full: r.neededForFull, swaps: r.swaps };
       } else {
         const scanned: KitPlacement[] = [];
         for (const g of input.graphs) {
@@ -145,7 +156,7 @@ export function createPlannerSession(input: PlanInput, opts: { onLog?: (e: ToolL
       kits = placePins(input, kits.sort((x, z) => (x.level ?? 0) - (z.level ?? 0)));
       if (a.reason) reasons.push(a.reason);
       const ev = evaluate(input, kits, rules);
-      return record("propose_kits", { ...a, kits: a.kits ? `${a.kits.length} kits` : undefined }, { ok: true, rules, ...ev.stats });
+      return record("propose_kits", { ...a, kits: a.kits ? `${a.kits.length} kits` : undefined }, { ok: true, rules, ...budgetInfo, ...ev.stats });
     },
     set_pickup_points(a: { facings: string[]; reason?: string }): ToolResult {
       const all = pickupCandidates(input.aerial);
@@ -155,6 +166,7 @@ export function createPlannerSession(input: PlanInput, opts: { onLog?: (e: ToolL
     },
     commit_plan(a: { summary: string; reasons?: string[] }): ToolResult {
       if (kits.length === 0) return record("commit_plan", a, { ok: false, error: "Propose kits first." });
+      if (maxKits != null && kits.length > maxKits) return record("commit_plan", a, { ok: false, error: `${kits.length} kits is over the budget of ${maxKits}; use propose_kits mode "budget".` });
       const ev = evaluate(input, kits, rules);
       reasons.push(...(a.reasons ?? []).slice(0, 8));
       plan = {
@@ -164,7 +176,7 @@ export function createPlannerSession(input: PlanInput, opts: { onLog?: (e: ToolL
         pickups,
         coverage: ev.coverage,
         stats: ev.stats,
-        assumptions: assumptions(input, rules),
+        assumptions: [...assumptions(input, rules), ...(maxKits != null ? [`Box budget: at most ${maxKits} boxes; spots chosen to put the most people within the target (greedy max-coverage plus swap search).`] : [])],
         reasons: reasons.map((r) => r.slice(0, 300)),
         committed: true,
         summary: String(a.summary ?? "").slice(0, 600),
@@ -178,6 +190,7 @@ export function createPlannerSession(input: PlanInput, opts: { onLog?: (e: ToolL
     log,
     plan: () => plan,
     draft: () => ({ kits, pickups, rules }),
+    maxKits,
   };
 }
 

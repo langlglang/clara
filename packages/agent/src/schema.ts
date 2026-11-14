@@ -1,6 +1,6 @@
 // Adapted from Sophi (github.com/mzhao1599/sophi), services/cloud-api/src/walker/assistant.ts (per-turn schema with enums of what is allowed).
 import { z } from "zod";
-import { ActionSchema, MAX_HEARD, MAX_REPLY, type Action, type TurnState } from "@clara/contracts";
+import { ActionSchema, TriageObservationsSchema, MAX_HEARD, MAX_REPLY, type Action, type TurnState } from "@clara/contracts";
 
 /**
  * The reply's shape for one turn, as a JSON schema (sent to the model as `output_config.format`) and as a zod
@@ -46,7 +46,7 @@ export function replyJsonSchema(state: TurnState): Record<string, unknown> {
   if (visualIds.length > 0) variants.push(obj("show_visual", { visual_id: { type: "string", enum: visualIds } }));
   if (pulseAvailable) variants.push(obj("read_pulse"));
   if (cameraAvailable) variants.push(obj("request_camera"));
-  if (triage) variants.push(obj("start_triage"));
+  if (triage) variants.push(obj("start_triage"), obj("assess_patient", { observations: { type: "object", additionalProperties: false, required: ["patient", "walks", "breathing", "breathes_after_airway", "breathing_over_30", "circulation_ok", "follows_commands"], properties: { patient: { type: "integer", minimum: 1, maximum: 50 }, walks: { type: ["boolean", "null"] }, breathing: { type: ["boolean", "null"] }, breathes_after_airway: { type: ["boolean", "null"] }, breathing_over_30: { type: ["boolean", "null"] }, circulation_ok: { type: ["boolean", "null"] }, follows_commands: { type: ["boolean", "null"] } } } }));
   if (pendingEmergencyQuestion) variants.push(obj("answer_emergency_question", { task_id: { type: "string", enum: [pendingEmergencyQuestion.task_id] }, question_id: { type: "string", enum: [pendingEmergencyQuestion.question_id] } }));
   if (nearbyKits) variants.push(obj("request_nearby_kits"));
   variants.push(obj("suggest_sos"));
@@ -79,7 +79,7 @@ export function replyZodSchema(state: TurnState) {
   if (visualIds.length > 0) variants.push(z.strictObject({ name: z.literal("show_visual"), visual_id: oneOf(visualIds) }));
   if (pulseAvailable) variants.push(z.strictObject({ name: z.literal("read_pulse") }));
   if (cameraAvailable) variants.push(z.strictObject({ name: z.literal("request_camera") }));
-  if (triage) variants.push(z.strictObject({ name: z.literal("start_triage") }));
+  if (triage) variants.push(z.strictObject({ name: z.literal("start_triage") }), z.strictObject({ name: z.literal("assess_patient"), observations: TriageObservationsSchema }));
   if (pendingEmergencyQuestion) variants.push(z.strictObject({ name: z.literal("answer_emergency_question"), task_id: z.literal(pendingEmergencyQuestion.task_id), question_id: z.literal(pendingEmergencyQuestion.question_id) }));
   if (nearbyKits) variants.push(z.strictObject({ name: z.literal("request_nearby_kits") }));
   variants.push(z.strictObject({ name: z.literal("suggest_sos") }));

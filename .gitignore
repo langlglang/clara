@@ -10,3 +10,6 @@ dist/
 # Personal Claude Code settings (ChatOverflow hook, local notes)
 .claude/settings.local.json
 CLAUDE.local.md
+
+# Kit placement planner cache (CoStar/Matterport/Vexcel responses; never commit)
+.placement-cache/

@@ -5,6 +5,7 @@ import type { LatLng, Skill, Volunteer } from "@clara/contracts";
 import { SKILL_LABEL, api, km } from "../../lib/client";
 import type { KitMapResponse } from "../../lib/views";
 import type { VehicleKind } from "../../lib/rides";
+import { GlyphCar, GlyphFirstAid, IconCheck } from "../ClaraIcons";
 import { LeafletMap, type MapPin } from "../LeafletMap";
 
 /**
@@ -170,33 +171,47 @@ const toggle = <T,>(list: T[], value: T): T[] => (list.includes(value) ? list.fi
 
 type FieldProps = { d: Draft; set(patch: Partial<Draft>): void };
 
+/**
+ * First aid and Driving as two large checkbox tiles (pick one or both), with a live summary of what you'll get.
+ * Turning driving on assumes a car with 3 seats until the vehicle step; turning it off clears the vehicle.
+ */
 export function HelpFields({ d, set }: FieldProps) {
-  const opts: { aid: boolean; drive: boolean; title: string; detail: string }[] = [
-    { aid: true, drive: false, title: "Give first aid nearby", detail: "Walk to emergencies close to you with your first-aid skills." },
-    { aid: false, drive: true, title: "Drive people to hospital", detail: "I have a car. No medical skills needed: a dispatcher asks you to drive a patient." },
-    { aid: true, drive: true, title: "Both", detail: "First aid nearby, and rides to hospital." },
+  const setDrive = (drive: boolean) =>
+    set({ drive, ...(drive && d.vehicle === "none" ? { vehicle: "car", seats: Math.max(d.seats, 3) } : {}), ...(!drive ? { vehicle: "none", seats: 0 } : {}) });
+  const tiles = [
+    { id: "aid", on: d.aid, toggle: () => set({ aid: !d.aid }), title: "First aid", detail: "Go to the person and help until paramedics arrive", Glyph: GlyphFirstAid },
+    { id: "drive", on: d.drive, toggle: () => setDrive(!d.drive), title: "Driving", detail: "Take someone to the hospital when the ambulance is far", Glyph: GlyphCar },
   ];
+  const gets = [...(d.aid ? ["First-aid alerts near you"] : []), ...(d.drive ? ["Ride requests to the hospital"] : [])];
   return (
-    <fieldset className="stack" style={{ gap: 10 }}>
-      <legend className="visually-hidden">How can you help?</legend>
-      {opts.map((o) => {
-        const checked = d.aid === o.aid && d.drive === o.drive;
-        return (
-          <label key={o.title} className={`choice${checked ? " on" : ""}`}>
-            <input
-              type="radio"
-              name="help-mode"
-              checked={checked}
-              onChange={() => set({ aid: o.aid, drive: o.drive, ...(o.drive && d.vehicle === "none" ? { vehicle: "car", seats: Math.max(d.seats, 3) } : {}), ...(!o.drive ? { vehicle: "none", seats: 0 } : {}) })}
-            />
-            <span>
-              <b>{o.title}</b>
-              <span className="small muted">{o.detail}</span>
+    <div className="stack" style={{ gap: 16 }}>
+      <fieldset className="help-tiles">
+        <legend className="visually-hidden">How you can help. Pick one or both.</legend>
+        {tiles.map(({ id, on, toggle, title, detail, Glyph }) => (
+          <label key={id} className={`help-tile${on ? " on" : ""}`}>
+            <input type="checkbox" className="visually-hidden" checked={on} onChange={toggle} />
+            <span className="help-tile-check" aria-hidden="true">
+              <IconCheck />
             </span>
+            <Glyph />
+            <span className="help-tile-title">{title}</span>
+            <span className="help-tile-detail">{detail}</span>
           </label>
-        );
-      })}
-    </fieldset>
+        ))}
+      </fieldset>
+      <section className="gets" aria-live="polite">
+        <h2 className="gets-h">You&apos;ll get</h2>
+        {gets.length ? (
+          <ul>
+            {gets.map((g) => (
+              <li key={g}>{g}</li>
+            ))}
+          </ul>
+        ) : (
+          <p>Pick at least one way to help to continue.</p>
+        )}
+      </section>
+    </div>
   );
 }
 

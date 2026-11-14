@@ -2,6 +2,8 @@
 
 **Status:** chosen look for every Clara screen: companion app (phone), network console and dispatch (computer), and the box screen. Mockups: [`mockups/field-kit-phone.html`](mockups/field-kit-phone.html) and [`mockups/field-kit-computer.html`](mockups/field-kit-computer.html) (design-canvas exports; open in a browser for reference, the `<x-dc>` wrapper is not app code). Live canvas: https://claude.ai/artifact/Qb94BTMDQ9Q6VZRybUKHsb (row "Field Kit").
 
+**Exception (2026-11-14):** the landing page (`/`) and volunteer sign-up (`/join`) use the Signal theme instead, scoped with the `.theme-signal` class in `apps/web/app/globals.css`: black background, orange `#FF5A1F` with black text on orange buttons, Barlow Condensed headings, Barlow body text, IBM Plex Mono only for timestamps (`.time`). Reference mockups: `design-mockups/`. Every other screen stays Field Kit, and `/` keeps the shared Field Kit `TopBar` above the Signal content. The "How you help" tiles (First aid / Driving) are shared with Profile and use whichever theme they sit in.
+
 Feel: rugged emergency equipment. Charcoal, one safety-orange action color, square corners, monospaced numbers and labels, high contrast.
 
 ## Tokens (use as CSS variables)

@@ -5,7 +5,8 @@
  * - Shows push notifications for emergency alerts and ride offers, with answer buttons.
  * - A button press posts the answer to the same API the app uses; a tap on the notification opens the app.
  */
-const VERSION = "clara-shell-v1";
+// v2: v1 kept dev-server chunks forever (see cacheFirst); bumping the version deletes that cache on activate.
+const VERSION = "clara-shell-v2";
 const SHELL = ["/app", "/join", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/apple-icon"];
 const NAV_TIMEOUT_MS = 4000;
 
@@ -29,6 +30,10 @@ self.addEventListener("activate", (event) => {
 });
 
 const cacheable = (res) => res && res.ok && res.type === "basic";
+// Only files the server marks immutable are safe to serve from cache forever: production builds put a content
+// hash in /_next/static names and send `immutable`. `next dev` reuses the same chunk URLs with `no-cache`, so a
+// cached dev chunk would outlive every edit and restart.
+const immutable = (res) => cacheable(res) && /\bimmutable\b/i.test(res.headers.get("cache-control") || "");
 
 async function networkFirst(request) {
   const cache = await caches.open(VERSION);
@@ -50,7 +55,7 @@ async function cacheFirst(request) {
   const hit = await cache.match(request);
   if (hit) return hit;
   const res = await fetch(request);
-  if (cacheable(res)) cache.put(request, res.clone()).catch(() => undefined);
+  if (immutable(res)) cache.put(request, res.clone()).catch(() => undefined);
   return res;
 }
 

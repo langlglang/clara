@@ -1,6 +1,8 @@
 import type { Network } from "@clara/network";
 import { E164, NEED_WORDS, maskPhone } from "./alertText";
+import { randomBytes } from "node:crypto";
 import { placeCall, type FetchLike, type TwilioConfig } from "./twilio";
+import type { ClaraSpeech } from "./speech";
 
 /**
  * Demo "911" call. When a box's SOS opens, Clara's mock 911 call rings a demo dispatcher phone (one the team owns)
@@ -31,7 +33,12 @@ export interface Demo911Call {
   at: string;
   sid?: string;
   error?: string;
+  /** How the briefing was voiced: Clara's Cartesia recording, Twilio's own voice (inline TwiML), or the trial template. */
+  voice?: "cartesia" | "twilio" | "trial_template";
 }
+
+/** How long Twilio may fetch a call's recording after the call is placed. */
+const RECORDING_TTL_MS = 30 * 60_000;
 
 /** One spoken line of the call, labelled so the call page can show who is speaking and where a fact came from. */
 export interface BriefingLine {
@@ -90,6 +97,8 @@ export function demo911Twiml(spoken: string): string {
 }
 
 export interface Demo911 {
+  /** The TwiML and Cartesia recording behind one call's private address, while it is valid. */
+  recording(token: string): { twiml: string; wav: Buffer } | null;
   readonly configured: boolean;
   readonly target: string | null; // masked
   log(): Demo911Call[];
@@ -105,10 +114,16 @@ export function createDemo911({
   delayMs = DEMO_911_DELAY_MS,
   timers = true,
   onCall,
+  speech = null,
+  baseUrl = null,
 }: {
   network: Network;
   twilio: TwilioConfig | null;
   number: string | undefined;
+  /** Clara's Cartesia voice; when present (and baseUrl is https) the phone hears Clara, not Twilio's voice. */
+  speech?: ClaraSpeech | null;
+  /** The public https address Twilio fetches the recording from. */
+  baseUrl?: string | null;
   fetch?: FetchLike;
   log?: (line: string) => void;
   delayMs?: number;
@@ -119,6 +134,21 @@ export function createDemo911({
   const calls: Demo911Call[] = [];
   const called = new Set<string>();
   const pending = new Set<ReturnType<typeof setTimeout>>();
+  const recordings = new Map<string, { twiml: string; wav: Buffer; expires: number }>();
+
+  /** Clara's Cartesia voice for the call, behind a private one-time address; null when it can't be made. */
+  async function recordingUrl(spoken: string): Promise<string | null> {
+    if (!speech?.available || !baseUrl?.startsWith("https://")) return null;
+    const wav = await speech.speak(spoken, "en", 8_000);
+    if (!wav) return null;
+    const now = Date.now();
+    for (const [k, r] of recordings) if (r.expires < now) recordings.delete(k);
+    const token = randomBytes(24).toString("base64url");
+    const audio = `${baseUrl}/api/demo911/${token}/audio`;
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Play>${xml(audio)}</Play><Pause length="1"/><Play>${xml(audio)}</Play><Hangup/></Response>`;
+    recordings.set(token, { twiml, wav, expires: now + RECORDING_TTL_MS });
+    return `${baseUrl}/api/demo911/${token}/twiml`;
+  }
 
   const record = (call: Demo911Call) => {
     calls.unshift(call);
@@ -139,9 +169,13 @@ export function createDemo911({
     const spoken = briefing(network, boxId, new Date());
     if (!spoken) return null;
     try {
-      const sid = await placeCall(twilio, to, demo911Twiml(spoken), fetchImpl);
-      log(`[demo-911] SOS at ${boxId}: called the demo dispatcher ${maskPhone(to)} (${sid})`);
-      return record({ incident_id: incident.incident_id, box_id: boxId, to: maskPhone(to), status: "placed", at, sid });
+      const url = await recordingUrl(spoken);
+      const went: { route: "url" | "twiml" | "trial_template" } = { route: "twiml" };
+      const sid = await placeCall(twilio, to, demo911Twiml(spoken), fetchImpl, undefined, { ...(url ? { url } : {}), onRoute: (r) => (went.route = r) });
+      const route = went.route;
+      const voice = route === "url" ? "cartesia" : route === "twiml" ? "twilio" : "trial_template";
+      log(`[demo-911] SOS at ${boxId}: called the demo dispatcher ${maskPhone(to)} (${sid}, voice: ${voice}${url ? "" : ", no Cartesia recording"})`);
+      return record({ incident_id: incident.incident_id, box_id: boxId, to: maskPhone(to), status: "placed", at, sid, voice });
     } catch (error) {
       const message = (error as Error).message.slice(0, 160);
       log(`[demo-911] SOS at ${boxId}: call to ${maskPhone(to)} failed: ${message}`);
@@ -165,6 +199,10 @@ export function createDemo911({
     configured: Boolean(to && twilio),
     target: to ? maskPhone(to) : null,
     log: () => calls.map((c) => ({ ...c })),
+    recording(token) {
+      const r = recordings.get(token);
+      return r && r.expires >= Date.now() ? { twiml: r.twiml, wav: r.wav } : null;
+    },
     fire,
     stop() {
       unsubscribe();

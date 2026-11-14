@@ -122,3 +122,45 @@ describe("Twilio trial fallback", () => {
     expect(sent[1]!.get("Twiml")).toBeNull();
   });
 });
+
+describe("demo 911 call in Clara's Cartesia voice", () => {
+  it("plays a private Cartesia recording through our own TwiML address, not Twilio's voice", async () => {
+    const network = createNetwork();
+    network.seedDemo();
+    const sent: Array<{ url: string; body: string }> = [];
+    const fetchFake = async (url: string, init: RequestInit) => {
+      sent.push({ url, body: String(init.body) });
+      return new Response(JSON.stringify({ sid: "CA9" }), { status: 201 });
+    };
+    const wav = Buffer.concat([Buffer.from("RIFF0000WAVEfmt "), Buffer.alloc(60)]);
+    const spoken: string[] = [];
+    const speech = { available: true, speak: async (text: string, _language: string, rate: number) => (spoken.push(`${rate}:${text.slice(0, 20)}`), wav) };
+    const d = createDemo911({ network, twilio, number: "+17372583742", fetch: fetchFake, timers: false, log: () => {}, speech, baseUrl: "https://clara.living" });
+    sos(network);
+    const call = await d.fire("box-clinic");
+    expect(call).toMatchObject({ status: "placed", voice: "cartesia" });
+    expect(spoken[0]).toMatch(/^8000:/); // phone-quality audio
+    expect(sent).toHaveLength(1);
+    const params = new URLSearchParams(sent[0]!.body);
+    expect(params.get("Twiml")).toBeNull();
+    const url = params.get("Url")!;
+    const token = /^https:\/\/clara\.living\/api\/demo911\/([\w-]{20,})\/twiml$/.exec(url)?.[1];
+    expect(token).toBeTruthy();
+    const r = d.recording(token!)!;
+    expect(r.wav).toBe(wav);
+    expect(r.twiml).toContain(`<Play>https://clara.living/api/demo911/${token}/audio</Play>`);
+    expect(r.twiml).not.toContain("<Say>");
+    expect(d.recording("not-a-token")).toBeNull();
+  });
+
+  it("falls back to inline TwiML when Cartesia can't voice the briefing", async () => {
+    const network = createNetwork();
+    network.seedDemo();
+    const sent: string[] = [];
+    const fetchFake = async (_url: string, init: RequestInit) => (sent.push(String(init.body)), new Response(JSON.stringify({ sid: "CA8" }), { status: 201 }));
+    const d = createDemo911({ network, twilio, number: "+17372583742", fetch: fetchFake, timers: false, log: () => {}, speech: { available: true, speak: async () => null }, baseUrl: "https://clara.living" });
+    sos(network);
+    expect(await d.fire("box-clinic")).toMatchObject({ status: "placed", voice: "twilio" });
+    expect(new URLSearchParams(sent[0]!).get("Twiml")).toContain("simulated 911 call");
+  });
+});

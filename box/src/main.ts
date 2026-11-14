@@ -1,7 +1,7 @@
 // Adapted from Sophi (github.com/mzhao1599/sophi), devices/pi/src/run.ts and cli.ts: settings from the
 // environment, every part optional except the scenario, and a clean shutdown on SIGINT/SIGTERM.
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HttpCloudLink } from "./cloud/http.js";
 import { Kit, loadKit } from "./engine/kit.js";
@@ -12,6 +12,8 @@ import { PulseReader } from "./sensors/pulse-reader.js";
 import type { Board, CloudLink } from "./ports.js";
 import { DEFAULT_SCREEN_PORT, startScreenServer, type ScreenServer } from "./screen/server.js";
 import { BoxSession, type Need } from "./session/session.js";
+import { spokenLines } from "./session/spoken-lines.js";
+import type { CartesiaSpeaker } from "./audio/cartesia-speaker.js";
 import { loadAudio, loadBoard, loadVoiceLoop, type AudioConfig, type AudioParts } from "./wiring.js";
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -129,12 +131,18 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
   const board = o.board !== undefined ? o.board : await loadBoard({ sim: config.sim, log });
   const location = config.gpsPort ? new UsbGpsLocation(config.gpsPort, (message) => log(`[gps] ${message}`)) : null;
   location?.start();
+  let session!: BoxSession;
   const audio = await loadAudio(
-    { kind: config.audio, micDevice: config.micDevice, speakerDevice: config.speakerDevice, piperModel: config.piperModel, micFiles: config.micFiles, print: o.print ?? log },
+    { kind: config.audio, micDevice: config.micDevice, speakerDevice: config.speakerDevice, piperModel: config.piperModel, micFiles: config.micFiles, print: o.print ?? log,
+      // Every line the box says itself, in Clara's Cartesia voice (fetched once, kept in the state folder).
+      cartesia: http ? {
+        fetchWav: (text, language, signal) => http!.speech(text, language, signal),
+        language: () => session?.language ?? config.language,
+        cacheDir: join(config.stateDir, "voice-cache"),
+      } : null },
     log,
   );
 
-  let session!: BoxSession;
   const cameraDevice = defaultCameraDevice();
   const camera = !config.sim && config.token && existsSync(cameraDevice)
     ? new CameraCapture(() => session?.sessionId ?? null, (signal) => captureUsbJpeg(cameraDevice, signal)) : null;
@@ -188,6 +196,12 @@ export async function startBox(config: BoxConfig, o: { cloud?: CloudLink; board?
   }
 
   http?.start();
+  const voiced = audio?.speaker as Partial<CartesiaSpeaker> | undefined;
+  if (voiced?.prepare) {
+    // In the background: voice every fixed line and step once, so they play in Clara's voice at once, offline too.
+    const lines = spokenLines({ scenarios: [scenario, ...extras], translations });
+    void voiced.prepare(lines).then((added) => log(`[voice] ${added} new line(s) voiced by Cartesia; ${lines.length} kept for offline use`)).catch(() => {});
+  }
   session.startHeartbeat(config.heartbeatMs, () =>
     [board && !board.simulated ? "board" : null, audio ? "audio" : null, audio?.listener ? "mic" : null, screen ? "screen" : null].filter((p): p is string => p !== null),
   );

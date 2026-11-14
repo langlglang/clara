@@ -6,6 +6,7 @@ import { DEMO_BOXES, createNetwork, randomIds, type MaintainerAlert, type Networ
 import { createRideBook, type Ride, type RideBook, type RideChange, type VehicleKind } from "./rides";
 import { createCallBook, type CallBook } from "./calls";
 import { createDemo911, type Demo911 } from "./demo911";
+import { createSpeech, type ClaraSpeech } from "./speech";
 import { createAutoSupply } from "./autoSupply";
 import { ridePushListener, wireAlertPushes } from "./notify";
 import { createPushBook, resolveVapid, type PushBook, type PushSender, type VapidEnv } from "./push";
@@ -77,6 +78,8 @@ export interface Runtime {
   twilio: TwilioConfig | null;
   /** Demo "911": rings the team's demo dispatcher phone (CLARA_DEMO_911_NUMBER) when an SOS opens. */
   demo911: Demo911;
+  /** Clara's Cartesia voice for everything the server says (box lines, the call page, the Twilio call). */
+  speech: ClaraSpeech;
   publicBaseUrl: string;
   /** Text alerts over Photon (iMessage/WhatsApp/SMS), or "would message" logs without it. */
   texts: TextBook;
@@ -216,7 +219,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const twilio = twilioConfig(env);
   const calls = createCallBook({ network, rides, twilio, baseUrl: publicBaseUrl(env), ...(options.fetch ? { fetch: options.fetch } : {}) });
   if (snap) calls.importState(snap.calls);
-  const demo911 = createDemo911({ network, twilio, number: env.CLARA_DEMO_911_NUMBER, timers: options.timers !== false, ...(options.fetch ? { fetch: options.fetch } : {}) });
+  const speech = createSpeech(env, options.fetch ? { fetch: options.fetch as typeof fetch } : {});
+  const demo911 = createDemo911({ network, twilio, number: env.CLARA_DEMO_911_NUMBER, timers: options.timers !== false, speech, baseUrl: publicBaseUrl(env), ...(options.fetch ? { fetch: options.fetch } : {}) });
   // Demo assumption: a guided step that uses a kit item counts as one used (see lib/autoSupply.ts).
   const autoSupply = createAutoSupply({ network, scenarios });
   const photon = photonConfig(env);
@@ -284,6 +288,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     calls,
     twilio,
     demo911,
+    speech,
     texts,
     photon,
     publicBaseUrl: publicBaseUrl(env),

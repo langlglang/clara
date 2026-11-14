@@ -69,12 +69,15 @@ export function createCartesiaVoice({
   model = DEFAULT_TTS_MODEL,
   sampleRate = 16_000,
   fetchImpl = fetch,
+  onFailure,
 }: {
   apiKey: string;
   voiceId?: string;
   model?: string;
   sampleRate?: number;
   fetchImpl?: typeof fetch;
+  /** Why a line wasn't voiced (HTTP status, timeout, bad audio). Never the text or the key. */
+  onFailure?: (reason: string) => void;
 }): Voice {
   return {
     sampleRate,
@@ -94,12 +97,15 @@ export function createCartesiaVoice({
           signal,
         });
         if (!response.ok) {
-          await response.body?.cancel();
+          const detail = (await response.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160);
+          onFailure?.(`Cartesia answered ${response.status}${detail ? `: ${detail}` : ""}`);
           return null;
         }
         const audio = await readCapped(response, SPEECH_MAX_BYTES);
+        if (!audio || !isRiffWave(audio)) onFailure?.("Cartesia sent no usable audio");
         return audio && isRiffWave(audio) ? audio : null;
-      } catch {
+      } catch (error) {
+        onFailure?.(signal.aborted ? "timed out" : `request failed (${(error as Error).name})`);
         return null;
       }
     },

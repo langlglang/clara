@@ -24,6 +24,7 @@ export const BOX_ROUTES = {
   stream: (boxId: string) => `/api/boxes/${encodeURIComponent(boxId)}/stream`,
   turns: (boxId: string) => `/api/boxes/${encodeURIComponent(boxId)}/turns`,
   camera: (boxId: string) => `/api/boxes/${encodeURIComponent(boxId)}/camera`,
+  speech: (boxId: string) => `/api/boxes/${encodeURIComponent(boxId)}/speech`,
 } as const;
 
 export type CloudErrorKind = "unreachable" | "timeout" | "cancelled" | "unauthorized" | "server_error" | "rejected" | "bad_response" | "closed";
@@ -170,6 +171,27 @@ export class HttpCloudLink implements CloudLink {
       const failure = toCloudError(error, signal.aborted ? signal : undefined);
       if (failure.kind === "unreachable" || failure.kind === "timeout") this.setOnline(false);
       throw failure;
+    }
+  }
+
+  /** One of the box's own lines in Clara's Cartesia voice (16 kHz WAV), or null (offline, no key, Cartesia down). */
+  async speech(text: string, language: string, signal: AbortSignal): Promise<Buffer | null> {
+    try {
+      const response = await this.fetchImpl(new URL(BOX_ROUTES.speech(this.o.boxId), this.server), {
+        method: "POST",
+        headers: this.headers({ accept: "audio/wav", "content-type": "application/json" }),
+        body: JSON.stringify({ text: text.slice(0, 600), language }),
+        signal,
+        redirect: "error",
+      });
+      if (!response.ok) {
+        await response.body?.cancel();
+        return null;
+      }
+      const wav = Buffer.from(await response.arrayBuffer());
+      return wav.length > 44 && wav.length < 4_000_000 ? wav : null;
+    } catch {
+      return null;
     }
   }
 

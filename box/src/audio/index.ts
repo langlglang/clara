@@ -6,6 +6,8 @@ export type { ListenerOptions, EndpointerOptions, Segment } from "./vad.js";
 export { createSpeaker, PiSpeaker, MacSpeaker, SilentSpeaker } from "./speaker.js";
 export type { SpeakerOptions, PiSpeakerOptions } from "./speaker.js";
 export { createSpeechQueue, PlayerQueue } from "./speech-queue.js";
+export { CartesiaSpeaker } from "./cartesia-speaker.js";
+export type { CartesiaSpeakerOptions } from "./cartesia-speaker.js";
 export type { SpeechQueueOptions } from "./speech-queue.js";
 export { CUE_TONES, CUE_NAMES, cueWav, writeCueSounds } from "./cues.js";
 export { wavFromPcm, readWav, toneWav, clipFromPcm, isClipFormat, int16FromBytes, bytesFromInt16 } from "./wav.js";

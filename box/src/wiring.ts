@@ -29,6 +29,8 @@ export interface AudioConfig {
   /** WAV files to use as the mic (simulator). */
   micFiles?: string | undefined;
   print?: Log;
+  /** Clara's Cartesia voice for the box's own lines (see CartesiaSpeaker); null keeps the local voice. */
+  cartesia?: Omit<import("./audio/cartesia-speaker.js").CartesiaSpeakerOptions, "log"> | null;
 }
 
 export interface AudioParts {
@@ -48,12 +50,16 @@ export async function loadAudio(config: AudioConfig, log: Log): Promise<AudioPar
   }
   try {
     const audioLog = logger("audio", log);
-    const speaker =
+    const local =
       config.kind === "pi"
         ? audio.createSpeaker({ kind: "pi", device: config.speakerDevice ?? "default", piperModel: config.piperModel ?? null, log: audioLog })
         : config.kind === "mac"
           ? audio.createSpeaker({ kind: "mac" })
           : audio.createSpeaker({ kind: "silent", print: config.print ?? log });
+    // Clara's Cartesia voice for every line; the local voice only for a never-voiced line while offline.
+    const speaker = config.cartesia && config.kind !== "silent"
+      ? new audio.CartesiaSpeaker(local, { ...config.cartesia, log: (line) => log(`[voice] ${line}`) })
+      : local;
     const speech = audio.createSpeechQueue(speaker, { log: audioLog, onError: (error) => log(`[speech] ${error.message}`) });
     let listener: Listener | null = null;
     try {

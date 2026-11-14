@@ -87,7 +87,15 @@ export const spokenText = (twiml: string) =>
  * `Message`, so the phone still rings (the template may read its own sample text instead). Resolves with the call sid;
  * throws on a non-2xx or the deadline.
  */
-export async function placeCall(config: TwilioConfig, to: string, twiml: string, fetchImpl: FetchLike = fetch, timeoutMs = TWILIO_TIMEOUT_MS): Promise<string> {
+export async function placeCall(
+  config: TwilioConfig,
+  to: string,
+  twiml: string,
+  fetchImpl: FetchLike = fetch,
+  timeoutMs = TWILIO_TIMEOUT_MS,
+  /** url: our own TwiML address (e.g. a Cartesia recording), tried first. onRoute says which way the call went. */
+  o: { url?: string; onRoute?: (route: "url" | "twiml" | "trial_template") => void } = {},
+): Promise<string> {
   const post = async (params: Record<string, string>) => {
     const res = await fetchImpl(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(config.accountSid)}/Calls.json`, {
       method: "POST",
@@ -101,15 +109,29 @@ export async function placeCall(config: TwilioConfig, to: string, twiml: string,
     const body = (await res.json().catch(() => null)) as { sid?: string; message?: string } | null;
     return { ok: res.ok, status: res.status, sid: body?.sid, message: body?.message ?? "" };
   };
+  if (o.url) {
+    const own = await post({ To: to, From: config.from, Url: o.url, Method: "GET", Timeout: "25" });
+    if (own.ok) {
+      o.onRoute?.("url");
+      return own.sid ?? "unknown";
+    }
+    console.log(`[twilio] call with our own TwiML URL refused (${own.status}${own.message ? `: ${own.message.slice(0, 120)}` : ""}); trying inline TwiML`);
+  }
   const first = await post({ To: to, From: config.from, Twiml: twiml, Timeout: "25" });
-  if (first.ok) return first.sid ?? "unknown";
+  if (first.ok) {
+    o.onRoute?.("twiml");
+    return first.sid ?? "unknown";
+  }
   if (first.status === 400 && TRIAL_LIMITED.test(first.message)) {
     const url = `${TRIAL_TTS_TEMPLATE}?Message=${encodeURIComponent(spokenText(twiml).slice(0, 1500))}`;
     // Trial calls take only To, the template URL and (maybe) From; try with From first, then without.
     const attempts: Array<Record<string, string>> = [{ To: to, From: config.from, Url: url }, { To: to, Url: url }];
     for (const params of attempts) {
       const retry = await post(params);
-      if (retry.ok) return retry.sid ?? "unknown";
+      if (retry.ok) {
+        o.onRoute?.("trial_template");
+        return retry.sid ?? "unknown";
+      }
       if (!(retry.status === 400 && TRIAL_LIMITED.test(retry.message))) throw new Error(`Twilio answered ${retry.status} (trial template)${retry.message ? `: ${retry.message}` : ""}`);
     }
   }

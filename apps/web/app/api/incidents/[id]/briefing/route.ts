@@ -17,5 +17,5 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const incidentId = id === "latest" ? latestIncidentId(rt.network.store.listIncidents()) : id;
   const b = incidentId ? briefingLines(rt.network, incidentId) : null;
   if (!incidentId || !b) return fail(404, "not_found", "No incident with that id.");
-  return json({ incident_id: incidentId, ...b, voice: Boolean(process.env.CARTESIA_API_KEY?.trim()) });
+  return json({ incident_id: incidentId, ...b, voice: rt.speech.available });
 }

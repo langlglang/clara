@@ -13,6 +13,11 @@ export interface DispatchTalk {
 
 /** At most this many dispatcher turns per call. */
 export const MAX_DISPATCH_TURNS = 12;
+/** The call checks back this often (seconds of silence) so the bystander's words reach the dispatcher quickly. */
+export const LISTEN_POLL_S = 4;
+/** Silent check-backs before "Are you still there?", and before the call ends. */
+const IDLE_PROMPT_POLLS = 15;
+const IDLE_END_POLLS = 23;
 const LISTEN_PROMPT = "You can ask me about the scene, or tell me what to pass on to the bystander.";
 
 /**
@@ -151,14 +156,14 @@ export function createDemo911({
   const called = new Set<string>();
   const pending = new Set<ReturnType<typeof setTimeout>>();
   const recordings = new Map<string, { twiml: string; wav: Buffer; expires: number }>();
-  const conversations = new Map<string, { incident_id: string; box_id: string; history: DispatchTurn[]; expires: number }>();
+  const conversations = new Map<string, { incident_id: string; box_id: string; session_id: string; history: DispatchTurn[]; expires: number; idle: number; bystander: string[] }>();
   const canTalk = () => Boolean(talk && baseUrl?.startsWith("https://"));
 
   /** Listens for the dispatcher (speech), posting what they said to the call's reply address; then says goodbye. */
+  // Every few seconds of silence Twilio posts an empty result, so the server can read out what the bystander said.
   const listen = (token: string, prompt: string | null) => {
     const action = `${baseUrl}/api/demo911/${token}/reply`;
-    const gather = (say: string | null) => `<Gather input="speech" action="${xml(action)}" method="POST" speechTimeout="auto" timeout="10" language="en-US" actionOnEmptyResult="false">${say ? `<Say>${xml(say)}</Say>` : ""}</Gather>`;
-    return `${gather(prompt)}${gather("Are you still there? You can ask me about the scene.")}<Say>No more questions heard. End of simulated call. Goodbye.</Say><Hangup/>`;
+    return `<Gather input="speech" action="${xml(action)}" method="POST" speechTimeout="auto" timeout="${LISTEN_POLL_S}" language="en-US" actionOnEmptyResult="true">${prompt ? `<Say>${xml(prompt)}</Say>` : ""}</Gather><Hangup/>`;
   };
 
   /** Clara's voice for a line: a Cartesia recording behind a one-time address, or Twilio's voice. */
@@ -180,7 +185,8 @@ export function createDemo911({
     const now = Date.now();
     for (const [k, c] of conversations) if (c.expires < now) conversations.delete(k);
     const token = randomBytes(24).toString("base64url");
-    conversations.set(token, { incident_id: incidentId, box_id: boxId, history: [], expires: now + RECORDING_TTL_MS });
+    const sessionId = network.store.getIncident(incidentId)?.incident.session_id ?? "";
+    conversations.set(token, { incident_id: incidentId, box_id: boxId, session_id: sessionId, history: [], expires: now + RECORDING_TTL_MS, idle: 0, bystander: [] });
     return token;
   }
 
@@ -238,6 +244,16 @@ export function createDemo911({
   }
 
   const unsubscribe = network.subscribe((change) => {
+    if (change.kind === "event" && change.event.type === "report.heard") {
+      // What the bystander says at the box while a dispatcher call is open is read out on the call.
+      const e = change.event;
+      const text = e.text.trim();
+      if (!text || /^message from\b/i.test(text)) return;
+      for (const c of conversations.values()) {
+        if (c.box_id === e.box_id && c.session_id === e.session_id && c.expires >= Date.now() && c.bystander.length < 10) c.bystander.push(text.slice(0, 300));
+      }
+      return;
+    }
     if (change.kind !== "event" || change.event.type !== "sos.opened") return;
     const boxId = change.event.box_id;
     if (!timers) return;
@@ -258,7 +274,25 @@ export function createDemo911({
       const c = conversations.get(token);
       if (!c || c.expires < Date.now() || !talk) return hangup;
       const said = words.trim().slice(0, 500);
-      if (!said) return `<?xml version="1.0" encoding="UTF-8"?><Response>${listen(token, null)}</Response>`;
+      // The bystander's words since the last check, read out in Clara's voice.
+      const fromBystander = async () => {
+        if (!c.bystander.length) return "";
+        const lines = c.bystander.splice(0);
+        for (const text of lines) c.history.push({ from: "bystander", text });
+        log(`[demo-911] read ${lines.length} bystander line(s) on ${c.incident_id}`);
+        return voiced(`The bystander says: ${lines.join(" ")}`);
+      };
+      if (!said) {
+        const relayed = await fromBystander();
+        if (relayed) {
+          c.idle = 0;
+          return `<?xml version="1.0" encoding="UTF-8"?><Response>${relayed}${listen(token, null)}</Response>`;
+        }
+        c.idle += 1;
+        if (c.idle >= IDLE_END_POLLS) return `<?xml version="1.0" encoding="UTF-8"?><Response><Say>No more questions heard. End of simulated call. Goodbye.</Say><Hangup/></Response>`;
+        return `<?xml version="1.0" encoding="UTF-8"?><Response>${listen(token, c.idle === IDLE_PROMPT_POLLS ? "Are you still there? You can ask me about the scene." : null)}</Response>`;
+      }
+      c.idle = 0;
       const turns = c.history.filter((t) => t.from === "dispatcher").length;
       if (turns >= MAX_DISPATCH_TURNS) return `<?xml version="1.0" encoding="UTF-8"?><Response><Say>That's all I can take on this simulated call. Goodbye.</Say><Hangup/></Response>`;
       const answer = await talk.answer(c.incident_id, c.history, said);
@@ -271,7 +305,7 @@ export function createDemo911({
         }
       }
       log(`[demo-911] dispatcher turn ${turns + 1} on ${c.incident_id}${answer.relay ? " (relayed to the box)" : ""}${answer.end ? " (end)" : ""}`);
-      const spokenReply = await voiced(answer.reply);
+      const spokenReply = (await voiced(answer.reply)) + (answer.end ? "" : await fromBystander());
       return answer.end
         ? `<?xml version="1.0" encoding="UTF-8"?><Response>${spokenReply}<Say>End of simulated call. Goodbye.</Say><Hangup/></Response>`
         : `<?xml version="1.0" encoding="UTF-8"?><Response>${spokenReply}${listen(token, null)}</Response>`;

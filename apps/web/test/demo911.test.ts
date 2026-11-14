@@ -199,3 +199,40 @@ describe("dispatcher talks back", () => {
     expect(await d.reply("not-a-token", "hello")).toContain("<Hangup/>");
   });
 });
+
+describe("bystander talks to the dispatcher", () => {
+  it("reads the bystander's words on the call at the next check-back, and ends after a long silence", async () => {
+    const network = createNetwork();
+    network.seedDemo();
+    const sent: string[] = [];
+    const fetchFake = async (_url: string, init: { body?: unknown }) => (sent.push(String(init.body)), new Response(JSON.stringify({ sid: "CA9" }), { status: 201 }));
+    const histories: string[][] = [];
+    const talk = {
+      answer: async (_id: string, history: readonly { from: string; text: string }[]) => (histories.push(history.map((t) => `${t.from}:${t.text}`)), { reply: "Noted.", relay: null, end: false }),
+      relay: () => {},
+    };
+    const d = createDemo911({ network, twilio, number: "+17372583742", fetch: fetchFake, timers: false, log: () => {}, baseUrl: "https://clara.living", talk });
+    sos(network);
+    await d.fire("box-clinic");
+    const twiml = new URLSearchParams(sent[0]!).get("Twiml")!;
+    expect(twiml).toContain('actionOnEmptyResult="true"');
+    const token = /\/api\/demo911\/([\w-]{20,})\/reply/.exec(twiml)![1]!;
+    // Nothing said yet: keep listening quietly.
+    expect(await d.reply(token, "")).not.toContain("bystander says");
+    // The bystander speaks at the box (same session as the SOS); the box's own relayed message is ignored.
+    const session = network.store.getIncident(network.store.openIncidentForBox("box-clinic")!.incident.incident_id)!.incident.session_id;
+    const heard = (text: string) => network.ingest({ schema_version: EVENTS_VERSION, events: [{ event_id: randomUUID(), box_id: "box-clinic", session_id: session, occurred_at: new Date().toISOString(), type: "report.heard", text }] });
+    heard("He's still breathing but very pale.");
+    heard("Message from the 911 dispatcher: keep pressing.");
+    const check = await d.reply(token, "");
+    expect(check).toContain("The bystander says: He&apos;s still breathing but very pale.");
+    expect(check).not.toContain("keep pressing");
+    expect(check).toContain('<Gather input="speech"');
+    await d.reply(token, "Is he awake?");
+    expect(histories.at(-1)).toContain("bystander:He's still breathing but very pale.");
+    // A long silence: "are you still there?", then goodbye.
+    let last = "";
+    for (let i = 0; i < 30 && !last.includes("<Hangup/></Response>") || last.includes("<Gather"); i++) last = await d.reply(token, "");
+    expect(last).toContain("No more questions heard");
+  });
+});

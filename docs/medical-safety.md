@@ -1,6 +1,6 @@
 # Fictional-scenario content and demo boundaries
 
-**Clara is a HackPrinceton proof of concept and will never be used on a patient.** There is no treatment-validation, clinical-review, certification, or deployment milestone. The agent demonstrates conversation, tool use, kit navigation and synchronized instructions using fictional first-aid scenarios. The ordinary kiosk conversation does not carry a demo banner; the SOS button and call overlay explicitly state that 911 is simulated and no real call is made. This repository and project documentation identify the build as a prototype. Do not describe it as a certified medical device or imply a real emergency call occurred.
+**Clara is a HackPrinceton proof of concept and will never be used on a patient.** There is no treatment-validation, clinical-review, certification, or deployment milestone. The agent demonstrates conversation, tool use, kit navigation and synchronized instructions using fictional first-aid scenarios. The ordinary kiosk conversation does not carry a demo banner. The SOS button says “911 Guide”; the countdown and call overlay explicitly state that 911 is simulated and no real call is made. The scripted lid greeting is the owner's requested demo line and does not indicate that diagnosis or a real call is implemented. This repository and project documentation identify the build as a prototype. Do not describe it as a certified medical device or imply a real emergency call occurred.
 
 ## Source registry, checked 2026-11-02
 

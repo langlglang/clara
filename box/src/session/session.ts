@@ -80,8 +80,8 @@ interface Countdown {
 
 const MAX_MESSAGES = 5;
 const MAX_RECENT = 12;
-const GREETING = "I'm Clara. I'm here to help. Tell me what happened, and I can guide you through first aid, help you find supplies, or open the SOS guide.";
-const GREETING_AUDIO = "audio/clara-greeting-v2.wav";
+const GREETING = "I'm Clara, I'm here to help. Let me know what happened and I can guide you through treatment, diagnosis, or call for help.";
+const GREETING_AUDIO = "audio/clara-greeting-v3.wav";
 const SLOT_IMAGES: Record<string, string> = {
   "top-left": "/content/kits/layout-3slot-v1-top-left.svg",
   "top-right": "/content/kits/layout-3slot-v1-top-right.svg",

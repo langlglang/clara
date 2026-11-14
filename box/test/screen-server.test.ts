@@ -74,7 +74,7 @@ describe("screen server", () => {
     expect(page.body).not.toContain("CLARA DEMO");
     expect(page.body).not.toContain("EMERGENCY NEARBY");
     expect(page.body).not.toContain('id="box-name"');
-    expect(page.body).toContain("SIMULATED 911");
+    expect(page.body).toContain("911 GUIDE");
     for (const action of ["next", "back", "repeat", "talk", "goto", "start"]) {
       expect(page.body).not.toContain(`data-action="${action}"`);
     }

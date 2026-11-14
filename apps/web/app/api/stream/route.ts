@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Every change for the console and the companion app, as Server-Sent Events named `change`:
- * `{ kind: "box" | "volunteer" | "event" | "incident" | "push" | "maintainer" | "ride" | "message" | "profile", ... }`.
+ * `{ kind: "box" | "volunteer" | "event" | "incident" | "push" | "maintainer" | "ride" | "message" | "profile" | "coordinator", ... }`.
  * Pages refetch what they show when one arrives. Report tokens are left out.
  */
 export async function GET(req: Request): Promise<Response> {

@@ -57,7 +57,7 @@ Someone opens the box → the mic becomes available without automatically contac
 26. Ride matching for patient transport (one accept wins).
 27. Phone calls to helpers without smartphones (Twilio + Cartesia).
 28. deepagents coordinator (LangChain prize).
-29. Driver fuel reimbursement through Nessie (Capital One prize).
+29. ~~Driver fuel reimbursement through Nessie (Capital One prize)~~ — dropped, not targeting Capital One.
 30. CoStar kit-placement agent (only with a free person after a one-hour data check).
 31. Anti-theft: open chime, snapshot, wall-mount alert.
 32. Live video feed to EMS.

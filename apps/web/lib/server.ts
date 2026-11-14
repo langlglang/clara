@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { EVENTS_VERSION, type BoxEvent } from "@clara/contracts";
 import { createClaraAgent, type ClaraAgent, type ClaraAgentEnv } from "@clara/agent";
+import { createCoordinator, type Coordinator, type CoordinatorChange, type CoordinatorEnv, type RidesAdapter } from "@clara/coordinator";
 import { DEMO_BOXES, createNetwork, randomIds, type MaintainerAlert, type Network, type NetworkOptions, type ReportOptions } from "@clara/network";
 import { createRideBook, type RideBook, type RideChange, type VehicleKind } from "./rides";
 import bleeding from "../../../content/scenarios/severe-bleeding.json";
@@ -27,12 +28,14 @@ export interface BoxMessage {
 }
 
 /** App-level changes the network facade doesn't publish itself (rides, messages, profile details). */
-export type AppChange = RideChange | { kind: "message"; message: BoxMessage } | { kind: "profile"; volunteer_id: string };
+export type AppChange = RideChange | CoordinatorChange | { kind: "message"; message: BoxMessage } | { kind: "profile"; volunteer_id: string };
 
 export interface Runtime {
   network: Network;
   agent: ClaraAgent;
   rides: RideBook;
+  /** The response coordinator (deep agent, rules, or off): plans the human response per incident. */
+  coordinator: Coordinator;
   /** Vehicle kind per volunteer (the contract only has seat counts). */
   vehicles: Map<string, VehicleKind>;
   /** Messages to boxes, per incident, oldest first. */
@@ -59,6 +62,8 @@ export interface RuntimeOptions extends NetworkOptions {
   agent?: ClaraAgent;
   /** Start the tick loop (default true). Tests turn it off and call tick themselves. */
   timers?: boolean;
+  /** Replace the coordinator (tests). */
+  coordinator?: (deps: { network: Network; rides: RidesAdapter }) => Coordinator;
 }
 
 const stepLabels: Record<string, string> = Object.fromEntries(bleeding.steps.map((s: { step_id: string; label: string }) => [s.step_id, s.label]));
@@ -115,6 +120,12 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     vehicleOf: (id) => vehicles.get(id) ?? ((network.store.getVolunteer(id)?.vehicle_seats ?? 0) > 0 ? "car" : "none"),
     emit,
   });
+  // The coordinator only proposes rides; approving an offer stays with the dispatcher (no approve here).
+  const ridesAdapter: RidesAdapter = { forIncident: (id) => rides.forIncident(id), request: (id, note) => rides.request(id, note) };
+  const coordinator = options.coordinator
+    ? options.coordinator({ network, rides: ridesAdapter })
+    : createCoordinator({ network, rides: ridesAdapter, env: env as CoordinatorEnv, timers: options.timers !== false, log: (line) => console.log(line) });
+  coordinator.subscribe((change) => emit(change));
   const ambulance = Number(env.CLARA_AMBULANCE_ETA_MIN);
   const ambulanceEtaMin = env.CLARA_AMBULANCE_ETA_MIN && Number.isFinite(ambulance) && ambulance > 0 ? Math.round(ambulance) : null;
 
@@ -150,12 +161,13 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     beat.unref?.();
     timers.push(tick, beat);
   }
-  console.log(`[clara] network seeded (${network.store.listBoxes().length} boxes); agent ${agent.describe}; simulated boxes: ${simulatedBoxes.join(", ") || "none"}`);
+  console.log(`[clara] network seeded (${network.store.listBoxes().length} boxes); agent ${agent.describe}; coordinator ${coordinator.describe}; simulated boxes: ${simulatedBoxes.join(", ") || "none"}`);
 
   return {
     network,
     agent,
     rides,
+    coordinator,
     vehicles,
     messages: new Map(),
     ambulanceEtaMin,
@@ -167,7 +179,10 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     emit,
     simulatedBoxes,
     reportOptions: REPORT_OPTIONS,
-    stop: () => timers.forEach(clearInterval),
+    stop: () => {
+      timers.forEach(clearInterval);
+      coordinator.stop();
+    },
   };
 }
 

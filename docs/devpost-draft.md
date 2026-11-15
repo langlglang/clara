@@ -8,7 +8,7 @@
 
 When Ella was six, her younger sister started choking at a restaurant. Their grandparents were trying to help her, speak with 911, and find someone nearby who knew what to do—all at once. By luck, a doctor was there, and her sister survived.
 
-That pressure is not unique to choking. In a [2026 American Red Cross survey of 500 U.S. adults](https://www.redcross.org/about-us/news-and-events/news/2026/we-know-cpr-saves-lives-so-why-don-t-we-do-it.html), 80% said CPR and AED training was very important, but only 25% said they were very confident they could act if someone collapsed in front of them. In [2024 cardiac-arrest registry data summarized by the American Heart Association](https://cpr.heart.org/en/resuscitation-science/cpr-and-ecc-guidelines/adult-basic-life-support), bystanders performed CPR in 47.7% of adult out-of-hospital cardiac arrests.
+The need extends beyond one kind of emergency. [U.S. emergency departments saw 26.2 million visits for unintentional injuries in 2022](https://www.cdc.gov/nchs/fastats/accidental-injury.htm). Professional help does not arrive equally quickly everywhere: the [CDC reports that EMS response times for cardiac arrests are 10% longer in lower-income neighborhoods](https://www.cdc.gov/ems-community-paramedicine/php/us/disparities.html), and that rural areas face longer response and transport times.
 
 Ella's experience stayed with us. In an emergency, the person providing care should not have to juggle instructions, supplies, communication, and finding help. We built Clara to act as a first aid copilot: one voice you can talk to while your attention stays on the person in front of you.
 

@@ -7,12 +7,27 @@ const LINKS = [
   { href: "/map", label: "Kit map" },
 ] as const;
 
-/** The bar on every page. `current` marks the page you're on; `title` replaces "Clara" (e.g. "Clara Dispatch"). */
+/** Clara's mark: a pulse line on a red rounded square. Never a cross or plus (protected emblem). */
+export function BrandMark({ size = 28 }: { size?: number }) {
+  return (
+    <span className="brand-mark" aria-hidden="true" style={{ width: size, height: size }}>
+      <svg width={size * 0.57} height={size * 0.57} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 12h4l2-5 4 10 2-5h6" />
+      </svg>
+    </span>
+  );
+}
+
+/** The bar on every page. `current` marks the page you're on; `title` adds a section name after "Clara" (e.g. "Clara Dispatch"). */
 export function TopBar({ current, title = "Clara", children }: { current?: string; title?: string; children?: React.ReactNode }) {
+  const sub = title.startsWith("Clara ") ? title.slice("Clara ".length) : null;
   return (
     <header className="topbar">
       <Link href="/" className="brand">
-        {title}
+        <BrandMark />
+        <span>
+          Clara{sub ? <span className="brand-sub"> {sub}</span> : null}
+        </span>
       </Link>
       {children}
       <span className="spacer" />
@@ -35,7 +50,7 @@ export function StatusPill({ tone, children }: { tone: string; children: React.R
   );
 }
 
-/** A stat tile: label over a big mono number. */
+/** A stat tile: label over a big number. */
 export function Tile({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) {
   return (
     <div className="tile">

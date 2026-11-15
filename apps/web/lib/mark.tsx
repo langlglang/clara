@@ -1,17 +1,15 @@
 /**
- * Clara's mark for icons: a safety-orange first-aid cross on charcoal, square corners (Field Kit). Drawn with
- * Next's ImageResponse (Satori), so it needs only flexbox divs. `pad` shrinks the cross for maskable icons, whose
- * outer 20% may be cropped.
+ * Clara's mark for icons: a white pulse line on Clara red (Warm theme). Deliberately not a cross or plus, which
+ * reads as the protected Red Cross emblem. Drawn with Next's ImageResponse (Satori): full-bleed red so the OS can
+ * round the corners, and `pad` shrinks the line for maskable icons, whose outer 20% may be cropped.
  */
 export function ClaraMark({ size, pad = 0.18 }: { size: number; pad?: number }) {
   const inner = size * (1 - pad * 2);
-  const bar = inner * 0.3;
   return (
-    <div style={{ width: size, height: size, background: "#18181B", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: inner, height: inner, position: "relative", display: "flex" }}>
-        <div style={{ position: "absolute", left: (inner - bar) / 2, top: 0, width: bar, height: inner, background: "#F97316" }} />
-        <div style={{ position: "absolute", top: (inner - bar) / 2, left: 0, height: bar, width: inner, background: "#F97316" }} />
-      </div>
+    <div style={{ width: size, height: size, background: "#D42A2F", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <svg width={inner} height={inner} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 12h4.5l2.5-6 5 12 2.5-6H22" />
+      </svg>
     </div>
   );
 }

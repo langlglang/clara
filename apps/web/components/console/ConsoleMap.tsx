@@ -74,7 +74,7 @@ export function ConsoleMap({
     const driver = state.volunteers.find((v) => v.volunteer_id === driverId);
     if (!box) return [];
     const points: LatLng[] = [...(driver ? [driver.location] : []), box.location, ride.hospital.location];
-    return [{ points, color: "#38BDF8" }];
+    return [{ points, color: "#2563EB" }];
   }, [ride, state]);
 
   return (

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-/** The companion app's web app manifest (Field Kit colors). Icons are drawn at build time (app/icons, app/icon.tsx). */
+/** The companion app's web app manifest (Warm theme colors). Icons are drawn at build time (app/icons, app/icon.tsx). */
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/app",
@@ -11,8 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#18181B",
-    theme_color: "#18181B",
+    background_color: "#FFFFFF",
+    theme_color: "#FFFFFF",
     categories: ["medical", "health"],
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

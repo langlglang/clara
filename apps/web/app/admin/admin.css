@@ -1,46 +1,58 @@
-/* Admin app (Field Kit theme, docs/design/field-kit.md): 1440 px desktop. */
+/* Admin app (Warm theme, direction C): 1440 px desktop. Rounded white panels on a warm canvas, sentence-case labels. */
 
 .adm {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100vh;
+  height: 100dvh;
+  background: var(--canvas);
 }
 .adm > .topbar {
   position: static;
 }
 .adm-tabs {
   display: flex;
-  gap: 0;
+  gap: 4px;
   margin-left: 16px;
+  padding: 4px;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
 }
 .adm-tabs button {
-  font-family: var(--font-head);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
   background: transparent;
   color: var(--muted);
-  border: 1px solid var(--border);
-  padding: 8px 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
   min-height: 36px;
   cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+.adm-tabs button:hover {
+  color: var(--text);
 }
 .adm-tabs button[aria-selected="true"] {
-  background: var(--accent);
-  color: var(--on-accent);
-  border-color: var(--accent);
+  background: var(--text);
+  color: #ffffff;
 }
 
 /* Health */
 .adm-health {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 16px;
+  padding: 0 16px 16px;
   min-height: 0;
 }
 .adm-stage {
   position: relative;
   min-height: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
 }
 .adm-legend {
   position: absolute;
@@ -49,20 +61,23 @@
   z-index: 500;
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: 8px 12px;
-  font-family: var(--font-head);
-  font-size: 12px;
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 .adm-side,
 .adm-col {
   background: var(--surface);
-  border-left: 1px solid var(--border);
-  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   overflow-y: auto;
   min-height: 0;
 }
@@ -70,23 +85,30 @@
 .adm-input {
   background: var(--bg);
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 0;
-  padding: 10px;
-  font-family: var(--font-head);
-  font-size: 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-family: var(--font-body);
+  font-size: 14px;
   min-height: 44px;
   width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.adm-select:focus,
+.adm-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 .adm-tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
 }
 .adm-tile {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  padding: 10px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -99,9 +121,10 @@
   text-overflow: ellipsis;
 }
 .adm-card {
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--border);
-  padding: 12px;
+  border-radius: var(--radius);
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -110,6 +133,8 @@
 .adm-card h3 {
   margin: 0;
   font-family: var(--font-head);
+  font-weight: 700;
+  letter-spacing: -0.015em;
 }
 .adm-card p {
   margin: 0;
@@ -120,7 +145,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 .adm-row {
   width: 100%;
@@ -128,26 +153,34 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px 8px;
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  padding: 10px;
+  border-radius: var(--radius);
+  padding: 12px 14px;
   cursor: pointer;
   min-height: 44px;
+  font: inherit;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.adm-row:hover {
+  border-color: var(--border-strong);
+  background: var(--canvas);
 }
 .adm-row.on {
   border-color: var(--accent);
+  background: var(--accent-tint);
 }
 .adm-row .mono {
   grid-column: 1 / 3;
 }
 .adm-row-name {
-  font-weight: 600;
+  font-weight: 700;
 }
 .adm-supplies {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px 12px;
+  gap: 4px 12px;
   font-size: 13px;
 }
 .adm-supplies > div {
@@ -155,11 +188,13 @@
   justify-content: space-between;
 }
 .adm-warn {
-  border: 1px solid var(--warn);
+  background: var(--warn-tint);
   color: var(--warn);
-  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
   margin: 0;
   font-size: 13px;
+  font-weight: 500;
 }
 .pad {
   padding: 16px;
@@ -169,20 +204,20 @@
 .adm-planner {
   display: grid;
   grid-template-columns: 380px minmax(0, 1fr) 440px;
+  gap: 16px;
+  padding: 0 16px 16px;
   min-height: 0;
 }
-.adm-planner > .adm-col:first-child {
-  border-left: 0;
-}
 .adm-mid {
-  background: var(--bg);
+  background: var(--canvas);
+  border-color: transparent;
 }
 .adm-mid .adm-card {
   background: var(--surface);
 }
 .adm-search {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 .adm-head {
   display: flex;
@@ -193,39 +228,48 @@
 }
 .adm-levels {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 .adm-levels button {
-  font-family: var(--font-head);
-  font-size: 12px;
-  background: transparent;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface-2);
   color: var(--text);
-  border: 1px solid var(--border);
-  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
   cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+.adm-levels button:hover {
+  background: var(--border);
 }
 .adm-levels button.on {
   background: var(--info);
-  color: var(--on-accent);
-  border-color: var(--info);
+  color: #ffffff;
 }
 .adm-graph {
   width: 100%;
   max-height: 440px;
-  background: var(--map);
+  background: var(--canvas);
   border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 .adm-aerial {
   width: 100%;
   max-height: 520px;
   border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 .adm-tour {
   width: 100%;
   height: 420px;
   border: 1px solid var(--border);
-  background: var(--map);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow: hidden;
 }
 .adm-heat {
   margin: 0;
@@ -238,6 +282,7 @@
   display: inline-block;
   width: 12px;
   height: 12px;
+  border-radius: 4px;
 }
 .adm-section {
   display: flex;
@@ -263,7 +308,8 @@
 }
 .adm-floor .bar {
   height: 7px;
-  background: var(--muted);
+  background: var(--border-strong);
+  border-radius: 2px;
   justify-self: start;
   min-width: 1px;
 }
@@ -278,7 +324,8 @@
   height: 12px;
 }
 .adm-floor.on {
-  outline: 1px solid var(--accent);
+  outline: 2px solid var(--accent);
+  border-radius: 4px;
 }
 .adm-floor .kit {
   color: var(--accent);
@@ -298,9 +345,9 @@
   gap: 8px;
 }
 .adm-log {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  padding: 10px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 12px 14px;
   max-height: 360px;
   overflow-y: auto;
 }
@@ -312,11 +359,11 @@
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
-  font-family: var(--font-head);
+  font-family: var(--font-mono);
   word-break: break-word;
 }
 .adm-log li.note {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .adm-log li.refused {
   color: var(--warn);
@@ -334,14 +381,28 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   max-height: 420px;
   overflow-y: auto;
 }
 .adm-kits li {
   border-left: 3px solid var(--border);
-  padding-left: 8px;
+  border-radius: 2px;
+  padding-left: 10px;
 }
 .adm-kits li.on {
   border-left-color: var(--accent);
+}
+
+@media (max-width: 1100px) {
+  .adm {
+    height: auto;
+  }
+  .adm-health,
+  .adm-planner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .adm-stage {
+    height: 60vh;
+  }
 }

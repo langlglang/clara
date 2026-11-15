@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Clara",
-  description: "AI-guided first-aid boxes and a response network of nearby volunteers. HackPrinceton proof of concept.",
+  description: "AI-guided first-aid boxes and a response network of nearby volunteers.",
   applicationName: "Clara",
   // Installed to the iPhone home screen, the companion app opens full-screen (and can get push, iOS 16.4+).
   appleWebApp: { capable: true, title: "Clara", statusBarStyle: "black-translucent" },

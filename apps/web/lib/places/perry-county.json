@@ -1,0 +1,281 @@
+{
+ "region": "Perry County, Pennsylvania",
+ "source": "2020 US Census populations and coordinates from Wikipedia infoboxes: all 9 boroughs and all 21 townships of the county (townships placed at their Wikipedia infobox point, approx. township centre)",
+ "sources": [
+  "https://en.wikipedia.org/wiki/Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Blain,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Duncannon,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Landisburg,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Liverpool,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Marysville,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Millerstown,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/New_Bloomfield,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/New_Buffalo,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Newport,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Carroll_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Centre_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Oliver_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Penn_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Rye_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Saville_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Spring_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Wheatfield_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Tyrone_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Juniata_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Tuscarora_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Watts_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Buffalo_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Liverpool_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Greenwood_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Southwest_Madison_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Miller_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Northeast_Madison_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Jackson_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Toboyne_Township,_Perry_County,_Pennsylvania",
+  "https://en.wikipedia.org/wiki/Howe_Township,_Perry_County,_Pennsylvania",
+  "https://www.citypopulation.de/en/usa/pennsylvania/admin/42099__perry"
+ ],
+ "asOf": 2020,
+ "settlements": [
+  {
+   "name": "Marysville",
+   "people": 2652,
+   "at": {
+    "lat": 40.34111,
+    "lng": -76.93306
+   }
+  },
+  {
+   "name": "Newport",
+   "people": 1485,
+   "at": {
+    "lat": 40.47833,
+    "lng": -77.13389
+   }
+  },
+  {
+   "name": "Duncannon",
+   "people": 1478,
+   "at": {
+    "lat": 40.39389,
+    "lng": -77.02056
+   }
+  },
+  {
+   "name": "New Bloomfield",
+   "people": 1219,
+   "at": {
+    "lat": 40.41833,
+    "lng": -77.18833
+   }
+  },
+  {
+   "name": "Liverpool",
+   "people": 960,
+   "at": {
+    "lat": 40.57361,
+    "lng": -76.99111
+   }
+  },
+  {
+   "name": "Millerstown",
+   "people": 691,
+   "at": {
+    "lat": 40.55083,
+    "lng": -77.15472
+   }
+  },
+  {
+   "name": "Blain",
+   "people": 229,
+   "at": {
+    "lat": 40.33722,
+    "lng": -77.51056
+   }
+  },
+  {
+   "name": "Landisburg",
+   "people": 221,
+   "at": {
+    "lat": 40.34222,
+    "lng": -77.30694
+   }
+  },
+  {
+   "name": "New Buffalo",
+   "people": 124,
+   "at": {
+    "lat": 40.45417,
+    "lng": -76.97
+   }
+  },
+  {
+   "name": "Carroll Township (Shermans Dale)",
+   "people": 5238,
+   "at": {
+    "lat": 40.33333,
+    "lng": -77.16639
+   }
+  },
+  {
+   "name": "Wheatfield Township",
+   "people": 3203,
+   "at": {
+    "lat": 40.36667,
+    "lng": -77.11639
+   }
+  },
+  {
+   "name": "Penn Township",
+   "people": 3100,
+   "at": {
+    "lat": 40.36667,
+    "lng": -77.04972
+   }
+  },
+  {
+   "name": "Saville Township (Ickesburg)",
+   "people": 2598,
+   "at": {
+    "lat": 40.45,
+    "lng": -77.33306
+   }
+  },
+  {
+   "name": "Centre Township",
+   "people": 2516,
+   "at": {
+    "lat": 40.41667,
+    "lng": -77.26639
+   }
+  },
+  {
+   "name": "Spring Township",
+   "people": 2294,
+   "at": {
+    "lat": 40.33333,
+    "lng": -77.26639
+   }
+  },
+  {
+   "name": "Rye Township",
+   "people": 2262,
+   "at": {
+    "lat": 40.33333,
+    "lng": -76.96639
+   }
+  },
+  {
+   "name": "Oliver Township",
+   "people": 2044,
+   "at": {
+    "lat": 40.46667,
+    "lng": -77.11639
+   }
+  },
+  {
+   "name": "Tyrone Township (Loysville)",
+   "people": 1919,
+   "at": {
+    "lat": 40.28333,
+    "lng": -77.38306
+   }
+  },
+  {
+   "name": "Juniata Township",
+   "people": 1530,
+   "at": {
+    "lat": 40.51667,
+    "lng": -77.18306
+   }
+  },
+  {
+   "name": "Tuscarora Township",
+   "people": 1310,
+   "at": {
+    "lat": 40.51667,
+    "lng": -77.19972
+   }
+  },
+  {
+   "name": "Watts Township",
+   "people": 1233,
+   "at": {
+    "lat": 40.46667,
+    "lng": -77.01639
+   }
+  },
+  {
+   "name": "Buffalo Township",
+   "people": 1225,
+   "at": {
+    "lat": 40.51667,
+    "lng": -77.01639
+   }
+  },
+  {
+   "name": "Liverpool Township",
+   "people": 1036,
+   "at": {
+    "lat": 40.58333,
+    "lng": -77.01639
+   }
+  },
+  {
+   "name": "Greenwood Township",
+   "people": 1034,
+   "at": {
+    "lat": 40.55,
+    "lng": -77.11639
+   }
+  },
+  {
+   "name": "Southwest Madison Township",
+   "people": 1021,
+   "at": {
+    "lat": 40.33333,
+    "lng": -77.41639
+   }
+  },
+  {
+   "name": "Miller Township",
+   "people": 965,
+   "at": {
+    "lat": 40.46667,
+    "lng": -77.06639
+   }
+  },
+  {
+   "name": "Northeast Madison Township",
+   "people": 827,
+   "at": {
+    "lat": 40.37472,
+    "lng": -77.37639
+   }
+  },
+  {
+   "name": "Jackson Township",
+   "people": 589,
+   "at": {
+    "lat": 40.24167,
+    "lng": -77.49139
+   }
+  },
+  {
+   "name": "Toboyne Township",
+   "people": 467,
+   "at": {
+    "lat": 40.23333,
+    "lng": -77.58306
+   }
+  },
+  {
+   "name": "Howe Township",
+   "people": 376,
+   "at": {
+    "lat": 40.50167,
+    "lng": -77.11639
+   }
+  }
+ ]
+}

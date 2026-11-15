@@ -1,0 +1,211 @@
+{
+ "region": "Kutupalong-Balukhali expansion site (Camps 1E-20 Extension), Rohingya refugee camps, Ukhiya, Cox's Bazar, Bangladesh",
+ "source": "Joint Government of Bangladesh - UNHCR Rohingya population by camp (individuals), UNHCR Operational Data Portal, data date 31 Oct 2026; coordinates are UNHCR portal camp centroids from the same API response",
+ "sources": [
+  "https://data.unhcr.org/en/country/bgd",
+  "https://data.unhcr.org/population/get/sublocation/root?widget_id=691150&geo_id=591&population_group=5556&forcesublocation=true&fromDate=1900-01-01"
+ ],
+ "asOf": "2026-10-31",
+ "settlements": [
+  {
+   "name": "Camp 1E",
+   "people": 54162,
+   "at": {
+    "lat": 21.216533,
+    "lng": 92.15566
+   }
+  },
+  {
+   "name": "Camp 1W",
+   "people": 47008,
+   "at": {
+    "lat": 21.21342,
+    "lng": 92.152348
+   }
+  },
+  {
+   "name": "Camp 2E",
+   "people": 34546,
+   "at": {
+    "lat": 21.207808,
+    "lng": 92.164336
+   }
+  },
+  {
+   "name": "Camp 2W",
+   "people": 31393,
+   "at": {
+    "lat": 21.208922,
+    "lng": 92.158202
+   }
+  },
+  {
+   "name": "Camp 3",
+   "people": 43265,
+   "at": {
+    "lat": 21.209166,
+    "lng": 92.149164
+   }
+  },
+  {
+   "name": "Camp 4",
+   "people": 46620,
+   "at": {
+    "lat": 21.208249,
+    "lng": 92.142885
+   }
+  },
+  {
+   "name": "Camp 4 Extension",
+   "people": 12186,
+   "at": {
+    "lat": 21.206272,
+    "lng": 92.136679
+   }
+  },
+  {
+   "name": "Camp 5",
+   "people": 34248,
+   "at": {
+    "lat": 21.2022,
+    "lng": 92.150814
+   }
+  },
+  {
+   "name": "Camp 6",
+   "people": 30405,
+   "at": {
+    "lat": 21.203942,
+    "lng": 92.156859
+   }
+  },
+  {
+   "name": "Camp 7",
+   "people": 48750,
+   "at": {
+    "lat": 21.203122,
+    "lng": 92.165297
+   }
+  },
+  {
+   "name": "Camp 8E",
+   "people": 37986,
+   "at": {
+    "lat": 21.195558,
+    "lng": 92.164966
+   }
+  },
+  {
+   "name": "Camp 8W",
+   "people": 39204,
+   "at": {
+    "lat": 21.19679,
+    "lng": 92.154084
+   }
+  },
+  {
+   "name": "Camp 9",
+   "people": 46322,
+   "at": {
+    "lat": 21.189991,
+    "lng": 92.160313
+   }
+  },
+  {
+   "name": "Camp 10",
+   "people": 38017,
+   "at": {
+    "lat": 21.189743,
+    "lng": 92.154259
+   }
+  },
+  {
+   "name": "Camp 11",
+   "people": 38195,
+   "at": {
+    "lat": 21.18276,
+    "lng": 92.155749
+   }
+  },
+  {
+   "name": "Camp 12",
+   "people": 38206,
+   "at": {
+    "lat": 21.179848,
+    "lng": 92.151807
+   }
+  },
+  {
+   "name": "Camp 13",
+   "people": 53941,
+   "at": {
+    "lat": 21.178584,
+    "lng": 92.139856
+   }
+  },
+  {
+   "name": "Camp 14",
+   "people": 39942,
+   "at": {
+    "lat": 21.167026,
+    "lng": 92.144114
+   }
+  },
+  {
+   "name": "Camp 15",
+   "people": 67957,
+   "at": {
+    "lat": 21.16064,
+    "lng": 92.142896
+   }
+  },
+  {
+   "name": "Camp 16",
+   "people": 27614,
+   "at": {
+    "lat": 21.156381,
+    "lng": 92.149069
+   }
+  },
+  {
+   "name": "Camp 17",
+   "people": 30196,
+   "at": {
+    "lat": 21.197513,
+    "lng": 92.142851
+   }
+  },
+  {
+   "name": "Camp 18",
+   "people": 44873,
+   "at": {
+    "lat": 21.188976,
+    "lng": 92.14759
+   }
+  },
+  {
+   "name": "Camp 19",
+   "people": 32878,
+   "at": {
+    "lat": 21.183284,
+    "lng": 92.142385
+   }
+  },
+  {
+   "name": "Camp 20",
+   "people": 12225,
+   "at": {
+    "lat": 21.190871,
+    "lng": 92.140296
+   }
+  },
+  {
+   "name": "Camp 20 Extension",
+   "people": 15523,
+   "at": {
+    "lat": 21.194585,
+    "lng": 92.134365
+   }
+  }
+ ]
+}

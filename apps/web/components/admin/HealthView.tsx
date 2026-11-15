@@ -76,7 +76,7 @@ export function HealthView({ area, setArea, token }: { area: string; setArea(a: 
         ) : null}
         {sel ? <BoxDetail box={sel} now={now} /> : null}
         <span className="lbl">All boxes</span>
-        {d && d.boxes.length === 0 ? <p className="muted small">No boxes in this area yet. Plan a building in the Kit planner and deploy it.</p> : null}
+        {d && d.boxes.length === 0 ? <p className="muted small">No boxes in this area yet. Plan a building in the Urban planner and deploy it.</p> : null}
         <ul className="adm-list">
           {d?.boxes.map((b) => (
             <li key={b.box_id}>

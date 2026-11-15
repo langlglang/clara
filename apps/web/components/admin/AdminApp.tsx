@@ -47,7 +47,7 @@ export function AdminApp() {
             Network health
           </button>
           <button role="tab" aria-selected={tab === "planner"} onClick={() => setTab("planner")}>
-            Kit planner
+            Urban planner
           </button>
           <button role="tab" aria-selected={tab === "rural"} onClick={() => setTab("rural")}>
             Rural planner

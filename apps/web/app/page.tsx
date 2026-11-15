@@ -32,9 +32,8 @@ export default function Home() {
       <main id="main" className="home-wrap">
         <section className="hero">
           <div>
-            <p className="eyebrow">HackPrinceton proof of concept</p>
-            <h1>First aid until help arrives.</h1>
-            <p className="lede">A box that walks anyone through the next step out loud, and nearby volunteers with first-aid training who get the alert and come.</p>
+            <h1>Your first aid copilot</h1>
+            <p className="lede">Clara guides you through first aid, briefs dispatchers for you, and calls for nearby help.</p>
             <div className="row" style={{ gap: 12 }}>
               <Link href="/dashboard" className="btn primary huge">
                 Run a demo SOS
@@ -87,78 +86,126 @@ export default function Home() {
         <section className="zig" aria-label="How Clara works">
           <div>
             <div>
-              <p className="kicker">The box</p>
-              <h2>One step at a time, out loud.</h2>
-              <p className="body">Open the lid and Clara talks. It lights the right drawer, starts the tourniquet timer, and never guesses a diagnosis.</p>
+              <p className="kicker">Guidance</p>
+              <h2>Talk to it like you would a person.</h2>
+              <p className="body">
+                Open the lid and Clara is ready for hands-free conversation. It walks you through treatment step by step, shows pictures on the touchscreen, and lights up the
+                compartment that holds what you need.
+              </p>
               <Link href="/map" className="more">
-                See every box on the kit map
+                Find a box on the kit map
               </Link>
             </div>
-            <div className="panel tiles three">
-              <div className="tile" style={{ background: "#fff" }}>
-                <span className="lbl">Drawer</span>
-                <span className="big">Top</span>
+            <div className="panel stack" style={{ gap: 14 }} role="img" aria-label="A bystander asks for help out loud and Clara answers while lighting the top compartment">
+              <div className="bubble me">He cut his leg and it won&apos;t stop bleeding.</div>
+              <div className="bubble">
+                <span className="voice" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                Press gauze firmly on the wound. It&apos;s in the top compartment. I&apos;ve lit it up for you.
               </div>
-              <div className="tile">
-                <span className="lbl">TQ timer</span>
-                <span className="big t-red">06:42</span>
-              </div>
-              <div className="tile" style={{ background: "#fff" }}>
-                <span className="lbl">Pulse</span>
-                <span className="big">112</span>
+              <div className="kit" aria-hidden="true">
+                <div className="drawer on">
+                  <span className="led" />
+                  Gauze · tourniquet
+                </div>
+                <div className="drawer">
+                  <span className="led" />
+                  Gloves · tape
+                </div>
+                <div className="drawer">
+                  <span className="led" />
+                  Burn gel · splint
+                </div>
               </div>
             </div>
           </div>
 
           <div>
-            <ul className="panel list stack" style={{ gap: 10, padding: 20 }} aria-label="Example helpers">
-              {HELPERS.map((h) => (
-                <li key={h.initials} className="row" style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", border: 0, gap: 12, flexWrap: "nowrap" }}>
-                  <span className="avatar" style={{ width: 36, height: 36, borderRadius: 11, fontSize: 13, background: h.bg, color: h.fg }}>
-                    {h.initials}
+            <div className="panel stack" style={{ gap: 12 }} role="img" aria-label="Camera view of the injury next to a live pulse reading from the sensor">
+              <div className="viewfinder" aria-hidden="true">
+                <span className="corner tl" />
+                <span className="corner tr" />
+                <span className="corner bl" />
+                <span className="corner br" />
+                <span className="rec">Camera · live</span>
+                <span className="vf-target" />
+                <span className="vf-caption">
+                  <span className="label-tag" data-label="observed">
+                    Observed
                   </span>
-                  <div className="grow">
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>{h.name}</div>
-                    <div className="small muted" style={{ fontSize: 13 }}>
-                      {h.detail}
-                    </div>
-                  </div>
-                  <span className="pill" data-tone={h.tone}>
-                    {h.status}
+                  Bleeding from lower left leg
+                </span>
+              </div>
+              <div className="row" style={{ gap: 12, flexWrap: "nowrap" }}>
+                <div className="tile grow" style={{ background: "#fff" }}>
+                  <span className="lbl">Pulse sensor</span>
+                  <span className="big">
+                    112 <span className="small muted">bpm</span>
                   </span>
-                </li>
-              ))}
-            </ul>
+                </div>
+                <svg className="spark" viewBox="0 0 160 48" aria-hidden="true" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M0 30h22l6-16 8 30 7-22 5 8h26l6-16 8 30 7-22 5 8h26l6-16 8 30 6-14" />
+                </svg>
+              </div>
+            </div>
             <div>
-              <p className="kicker">The volunteers</p>
-              <h2>Trained neighbors, a tap away.</h2>
-              <p className="body">Volunteers in range get an alert with what happened and where. The first to say yes shows up on the box screen by name.</p>
-              <Link href="/app" className="more">
-                Open the companion app
-              </Link>
+              <p className="kicker">Diagnosis</p>
+              <h2>It looks and measures, so you don&apos;t have to guess.</h2>
+              <p className="body">
+                Clara asks questions, sees the scene through a detachable camera, and reads a connected pulse sensor to help you work out what&apos;s wrong. Every reading
+                comes from the hardware, never from the model.
+              </p>
             </div>
           </div>
 
           <div>
             <div>
               <p className="kicker">Dispatch</p>
-              <h2>Everyone sees the same scene.</h2>
-              <p className="body">Coordinators watch helpers move, approve a driver, and hand a scene report to the ambulance crew.</p>
+              <h2>Help gets called while your hands stay busy.</h2>
+              <p className="body">
+                While Clara talks to you, a second agent briefs 911 with what it has learned and passes the dispatcher&apos;s questions back to you. At the same time it texts
+                nearby volunteers and drivers who have opted in.
+              </p>
               <Link href="/dashboard" className="more">
                 Open Dispatch
               </Link>
             </div>
-            <div className="panel" style={{ height: 240, position: "relative", overflow: "hidden", padding: 0 }} aria-hidden="true">
-              <svg width="100%" height="100%" viewBox="0 0 520 240" preserveAspectRatio="xMidYMid slice" fill="none" stroke="#EADFDB" strokeWidth="10" strokeLinecap="round">
-                <path d="M-20 70 C120 60 220 110 540 90" />
-                <path d="M-20 190 C140 170 300 200 540 160" />
-                <path d="M150 -20 C160 80 170 160 140 260" />
-                <path d="M360 -20 C350 90 380 170 400 260" />
-              </svg>
-              <span style={{ position: "absolute", left: "44%", top: "40%", width: 22, height: 22, borderRadius: "50%", background: "var(--accent)", boxShadow: "0 0 0 10px rgba(212,42,47,0.18)" }} />
-              <span style={{ position: "absolute", left: "24%", top: "62%", width: 14, height: 14, borderRadius: "50%", background: "var(--info)", border: "3px solid #fff" }} />
-              <span style={{ position: "absolute", left: "68%", top: "26%", width: 14, height: 14, borderRadius: "50%", background: "var(--info)", border: "3px solid #fff" }} />
-              <span style={{ position: "absolute", left: "76%", top: "70%", width: 16, height: 16, borderRadius: 5, background: "var(--ok)", border: "3px solid #fff" }} />
+            <div className="panel stack" style={{ gap: 12 }}>
+              <div className="call">
+                <div className="row between">
+                  <span style={{ fontWeight: 700, fontSize: 14 }}>Briefing 911</span>
+                  <span className="pill">Simulated call</span>
+                </div>
+                <p className="small" style={{ margin: 0 }}>
+                  <b>Dispatcher:</b> Is he conscious and breathing?
+                </p>
+                <p className="small" style={{ margin: 0 }}>
+                  <b className="t-red">Clara:</b> Yes. Pulse 112 from the sensor. Tourniquet on at 14:14.
+                </p>
+              </div>
+              <ul className="list stack" style={{ gap: 8 }} aria-label="Example volunteers alerted">
+                {HELPERS.map((h) => (
+                  <li key={h.initials} className="row" style={{ background: "#fff", borderRadius: 14, padding: "10px 14px", border: 0, gap: 12, flexWrap: "nowrap" }}>
+                    <span className="avatar" style={{ width: 36, height: 36, borderRadius: 11, fontSize: 13, background: h.bg, color: h.fg }}>
+                      {h.initials}
+                    </span>
+                    <div className="grow">
+                      <div style={{ fontSize: 14, fontWeight: 700 }}>{h.name}</div>
+                      <div className="small muted" style={{ fontSize: 13 }}>
+                        {h.detail}
+                      </div>
+                    </div>
+                    <span className="pill" data-tone={h.tone}>
+                      {h.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </section>
@@ -175,10 +222,6 @@ export default function Home() {
           </Link>
         </section>
       </main>
-
-      <footer className="site-foot">
-        <div>Clara is a proof of concept. Demo data is fictional, the 911 call is simulated, and Clara is never used on a patient.</div>
-      </footer>
     </>
   );
 }

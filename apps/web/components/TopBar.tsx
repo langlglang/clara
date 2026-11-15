@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PULSE_PATH } from "../lib/mark";
 
 const LINKS = [
   { href: "/app", label: "Companion app" },
@@ -11,8 +12,8 @@ const LINKS = [
 export function BrandMark({ size = 28 }: { size?: number }) {
   return (
     <span className="brand-mark" aria-hidden="true" style={{ width: size, height: size }}>
-      <svg width={size * 0.57} height={size * 0.57} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 12h4l2-5 4 10 2-5h6" />
+      <svg width={size * 0.76} height={size * 0.76} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d={PULSE_PATH} />
       </svg>
     </span>
   );

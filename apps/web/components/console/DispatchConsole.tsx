@@ -111,7 +111,7 @@ function DemoSos({ boxes, announce, onOpened, refresh }: { boxes: { id: string; 
           </option>
         ))}
       </select>
-      <button type="button" className="btn small" aria-disabled={busy || undefined} onClick={() => void go()}>
+      <button type="button" className="btn primary small" aria-disabled={busy || undefined} onClick={() => void go()}>
         {busy ? "Sending…" : "Demo SOS"}
       </button>
     </span>

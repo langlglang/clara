@@ -322,7 +322,7 @@ function BuildingFacts({ b, plan, level, setLevel }: { b: BuildingResponse; plan
   );
 }
 
-const heat = (t: number | null | undefined) => (t == null ? "#52525B" : t <= 30 ? "#22C55E" : t <= 60 ? "#EAB308" : t <= 90 ? "#F97316" : "#EF4444");
+const heat = (t: number | null | undefined) => (t == null ? "#D6CCC8" : t <= 30 ? "#15803D" : t <= 60 ? "#CA8A04" : t <= 90 ? "#EA580C" : "#D42A2F");
 
 function HeatLegend() {
   return (
@@ -342,7 +342,7 @@ function FloorGraphSvg({ g, cov, kits }: { g: GraphView; cov: FloorCoverage | nu
   return (
     <svg className="adm-graph" viewBox={`0 0 ${w} ${h}`} role="img" aria-label={`Walking graph of ${g.label}`}>
       {g.edges.map(([i, j], k) => (
-        <line key={k} x1={X(g.nodes[i].x)} y1={Y(g.nodes[i].y)} x2={X(g.nodes[j].x)} y2={Y(g.nodes[j].y)} stroke="#3F3F46" strokeWidth={r / 2} />
+        <line key={k} x1={X(g.nodes[i].x)} y1={Y(g.nodes[i].y)} x2={X(g.nodes[j].x)} y2={Y(g.nodes[j].y)} stroke="#DCCFCB" strokeWidth={r / 2} />
       ))}
       {g.nodes.map((n, i) => (
         <circle key={n.id} cx={X(n.x)} cy={Y(n.y)} r={r * 1.4} fill={heat(cov?.times[i])}>
@@ -352,9 +352,9 @@ function FloorGraphSvg({ g, cov, kits }: { g: GraphView; cov: FloorCoverage | nu
       {kits.map((k) =>
         k.position ? (
           <g key={k.id}>
-            <rect x={X(k.position.x) - r * 3} y={Y(k.position.y) - r * 3} width={r * 6} height={r * 6} fill="#F97316" stroke="#18181B" strokeWidth={r / 2} />
-            <text x={X(k.position.x)} y={Y(k.position.y) + r * 1.4} fontSize={r * 4} textAnchor="middle" fill="#18181B" fontFamily="IBM Plex Mono" fontWeight={700}>
-              +
+            <rect x={X(k.position.x) - r * 3} y={Y(k.position.y) - r * 3} width={r * 6} height={r * 6} fill="#D42A2F" stroke="#FFFFFF" strokeWidth={r / 2} />
+            <text x={X(k.position.x)} y={Y(k.position.y) + r * 1.4} fontSize={r * 4} textAnchor="middle" fill="#FFFFFF" fontFamily="Plus Jakarta Sans" fontWeight={700}>
+              K
             </text>
           </g>
         ) : null,
@@ -384,18 +384,18 @@ function AerialSvg({ id, token, aerial, pickups, chosen, kits }: { id: number; t
   const pts = useMemo(() => kits.map((k) => P(k.at.lng, k.at.lat).split(",").map(Number)), [kits]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <svg className="adm-aerial" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Aerial image with the building footprint and pickup points">
-      {imageUrl ? <image href={imageUrl} x={0} y={0} width={W} height={H} preserveAspectRatio="none" /> : <rect width={W} height={H} fill="#1F1F23" />}
-      <polygon points={ring(aerial.parcel)} fill="none" stroke="#A1A1AA" strokeDasharray="8 8" strokeWidth={3} />
-      <polygon points={ring(aerial.footprint)} fill="rgba(249,115,22,0.15)" stroke="#F97316" strokeWidth={4} />
+      {imageUrl ? <image href={imageUrl} x={0} y={0} width={W} height={H} preserveAspectRatio="none" /> : <rect width={W} height={H} fill="#F6F0EE" />}
+      <polygon points={ring(aerial.parcel)} fill="none" stroke="#8A817D" strokeDasharray="8 8" strokeWidth={3} />
+      <polygon points={ring(aerial.footprint)} fill="rgba(212,42,47,0.15)" stroke="#D42A2F" strokeWidth={4} />
       {pts.map(([x, y], i) => (
-        <rect key={i} x={x - 5} y={y - 5} width={10} height={10} fill="#F97316" stroke="#18181B" strokeWidth={2} />
+        <rect key={i} x={x - 5} y={y - 5} width={10} height={10} fill="#D42A2F" stroke="#FFFFFF" strokeWidth={2} />
       ))}
       {pickups.map((p) => {
         const [x, y] = P(p.at.lng, p.at.lat).split(",").map(Number);
         return (
           <g key={p.id}>
-            <circle cx={x} cy={y} r={22} fill={chosen ? "#38BDF8" : "rgba(56,189,248,0.4)"} stroke="#18181B" strokeWidth={4} />
-            <text x={x} y={y + 9} textAnchor="middle" fontSize={26} fontWeight={700} fontFamily="IBM Plex Mono" fill="#18181B">
+            <circle cx={x} cy={y} r={22} fill={chosen ? "#2563EB" : "rgba(37,99,235,0.4)"} stroke="#FFFFFF" strokeWidth={4} />
+            <text x={x} y={y + 9} textAnchor="middle" fontSize={26} fontWeight={700} fontFamily="Plus Jakarta Sans" fill="#FFFFFF">
               P
             </text>
             <title>{p.note}</title>

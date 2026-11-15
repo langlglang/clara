@@ -286,7 +286,7 @@ export function RideScreen({ item, volunteerId, refresh, announce, now }: { item
   const pins: MapPin[] = [];
   if (box) pins.push({ id: "box", at: box.location, kind: "emergency", tone: "red", title: `Pickup: ${box.name}`, detail: box.directions, pulse: true });
   pins.push({ id: "hospital", at: ride.hospital.location, kind: "hospital", tone: "white", glyph: "H", title: ride.hospital.name, detail: "Hospital" });
-  const lines = box ? [{ points: [box.location, ride.hospital.location], color: "#38BDF8" }] : [];
+  const lines = box ? [{ points: [box.location, ride.hospital.location], color: "#2563EB" }] : [];
 
   return (
     <section ref={box_} className="stack" aria-labelledby={`ride-h-${ride.ride_id}`}>

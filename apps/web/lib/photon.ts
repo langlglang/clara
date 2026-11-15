@@ -107,6 +107,19 @@ export async function sendText(config: PhotonConfig, thread: Thread, text: strin
   return r?.id ?? "unknown";
 }
 
+/**
+ * An SMS thread from Clara's Photon number to any phone, even one that never texted us: get (or create) both Photon
+ * Users by handle, then create or get their direct SMS Space (POST /users, POST /spaces in the Beta API).
+ */
+export async function openSmsThread(config: PhotonConfig, fromNumber: string, to: string, fetchImpl: FetchLike = fetch): Promise<Thread> {
+  const user = (handle: string) => photonFetch<{ id?: string }>(config, fetchImpl, "POST", "/users", { handle, platform: "sms" });
+  const [agent, peer] = await Promise.all([user(fromNumber), user(to)]);
+  if (!agent?.id || !peer?.id) throw new Error("Photon returned no user id");
+  const space = await photonFetch<{ id?: string }>(config, fetchImpl, "POST", "/spaces", { participantIds: [agent.id, peer.id], platform: "sms" });
+  if (!space?.id) throw new Error("Photon returned no space id");
+  return { spaceId: space.id, senderId: agent.id, platform: "sms" };
+}
+
 /** The fields Clara reads from a Photon Message (GET messages item, or the message inside a webhook event). */
 export interface InboundMessage {
   id: string;

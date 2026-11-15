@@ -9,21 +9,60 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export const TWILIO_TIMEOUT_MS = 8_000;
 export const DEFAULT_BASE_URL = "https://clara.living";
 
+/**
+ * Photon voice: the call still runs on Twilio (our TwiML, Cartesia audio, keypad answers), but it is dialled over SIP
+ * to Photon, so the phone rings from the Photon number (photon.codes/docs/beta/cookbooks/voice/twilio).
+ */
+export interface PhotonSip {
+  /** host:port, TLS (e.g. sip.photon.codes:5061). */
+  server: string;
+  username: string;
+  password: string;
+  /** The Photon SMS number calls come from (E.164). */
+  from: string;
+}
+
 export interface TwilioConfig {
   accountSid: string;
   authToken: string;
   from: string;
+  /** When set, calls go out through Photon's number first, and through the Twilio number if that fails. */
+  photon?: PhotonSip | null;
 }
 
-export type TwilioEnv = { TWILIO_ACCOUNT_SID?: string; TWILIO_AUTH_TOKEN?: string; TWILIO_FROM_NUMBER?: string; PUBLIC_BASE_URL?: string };
+export type TwilioEnv = {
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_AUTH_TOKEN?: string;
+  TWILIO_FROM_NUMBER?: string;
+  PUBLIC_BASE_URL?: string;
+  PHOTON_SIP_SERVER?: string;
+  PHOTON_SIP_USERNAME?: string;
+  PHOTON_SIP_PASSWORD?: string;
+  PHOTON_VOICE_NUMBER?: string;
+};
+
+const E164_NUMBER = /^\+[1-9]\d{7,14}$/;
+
+/** Photon's SIP settings when all four are set and look right, else null. */
+export function photonSipConfig(env: TwilioEnv): PhotonSip | null {
+  const server = env.PHOTON_SIP_SERVER?.trim().replace(/^sips?:/i, "");
+  const username = env.PHOTON_SIP_USERNAME?.trim();
+  const password = env.PHOTON_SIP_PASSWORD?.trim();
+  const from = env.PHOTON_VOICE_NUMBER?.trim().replace(/[\s().-]/g, "");
+  if (!server || !username || !password || !from || !E164_NUMBER.test(from) || !/^[\w.-]+(:\d+)?$/.test(server)) return null;
+  return { server, username, password, from };
+}
 
 /** The Twilio settings when all three are set, else null (calls then only log "would call"). */
 export function twilioConfig(env: TwilioEnv): TwilioConfig | null {
   const accountSid = env.TWILIO_ACCOUNT_SID?.trim();
   const authToken = env.TWILIO_AUTH_TOKEN?.trim();
   const from = env.TWILIO_FROM_NUMBER?.trim();
-  return accountSid && authToken && from ? { accountSid, authToken, from } : null;
+  return accountSid && authToken && from ? { accountSid, authToken, from, photon: photonSipConfig(env) } : null;
 }
+
+/** Twilio's `To` for a call through Photon: the phone number at Photon's SIP server, over TLS. */
+export const photonSipTo = (sip: PhotonSip, to: string) => `sip:${to}@${sip.server};transport=tls;secure=true`;
 
 /** The public origin Twilio calls back on (no trailing slash). */
 export const publicBaseUrl = (env: TwilioEnv) => (env.PUBLIC_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, "");
@@ -94,9 +133,34 @@ export async function placeCall(
   fetchImpl: FetchLike = fetch,
   timeoutMs = TWILIO_TIMEOUT_MS,
   /** url: our own TwiML address (e.g. a Cartesia recording), tried first. onRoute says which way the call went. */
-  o: { url?: string; onRoute?: (route: "url" | "twiml" | "trial_template") => void } = {},
+  o: { url?: string; onRoute?: (route: "url" | "twiml" | "trial_template") => void; onVia?: (via: "photon" | "twilio") => void } = {},
 ): Promise<string> {
-  const post = async (params: Record<string, string>) => {
+  if (config.photon) {
+    try {
+      const sid = await dial(config, to, twiml, fetchImpl, timeoutMs, o, config.photon);
+      o.onVia?.("photon");
+      return sid;
+    } catch (error) {
+      console.log(`[twilio] call through Photon failed (${(error as Error).message.slice(0, 160)}); calling from the Twilio number`);
+    }
+  }
+  const sid = await dial(config, to, twiml, fetchImpl, timeoutMs, o, null);
+  o.onVia?.("twilio");
+  return sid;
+}
+
+async function dial(
+  config: TwilioConfig,
+  to: string,
+  twiml: string,
+  fetchImpl: FetchLike,
+  timeoutMs: number,
+  o: { url?: string; onRoute?: (route: "url" | "twiml" | "trial_template") => void },
+  sip: PhotonSip | null,
+): Promise<string> {
+  const post = async (raw: Record<string, string>) => {
+    // Through Photon: dial the number at Photon's SIP server, from the Photon number, with Photon's outbound login.
+    const params = sip ? { ...raw, To: photonSipTo(sip, raw.To ?? to), From: sip.from, SipAuthUsername: sip.username, SipAuthPassword: sip.password } : raw;
     const res = await fetchImpl(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(config.accountSid)}/Calls.json`, {
       method: "POST",
       signal: AbortSignal.timeout(timeoutMs),

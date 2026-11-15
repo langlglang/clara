@@ -86,6 +86,16 @@ services:
       # whsec_... printed by `npx tsx scripts/photon-setup.ts --webhook`; inbound replies are refused without it.
       - key: PHOTON_WEBHOOK_SECRET
         sync: false
+      # Calls through Photon voice: Twilio dials Photon over SIP (TLS), so calls ring from the Photon SMS number,
+      # which also texts the written brief. Set all four in the dashboard; without them calls use TWILIO_FROM_NUMBER.
+      - key: PHOTON_SIP_SERVER
+        sync: false
+      - key: PHOTON_SIP_USERNAME
+        sync: false
+      - key: PHOTON_SIP_PASSWORD
+        sync: false
+      - key: PHOTON_VOICE_NUMBER
+        sync: false
 
 databases:
   # Snapshot store for the web service (one row, table clara_snapshot, created by the app).

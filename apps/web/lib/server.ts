@@ -6,7 +6,8 @@ import { DEFAULT_CARE, createCoordinator, type CareThreshold, type Coordinator, 
 import { DEMO_BOXES, createNetwork, randomIds, type MaintainerAlert, type Network, type NetworkOptions, type ReportOptions } from "@clara/network";
 import { createRideBook, type Ride, type RideBook, type RideChange, type VehicleKind } from "./rides";
 import { createCallBook, type CallBook } from "./calls";
-import { createDemo911, type Demo911 } from "./demo911";
+import { createBriefBook, type BriefBook } from "./brief";
+import { createDemo911, demo911Target, type Demo911 } from "./demo911";
 import { createSpeech, type ClaraSpeech } from "./speech";
 import { createAutoSupply } from "./autoSupply";
 import { ridePushListener, wireAlertPushes } from "./notify";
@@ -85,6 +86,8 @@ export interface Runtime {
   publicBaseUrl: string;
   /** Text alerts over Photon (iMessage/WhatsApp/SMS), or "would message" logs without it. */
   texts: TextBook;
+  /** The written brief texted after the dispatcher call and to volunteers on the way. */
+  brief: BriefBook;
   photon: PhotonConfig | null;
   /** App-level live changes (box stream and /api/stream listen here as well as on the network). */
   subscribe(listener: (change: AppChange) => void): () => void;
@@ -233,15 +236,19 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         relay: (boxId: string, incidentId: string, text: string) => emit({ kind: "push", box_id: boxId, push: { type: "responder.message", incident_id: incidentId, from: "the team dispatcher", text } }),
       }
     : null;
+  const photon = photonConfig(env);
+  // The written brief from Clara's Photon number: to the demo dispatcher after the call, and to volunteers on the way.
+  const brief = createBriefBook({ network, photon, fromNumber: twilio?.photon?.from ?? env.PHOTON_VOICE_NUMBER?.trim() ?? null, baseUrl: publicBaseUrl(env), ...(options.fetch ? { fetch: options.fetch } : {}) });
   const demo911 = createDemo911({ network, twilio, number: env.CLARA_DEMO_911_NUMBER, timers: options.timers !== false, speech, baseUrl: publicBaseUrl(env), talk,
     onCall: (call) => {
       const incident = network.store.getIncident(call.incident_id)?.incident;
       if (incident) emit({ kind: "push", box_id: call.box_id, push: { type: "dispatcher.call_status", incident_id: call.incident_id, session_id: incident.session_id, state: call.status } });
+      const dispatcher = demo911Target(env.CLARA_DEMO_911_NUMBER);
+      if (call.status === "placed" && dispatcher) void brief.dispatcher(call.incident_id, dispatcher);
     },
     ...(options.fetch ? { fetch: options.fetch } : {}) });
   // Demo assumption: a guided step that uses a kit item counts as one used (see lib/autoSupply.ts).
   const autoSupply = createAutoSupply({ network, scenarios });
-  const photon = photonConfig(env);
   const texts = createTextBook({ network, rides, photon, ...(options.fetch ? { fetch: options.fetch } : {}) });
   // Other books are saved under `extra` once they expose exportState/importState (duck-typed, so adding one is enough).
   const extras: Record<string, Partial<Persistable>> = { texts: texts as Partial<Persistable>, emergency };
@@ -291,7 +298,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     beat.unref?.();
     timers.push(tick, beat);
   }
-  console.log(`[clara] network ${snap ? `restored from the snapshot saved ${snap.saved_at}` : "seeded"} (${network.store.listBoxes().length} boxes); agent ${agent.describe}; coordinator ${coordinator.describe}; simulated boxes: ${simulatedBoxes.join(", ") || "none"}; push VAPID ${push.vapid.source}; calls ${twilio ? "Twilio" : "not configured (logs only)"}; texts ${photon ? "Photon" : "not configured (logs only)"}`);
+  console.log(`[clara] network ${snap ? `restored from the snapshot saved ${snap.saved_at}` : "seeded"} (${network.store.listBoxes().length} boxes); agent ${agent.describe}; coordinator ${coordinator.describe}; simulated boxes: ${simulatedBoxes.join(", ") || "none"}; push VAPID ${push.vapid.source}; calls ${twilio ? (twilio.photon ? "Photon number via Twilio (Twilio number as fallback)" : "Twilio") : "not configured (logs only)"}; brief texts ${brief.configured ? "Photon SMS" : "not configured (logs only)"}; texts ${photon ? "Photon" : "not configured (logs only)"}`);
 
   return {
     network,
@@ -308,6 +315,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     demo911,
     speech,
     texts,
+    brief,
     photon,
     publicBaseUrl: publicBaseUrl(env),
     messages,
@@ -347,6 +355,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       emergency.stop();
       core.clear();
       demo911.stop();
+      brief.stop();
       autoSupply.stop();
     },
   };
